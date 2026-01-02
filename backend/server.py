@@ -178,50 +178,46 @@ def calculate_calorie_target(weight: float, height: float, age: int, gender: str
     }
 
 async def analyze_food_image(image_base64: str) -> Dict[str, Any]:
-    """Analyze food image using OpenAI Vision API"""
+    """Analyze food image using OpenAI Vision API via Emergent Integration"""
     try:
-        response = openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": """You are a nutrition expert analyzing food images. 
-                            Identify all food items in the image and estimate their quantities.
-                            Look for a coin in the image for scale reference (Indian coins: ₹1=16mm, ₹2=25mm, ₹5=23mm, ₹10=27mm).
-                            
-                            Return a JSON response with this format:
-                            {
-                                "coin_detected": true/false,
-                                "coin_type": "₹10" or null,
-                                "foods": [
-                                    {
-                                        "name": "Food name",
-                                        "estimated_quantity_grams": 150,
-                                        "confidence": "high/medium/low"
-                                    }
-                                ],
-                                "notes": "Any additional observations"
-                            }
-                            
-                            Focus on Indian cuisine if applicable."""
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{image_base64}"
-                            }
-                        }
-                    ]
-                }
-            ],
-            max_tokens=1000
+        # Create a new LlmChat instance for this analysis
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"food-analysis-{uuid.uuid4()}",
+            system_message="You are a nutrition expert analyzing food images. Always respond with valid JSON only."
+        ).with_model("openai", "gpt-4o")
+        
+        # Create image content from base64
+        image_content = ImageContent(image_base64=image_base64)
+        
+        # Create the user message with image
+        user_message = UserMessage(
+            text="""Analyze this food image and identify all food items.
+            Look for a coin in the image for scale reference (Indian coins: ₹1=16mm, ₹2=25mm, ₹5=23mm, ₹10=27mm).
+            
+            Return ONLY a JSON response (no markdown, no explanation) with this format:
+            {
+                "coin_detected": true/false,
+                "coin_type": "₹10" or null,
+                "foods": [
+                    {
+                        "name": "Food name",
+                        "estimated_quantity_grams": 150,
+                        "confidence": "high/medium/low"
+                    }
+                ],
+                "notes": "Any additional observations"
+            }
+            
+            Focus on Indian cuisine if applicable.""",
+            image_contents=[image_content]
         )
         
-        content = response.choices[0].message.content
+        # Send message and get response
+        response = await chat.send_message(user_message)
+        
         # Extract JSON from response
+        content = response
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0].strip()
         elif "```" in content:
