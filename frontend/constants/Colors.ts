@@ -1,51 +1,51 @@
-// NutriSnap Color Palette - Duolingo-inspired vibrant design
+// NutriSnap Color Palette - Earthy & Natural with Professional Touch
 
 export const Colors = {
-  // Primary colors - Vibrant and energetic
-  primary: '#58CC02',
-  primaryDark: '#46A302',
-  primaryLight: '#78DC42',
+  // Primary colors - Natural Green
+  primary: '#5B7350',
+  primaryDark: '#4A6741',
+  primaryLight: '#6D8660',
   
-  // Background colors - Clean and fresh
-  background: '#FFFFFF',
-  backgroundSecondary: '#F7F7F7',
-  backgroundTertiary: '#EFEFEF',
+  // Background colors - Soft & Clean
+  background: '#FAFAF8',
+  backgroundSecondary: '#F5F3EF',
+  backgroundTertiary: '#EFEEE9',
   
   // Card colors
   cardBackground: '#FFFFFF',
-  cardBackgroundSecondary: '#FAFAFA',
+  cardBackgroundSecondary: '#FDFCF9',
   
-  // Accent colors - Bright and playful
-  accent: '#FF9600',
-  accentLight: '#FFB800',
-  accentDark: '#E68600',
+  // Accent colors - Warm & Inviting
+  accent: '#E8956F',
+  accentLight: '#F4B59D',
+  accentDark: '#D67D5A',
   
-  // Secondary accent
-  secondary: '#1CB0F6',
-  secondaryLight: '#4DC3FF',
-  secondaryDark: '#0098DD',
+  // Secondary accent - Calming Blue
+  secondary: '#7A9BB0',
+  secondaryLight: '#9BB5C7',
+  secondaryDark: '#5B7C91',
   
-  // Tertiary accent
-  tertiary: '#CE82FF',
-  tertiaryLight: '#E0A0FF',
-  tertiaryDark: '#B565E8',
+  // Tertiary accent - Soft Purple
+  tertiary: '#B8A4C9',
+  tertiaryLight: '#D0C2DD',
+  tertiaryDark: '#9A86AD',
   
   // Text colors
   text: '#3C3C3C',
-  textSecondary: '#777777',
-  textLight: '#AFAFAF',
+  textSecondary: '#6B6B6B',
+  textLight: '#9A9A9A',
   textInverse: '#FFFFFF',
   
-  // Status colors - Vibrant
-  success: '#58CC02',
-  warning: '#FF9600',
-  error: '#FF4B4B',
-  info: '#1CB0F6',
+  // Status colors
+  success: '#6D8660',
+  warning: '#E8956F',
+  error: '#D66853',
+  info: '#7A9BB0',
   
-  // Macro colors
-  protein: '#FF4B4B',
-  carbs: '#FFB800',
-  fat: '#1CB0F6',
+  // Macro colors - Distinct but natural
+  protein: '#E57373',
+  carbs: '#FFB74D',
+  fat: '#64B5F6',
   
   // Neutral colors
   white: '#FFFFFF',
@@ -62,9 +62,5 @@ export const Colors = {
   
   // Shadow colors
   shadow: 'rgba(0, 0, 0, 0.08)',
-  shadowDark: 'rgba(0, 0, 0, 0.15)',
-  
-  // Gradient colors
-  gradientStart: '#58CC02',
-  gradientEnd: '#78DC42',
+  shadowDark: 'rgba(0, 0, 0, 0.12)',
 };
