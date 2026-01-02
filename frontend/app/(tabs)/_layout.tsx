@@ -14,7 +14,7 @@ export default function TabsLayout() {
           height: Platform.OS === 'ios' ? 85 : 65,
           paddingBottom: Platform.OS === 'ios' ? 20 : 8,
           paddingTop: 8,
-          paddingHorizontal: 20,
+          paddingHorizontal: 16,
           position: 'absolute',
           shadowColor: Colors.shadowDark,
           shadowOffset: { width: 0, height: -3 },
@@ -31,7 +31,6 @@ export default function TabsLayout() {
         },
         tabBarItemStyle: {
           paddingTop: 4,
-          marginHorizontal: 4,
         },
       }}
     >
@@ -54,16 +53,16 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="history"
+        name="analytics"
         options={{
-          title: 'History',
+          title: 'Analytics',
           tabBarIcon: ({ color, focused }) => (
             <View style={[
               styles.iconContainer,
               focused && { ...styles.iconContainerActive, backgroundColor: Colors.secondary + '15' }
             ]}>
               <Ionicons 
-                name={focused ? "time" : "time-outline"} 
+                name={focused ? "stats-chart" : "stats-chart-outline"} 
                 size={24} 
                 color={color} 
               />
@@ -80,6 +79,24 @@ export default function TabsLayout() {
               <View style={[styles.centerButton, focused && styles.centerButtonActive]}>
                 <Ionicons name="add" size={32} color={Colors.white} />
               </View>
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="recipes"
+        options={{
+          title: 'Recipes',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[
+              styles.iconContainer,
+              focused && { ...styles.iconContainerActive, backgroundColor: Colors.accent + '15' }
+            ]}>
+              <Ionicons 
+                name={focused ? "restaurant" : "restaurant-outline"} 
+                size={24} 
+                color={color} 
+              />
             </View>
           ),
         }}
