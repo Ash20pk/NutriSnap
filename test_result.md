@@ -131,15 +131,18 @@ backend:
   
   - task: "AI Photo Analysis"
     implemented: true
-    working: "NA"
+    working: false
     file: "/app/backend/server.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
           comment: "POST /api/meals/log-photo endpoint uses OpenAI GPT-4 Vision API for food recognition and coin detection. Uses Emergent LLM key. Needs testing with actual image data."
+        - working: false
+          agent: "testing"
+          comment: "API endpoint responds but fails with 401 Unauthorized. OpenAI API key 'sk-emergent-1296706658d9dBc9a6' is invalid - not a valid OpenAI key format. Valid keys start with 'sk-proj-' or 'sk-'. This appears to be a MOCKED key."
   
   - task: "Meal Logging API"
     implemented: true
