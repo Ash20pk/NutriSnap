@@ -101,3 +101,198 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Build NutriSnap - an AI-powered nutrition tracking mobile app with coin calibration for accurate portion sizes, comprehensive Indian food database, and multiple logging methods (photo, voice, manual)."
+
+backend:
+  - task: "User Onboarding API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "POST /api/user/onboard endpoint implemented with BMR calculation using Mifflin-St Jeor equation. Tested successfully with curl. Returns user profile with calculated daily targets for calories, protein, carbs, and fat."
+  
+  - task: "Food Database Search API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "GET /api/foods/search endpoint with query, category, and vegetarian filters. 25 Indian foods in database covering north_indian, south_indian, and street_food categories. Tested successfully."
+  
+  - task: "AI Photo Analysis"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "POST /api/meals/log-photo endpoint uses OpenAI GPT-4 Vision API for food recognition and coin detection. Uses Emergent LLM key. Needs testing with actual image data."
+  
+  - task: "Meal Logging API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "POST /api/meals/log endpoint saves meal with nutrition totals. Tested successfully with breakfast meal (Idli + Sambar). Calculates totals correctly."
+  
+  - task: "Meal History API"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "GET /api/meals/history/{user_id} endpoint implemented with days filter. Returns chronological meal list. Needs testing with multiple meals."
+  
+  - task: "Daily Stats API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "GET /api/meals/stats/{user_id} endpoint returns daily totals and targets. Tested successfully showing 213.6 calories consumed vs 2148.56 target."
+  
+  - task: "Voice Logging Parser"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "POST /api/meals/log-voice uses GPT-4 to parse voice text into structured food data. Needs testing with actual voice input text."
+
+frontend:
+  - task: "Onboarding Flow"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/onboarding.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "4-step onboarding: basic info, measurements, goals, dietary preferences. Validates input and calls backend API. Needs UI testing."
+  
+  - task: "Home Dashboard"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(tabs)/home.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Dashboard with calorie circle, macro bars, quick stats, and tips. Fetches data from /api/meals/stats. Needs UI testing."
+  
+  - task: "Photo Logging with Camera"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/camera.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Camera screen with coin calibration overlay. Uses expo-camera. Captures photo, sends to AI API, displays results. Needs full flow testing."
+  
+  - task: "Manual Meal Logging"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(tabs)/log.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Log screen with meal type selector and 3 input methods (photo, voice, manual). Modal for food search and selection. Needs UI testing."
+  
+  - task: "Meal History"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(tabs)/history.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "History screen with date grouping and time filters (7/14/30 days). Shows nutrition breakdown per meal. Needs UI testing."
+  
+  - task: "Profile Management"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(tabs)/profile.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Profile screen showing user stats, daily targets, preferences. Logout functionality included. Needs UI testing."
+  
+  - task: "Navigation & Routing"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/_layout.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Expo Router with tab navigation. Protected routes based on onboarding status. Needs navigation flow testing."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 0
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "User Onboarding API"
+    - "Food Database Search API"
+    - "Meal Logging API"
+    - "Daily Stats API"
+    - "AI Photo Analysis"
+    - "Voice Logging Parser"
+    - "Meal History API"
+  stuck_tasks: []
+  test_all: true
+  test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: "NutriSnap MVP implementation complete. Backend has 7 API endpoints, 25 Indian foods in database, OpenAI integration for AI features. Frontend has complete user journey: onboarding → dashboard → meal logging (photo/manual/voice) → history → profile. Ready for comprehensive backend testing. Frontend UI testing should be done separately after backend validation."
