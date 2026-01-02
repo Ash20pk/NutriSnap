@@ -10,8 +10,10 @@ from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timedelta
 import base64
-from openai import OpenAI
 import json
+
+# Emergent integrations for LLM
+from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -21,8 +23,8 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# OpenAI client
-openai_client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
+# Emergent LLM Key for AI features
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 
 # Create the main app
 app = FastAPI()
