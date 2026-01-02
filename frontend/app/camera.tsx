@@ -257,6 +257,21 @@ export default function CameraScreen() {
             </Text>
           </View>
 
+          {/* Pro Tip Card */}
+          {!barcodeData && (
+            <View style={styles.proTipCard}>
+              <View style={styles.proTipHeader}>
+                <Ionicons name="bulb" size={24} color={Colors.accent} />
+                <Text style={styles.proTipTitle}>💡 Pro Tip!</Text>
+              </View>
+              <Text style={styles.proTipText}>
+                {hasLiDAR && lidarEnabled 
+                  ? "LiDAR is measuring 3D depth for precise portions. Position food at center for best results!" 
+                  : "Place a standard coin (₹5 or ₹10) next to your food. This helps our AI measure portions accurately!"}
+              </Text>
+            </View>
+          )}
+
           {/* Barcode Info Card */}
           {barcodeData && (
             <View style={styles.barcodeInfoCard}>
