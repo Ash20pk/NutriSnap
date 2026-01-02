@@ -179,7 +179,24 @@ export default function LogScreen() {
           <View style={styles.methodContent}>
             <Text style={styles.methodTitle}>Take a Photo</Text>
             <Text style={styles.methodDescription}>
-              Use coin calibration for accurate portions
+              LiDAR + coin calibration for accurate portions
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
+        </TouchableOpacity>
+
+        {/* Barcode Scanner */}
+        <TouchableOpacity 
+          style={styles.methodCard} 
+          onPress={() => router.push('/barcode')}
+        >
+          <View style={[styles.methodIconContainer, { backgroundColor: Colors.secondary + '15' }]}>
+            <Ionicons name="barcode" size={32} color={Colors.secondary} />
+          </View>
+          <View style={styles.methodContent}>
+            <Text style={styles.methodTitle}>Scan Barcode</Text>
+            <Text style={styles.methodDescription}>
+              Scan packaged food, then photo your portion
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
@@ -187,7 +204,7 @@ export default function LogScreen() {
 
         {/* Voice Logging */}
         <TouchableOpacity style={styles.methodCard} onPress={handleVoiceLog}>
-          <View style={styles.methodIconContainer}>
+          <View style={[styles.methodIconContainer, { backgroundColor: Colors.accent + '15' }]}>
             <Ionicons name="mic" size={32} color={Colors.accent} />
           </View>
           <View style={styles.methodContent}>
@@ -201,7 +218,7 @@ export default function LogScreen() {
 
         {/* Manual Logging */}
         <TouchableOpacity style={styles.methodCard} onPress={handleManualLog}>
-          <View style={styles.methodIconContainer}>
+          <View style={[styles.methodIconContainer, { backgroundColor: Colors.success + '15' }]}>
             <Ionicons name="create" size={32} color={Colors.success} />
           </View>
           <View style={styles.methodContent}>
