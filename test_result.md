@@ -188,11 +188,11 @@ backend:
   
   - task: "Voice Logging Parser"
     implemented: true
-    working: false
+    working: "NA"
     file: "/app/backend/server.py"
     stuck_count: 1
     priority: "medium"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
         - working: "NA"
           agent: "main"
@@ -200,6 +200,9 @@ backend:
         - working: false
           agent: "testing"
           comment: "API endpoint responds but fails with 401 Unauthorized. OpenAI API key 'sk-emergent-1296706658d9dBc9a6' is invalid - not a valid OpenAI key format. Valid keys start with 'sk-proj-' or 'sk-'. This appears to be a MOCKED key."
+        - working: "NA"
+          agent: "main"
+          comment: "Refactored to use emergentintegrations library with LlmChat class. Now using proper Emergent LLM Key authentication via EMERGENT_LLM_KEY env variable. Needs retesting."
 
 frontend:
   - task: "Onboarding Flow"
