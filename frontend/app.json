@@ -1,22 +1,33 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "NutriSnap",
+    "slug": "nutrisnap",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "nutrisnap",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "NutriSnap needs access to your camera to take photos of your meals for AI-powered food recognition and portion tracking.",
+        "NSPhotoLibraryUsageDescription": "NutriSnap needs access to your photo library to select meal photos.",
+        "NSMicrophoneUsageDescription": "NutriSnap needs access to your microphone for voice meal logging."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000"
+        "backgroundColor": "#5B7350"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -31,7 +42,19 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#000"
+          "backgroundColor": "#5B7350"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow NutriSnap to access your camera for meal photo logging."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow NutriSnap to access your photos."
         }
       ]
     ],
