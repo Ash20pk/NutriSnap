@@ -472,7 +472,7 @@ async def get_meal_history(user_id: str, days: int = 7):
     meals = await db.meals.find({
         "user_id": user_id,
         "timestamp": {"$gte": start_date}
-    }).sort("timestamp", -1).to_list(1000)
+    }, {"_id": 0}).sort("timestamp", -1).to_list(1000)
     
     return {"meals": meals, "count": len(meals)}
 
