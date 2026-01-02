@@ -291,17 +291,16 @@ metadata:
 
 test_plan:
   current_focus:
-    - "User Onboarding API"
-    - "Food Database Search API"
-    - "Meal Logging API"
-    - "Daily Stats API"
     - "AI Photo Analysis"
     - "Voice Logging Parser"
-    - "Meal History API"
-  stuck_tasks: []
-  test_all: true
-  test_priority: "high_first"
+  stuck_tasks:
+    - "AI Photo Analysis"
+    - "Voice Logging Parser"
+  test_all: false
+  test_priority: "stuck_first"
 
 agent_communication:
     - agent: "main"
       message: "NutriSnap MVP implementation complete. Backend has 7 API endpoints, 25 Indian foods in database, OpenAI integration for AI features. Frontend has complete user journey: onboarding → dashboard → meal logging (photo/manual/voice) → history → profile. Ready for comprehensive backend testing. Frontend UI testing should be done separately after backend validation."
+    - agent: "testing"
+      message: "Backend testing completed. CRITICAL ISSUE: OpenAI API key 'sk-emergent-1296706658d9dBc9a6' is INVALID/MOCKED - not a valid OpenAI format. All AI features (photo analysis, voice logging) fail with 401 Unauthorized. Fixed meal history MongoDB serialization issue. Core APIs (user management, food search, meal logging, stats) working correctly with accurate BMR calculations and macro splits."
