@@ -418,32 +418,33 @@ async def log_meal(meal_data: MealLogCreate):
 async def log_meal_voice(request: VoiceLogRequest):
     """Parse voice input and log meal"""
     try:
-        # Use OpenAI to parse voice input
-        response = openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"""Parse this meal description into structured data:
-                    "{request.text}"
-                    
-                    Return JSON with this format:
+        # Use Emergent Integration to parse voice input
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"voice-parse-{uuid.uuid4()}",
+            system_message="You are a nutrition assistant. Parse meal descriptions into structured JSON. Always respond with valid JSON only."
+        ).with_model("openai", "gpt-4o")
+        
+        user_message = UserMessage(
+            text=f"""Parse this meal description into structured data:
+            "{request.text}"
+            
+            Return ONLY a JSON response (no markdown, no explanation) with this format:
+            {{
+                "foods": [
                     {{
-                        "foods": [
-                            {{
-                                "name": "Food name",
-                                "estimated_quantity_grams": 150
-                            }}
-                        ]
+                        "name": "Food name",
+                        "estimated_quantity_grams": 150
                     }}
-                    
-                    Focus on Indian cuisine. Estimate quantities if not specified."""
-                }
-            ],
-            max_tokens=500
+                ]
+            }}
+            
+            Focus on Indian cuisine. Estimate quantities if not specified."""
         )
         
-        content = response.choices[0].message.content
+        response = await chat.send_message(user_message)
+        
+        content = response
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0].strip()
         elif "```" in content:
