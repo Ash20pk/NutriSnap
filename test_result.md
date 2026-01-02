@@ -185,15 +185,18 @@ backend:
   
   - task: "Voice Logging Parser"
     implemented: true
-    working: "NA"
+    working: false
     file: "/app/backend/server.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "medium"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
           comment: "POST /api/meals/log-voice uses GPT-4 to parse voice text into structured food data. Needs testing with actual voice input text."
+        - working: false
+          agent: "testing"
+          comment: "API endpoint responds but fails with 401 Unauthorized. OpenAI API key 'sk-emergent-1296706658d9dBc9a6' is invalid - not a valid OpenAI key format. Valid keys start with 'sk-proj-' or 'sk-'. This appears to be a MOCKED key."
 
 frontend:
   - task: "Onboarding Flow"
