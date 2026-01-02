@@ -1,212 +1,351 @@
-diff --git a/backend/server.py b/backend/server.py
-index f339757..1e6fb20 100644
---- a/backend/server.py
-+++ b/backend/server.py
-@@ -472,7 +472,7 @@ async def get_meal_history(user_id: str, days: int = 7):
-     meals = await db.meals.find({
-         "user_id": user_id,
-         "timestamp": {"$gte": start_date}
--    }).sort("timestamp", -1).to_list(1000)
-+    }, {"_id": 0}).sort("timestamp", -1).to_list(1000)
-     
-     return {"meals": meals, "count": len(meals)}
- 
-diff --git a/test_fixes.py b/test_fixes.py
-new file mode 100644
-index 0000000..2da25b5
---- /dev/null
-+++ b/test_fixes.py
-@@ -0,0 +1,95 @@
-+#!/usr/bin/env python3
-+"""
-+Quick test for the fixed meal history and AI endpoints
-+"""
-+
-+import requests
-+import json
-+
-+BACKEND_URL = "https://design-preview-49.preview.emergentagent.com/api"
-+TEST_USER_ID = "686c41c1-21a5-450a-9c48-e2117ac8f9dc"
-+
-+def test_meal_history():
-+    """Test the fixed meal history endpoint"""
-+    print("=== Testing Fixed Meal History API ===")
-+    try:
-+        response = requests.get(f"{BACKEND_URL}/meals/history/{TEST_USER_ID}?days=7", timeout=30)
-+        if response.status_code == 200:
-+            data = response.json()
-+            print(f"✅ PASS Meal History - Found {data['count']} meals")
-+            return True
-+        else:
-+            print(f"❌ FAIL Meal History - Status: {response.status_code}")
-+            return False
-+    except Exception as e:
-+        print(f"❌ FAIL Meal History - Error: {str(e)}")
-+        return False
-+
-+def test_voice_logging():
-+    """Test voice logging (will fail due to invalid API key)"""
-+    print("=== Testing Voice Logging API ===")
-+    voice_data = {
-+        "text": "I had 2 rotis and dal for dinner",
-+        "user_id": TEST_USER_ID,
-+        "meal_type": "dinner"
-+    }
-+    
-+    try:
-+        response = requests.post(f"{BACKEND_URL}/meals/log-voice", json=voice_data, timeout=60)
-+        if response.status_code == 200:
-+            print("✅ PASS Voice Logging")
-+            return True
-+        else:
-+            print(f"❌ FAIL Voice Logging - Status: {response.status_code}")
-+            if "401" in response.text or "invalid_api_key" in response.text:
-+                print("   Issue: Invalid OpenAI API key (sk-emergent... is not valid)")
-+            return False
-+    except Exception as e:
-+        print(f"❌ FAIL Voice Logging - Error: {str(e)}")
-+        return False
-+
-+def test_photo_analysis():
-+    """Test photo analysis (will fail due to invalid API key)"""
-+    print("=== Testing Photo Analysis API ===")
-+    test_image_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
-+    
-+    photo_data = {
-+        "image_base64": test_image_b64,
-+        "user_id": TEST_USER_ID
-+    }
-+    
-+    try:
-+        response = requests.post(f"{BACKEND_URL}/meals/log-photo", json=photo_data, timeout=60)
-+        if response.status_code == 200:
-+            print("✅ PASS Photo Analysis")
-+            return True
-+        else:
-+            print(f"❌ FAIL Photo Analysis - Status: {response.status_code}")
-+            if "401" in response.text or "invalid_api_key" in response.text:
-+                print("   Issue: Invalid OpenAI API key (sk-emergent... is not valid)")
-+            return False
-+    except Exception as e:
-+        print(f"❌ FAIL Photo Analysis - Error: {str(e)}")
-+        return False
-+
-+if __name__ == "__main__":
-+    print("🔧 Testing Fixed Issues")
-+    print("=" * 50)
-+    
-+    results = []
-+    results.append(test_meal_history())
-+    results.append(test_voice_logging())
-+    results.append(test_photo_analysis())
-+    
-+    print("\n📊 SUMMARY")
-+    print("=" * 50)
-+    passed = sum(results)
-+    total = len(results)
-+    print(f"Passed: {passed}/{total}")
-+    
-+    if results[0]:
-+        print("✅ Meal History API - FIXED")
-+    if not results[1]:
-+        print("❌ Voice Logging API - OpenAI API key issue")
-+    if not results[2]:
-+        print("❌ Photo Analysis API - OpenAI API key issue")
-\ No newline at end of file
-diff --git a/test_result.md b/test_result.md
-index 9aa8bba..cd25782 100644
---- a/test_result.md
-+++ b/test_result.md
-@@ -131,15 +131,18 @@ backend:
-   
-   - task: "AI Photo Analysis"
-     implemented: true
--    working: "NA"
-+    working: false
-     file: "/app/backend/server.py"
--    stuck_count: 0
-+    stuck_count: 1
-     priority: "high"
--    needs_retesting: true
-+    needs_retesting: false
-     status_history:
-         - working: "NA"
-           agent: "main"
-           comment: "POST /api/meals/log-photo endpoint uses OpenAI GPT-4 Vision API for food recognition and coin detection. Uses Emergent LLM key. Needs testing with actual image data."
-+        - working: false
-+          agent: "testing"
-+          comment: "API endpoint responds but fails with 401 Unauthorized. OpenAI API key 'sk-emergent-1296706658d9dBc9a6' is invalid - not a valid OpenAI key format. Valid keys start with 'sk-proj-' or 'sk-'. This appears to be a MOCKED key."
-   
-   - task: "Meal Logging API"
-     implemented: true
-@@ -155,15 +158,18 @@ backend:
-   
-   - task: "Meal History API"
-     implemented: true
--    working: "NA"
-+    working: true
-     file: "/app/backend/server.py"
-     stuck_count: 0
-     priority: "medium"
--    needs_retesting: true
-+    needs_retesting: false
-     status_history:
-         - working: "NA"
-           agent: "main"
-           comment: "GET /api/meals/history/{user_id} endpoint implemented with days filter. Returns chronological meal list. Needs testing with multiple meals."
-+        - working: true
-+          agent: "testing"
-+          comment: "Fixed MongoDB ObjectId serialization issue by excluding _id field. API now returns meal history correctly. Tested with 2 meals successfully."
-   
-   - task: "Daily Stats API"
-     implemented: true
-@@ -179,15 +185,18 @@ backend:
-   
-   - task: "Voice Logging Parser"
-     implemented: true
--    working: "NA"
-+    working: false
-     file: "/app/backend/server.py"
--    stuck_count: 0
-+    stuck_count: 1
-     priority: "medium"
--    needs_retesting: true
-+    needs_retesting: false
-     status_history:
-         - working: "NA"
-           agent: "main"
-           comment: "POST /api/meals/log-voice uses GPT-4 to parse voice text into structured food data. Needs testing with actual voice input text."
-+        - working: false
-+          agent: "testing"
-+          comment: "API endpoint responds but fails with 401 Unauthorized. OpenAI API key 'sk-emergent-1296706658d9dBc9a6' is invalid - not a valid OpenAI key format. Valid keys start with 'sk-proj-' or 'sk-'. This appears to be a MOCKED key."
- 
- frontend:
-   - task: "Onboarding Flow"
-@@ -282,17 +291,16 @@ metadata:
- 
- test_plan:
-   current_focus:
--    - "User Onboarding API"
--    - "Food Database Search API"
--    - "Meal Logging API"
--    - "Daily Stats API"
-     - "AI Photo Analysis"
-     - "Voice Logging Parser"
--    - "Meal History API"
--  stuck_tasks: []
--  test_all: true
--  test_priority: "high_first"
-+  stuck_tasks:
-+    - "AI Photo Analysis"
-+    - "Voice Logging Parser"
-+  test_all: false
-+  test_priority: "stuck_first"
- 
- agent_communication:
-     - agent: "main"
--      message: "NutriSnap MVP implementation complete. Backend has 7 API endpoints, 25 Indian foods in database, OpenAI integration for AI features. Frontend has complete user journey: onboarding → dashboard → meal logging (photo/manual/voice) → history → profile. Ready for comprehensive backend testing. Frontend UI testing should be done separately after backend validation."
-\ No newline at end of file
-+      message: "NutriSnap MVP implementation complete. Backend has 7 API endpoints, 25 Indian foods in database, OpenAI integration for AI features. Frontend has complete user journey: onboarding → dashboard → meal logging (photo/manual/voice) → history → profile. Ready for comprehensive backend testing. Frontend UI testing should be done separately after backend validation."
-+    - agent: "testing"
-+      message: "Backend testing completed. CRITICAL ISSUE: OpenAI API key 'sk-emergent-1296706658d9dBc9a6' is INVALID/MOCKED - not a valid OpenAI format. All AI features (photo analysis, voice logging) fail with 401 Unauthorized. Fixed meal history MongoDB serialization issue. Core APIs (user management, food search, meal logging, stats) working correctly with accurate BMR calculations and macro splits."
-\ No newline at end of file
+diff --git a/frontend/app/(tabs)/_layout.tsx b/frontend/app/(tabs)/_layout.tsx
+index b5beaff..a5a9e93 100644
+--- a/frontend/app/(tabs)/_layout.tsx
++++ b/frontend/app/(tabs)/_layout.tsx
+@@ -9,25 +9,26 @@ export default function TabsLayout() {
+       screenOptions={{
+         headerShown: false,
+         tabBarStyle: {
+-          backgroundColor: Colors.primary,
++          backgroundColor: Colors.white,
+           borderTopWidth: 0,
+           height: Platform.OS === 'ios' ? 88 : 68,
+           paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+           paddingTop: 12,
+-          borderTopLeftRadius: 24,
+-          borderTopRightRadius: 24,
+           position: 'absolute',
+           elevation: 0,
+-          shadowColor: Colors.shadow,
++          shadowColor: Colors.shadowDark,
+           shadowOffset: { width: 0, height: -4 },
+-          shadowOpacity: 0.1,
+-          shadowRadius: 8,
++          shadowOpacity: 0.15,
++          shadowRadius: 12,
+         },
+-        tabBarActiveTintColor: Colors.white,
+-        tabBarInactiveTintColor: 'rgba(255, 255, 255, 0.5)',
++        tabBarActiveTintColor: Colors.primary,
++        tabBarInactiveTintColor: Colors.gray400,
+         tabBarLabelStyle: {
+           fontSize: 12,
+-          fontWeight: '600',
++          fontWeight: '700',
++        },
++        tabBarItemStyle: {
++          paddingTop: 4,
+         },
+       }}
+     >
+@@ -35,8 +36,17 @@ export default function TabsLayout() {
+         name="home"
+         options={{
+           title: 'Home',
+-          tabBarIcon: ({ color, size }) => (
+-            <Ionicons name="home" size={size} color={color} />
++          tabBarIcon: ({ color, size, focused }) => (
++            <View style={{
++              width: 48,
++              height: 48,
++              borderRadius: 24,
++              backgroundColor: focused ? Colors.primary + '15' : 'transparent',
++              justifyContent: 'center',
++              alignItems: 'center',
++            }}>
++              <Ionicons name={focused ? "home" : "home-outline"} size={26} color={color} />
++            </View>
+           ),
+         }}
+       />
+@@ -44,29 +54,44 @@ export default function TabsLayout() {
+         name="log"
+         options={{
+           title: 'Log Meal',
+-          tabBarIcon: ({ color, size }) => (
++          tabBarIcon: ({ color, size, focused }) => (
+             <View
+               style={{
+-                backgroundColor: Colors.accent,
+-                borderRadius: 28,
+-                width: 56,
+-                height: 56,
++                backgroundColor: Colors.primary,
++                borderRadius: 32,
++                width: 64,
++                height: 64,
+                 justifyContent: 'center',
+                 alignItems: 'center',
+-                marginBottom: 20,
++                marginBottom: 32,
++                shadowColor: Colors.primary,
++                shadowOffset: { width: 0, height: 4 },
++                shadowOpacity: 0.4,
++                shadowRadius: 8,
++                elevation: 8,
+               }}
+             >
+-              <Ionicons name="add" size={32} color={Colors.white} />
++              <Ionicons name="add" size={36} color={Colors.white} />
+             </View>
+           ),
++          tabBarLabel: '',
+         }}
+       />
+       <Tabs.Screen
+         name="history"
+         options={{
+           title: 'History',
+-          tabBarIcon: ({ color, size }) => (
+-            <Ionicons name="time" size={size} color={color} />
++          tabBarIcon: ({ color, size, focused }) => (
++            <View style={{
++              width: 48,
++              height: 48,
++              borderRadius: 24,
++              backgroundColor: focused ? Colors.secondary + '15' : 'transparent',
++              justifyContent: 'center',
++              alignItems: 'center',
++            }}>
++              <Ionicons name={focused ? "time" : "time-outline"} size={26} color={color} />
++            </View>
+           ),
+         }}
+       />
+@@ -74,8 +99,17 @@ export default function TabsLayout() {
+         name="profile"
+         options={{
+           title: 'Profile',
+-          tabBarIcon: ({ color, size }) => (
+-            <Ionicons name="person" size={size} color={color} />
++          tabBarIcon: ({ color, size, focused }) => (
++            <View style={{
++              width: 48,
++              height: 48,
++              borderRadius: 24,
++              backgroundColor: focused ? Colors.tertiary + '15' : 'transparent',
++              justifyContent: 'center',
++              alignItems: 'center',
++            }}>
++              <Ionicons name={focused ? "person" : "person-outline"} size={26} color={color} />
++            </View>
+           ),
+         }}
+       />
+diff --git a/model.patch b/model.patch
+index 8b0d750..ab85b44 100644
+--- a/model.patch
++++ b/model.patch
+@@ -1,212 +0,0 @@
+-diff --git a/backend/server.py b/backend/server.py
+-index f339757..1e6fb20 100644
+---- a/backend/server.py
+-+++ b/backend/server.py
+-@@ -472,7 +472,7 @@ async def get_meal_history(user_id: str, days: int = 7):
+-     meals = await db.meals.find({
+-         "user_id": user_id,
+-         "timestamp": {"$gte": start_date}
+--    }).sort("timestamp", -1).to_list(1000)
+-+    }, {"_id": 0}).sort("timestamp", -1).to_list(1000)
+-     
+-     return {"meals": meals, "count": len(meals)}
+- 
+-diff --git a/test_fixes.py b/test_fixes.py
+-new file mode 100644
+-index 0000000..2da25b5
+---- /dev/null
+-+++ b/test_fixes.py
+-@@ -0,0 +1,95 @@
+-+#!/usr/bin/env python3
+-+"""
+-+Quick test for the fixed meal history and AI endpoints
+-+"""
+-+
+-+import requests
+-+import json
+-+
+-+BACKEND_URL = "https://design-preview-49.preview.emergentagent.com/api"
+-+TEST_USER_ID = "686c41c1-21a5-450a-9c48-e2117ac8f9dc"
+-+
+-+def test_meal_history():
+-+    """Test the fixed meal history endpoint"""
+-+    print("=== Testing Fixed Meal History API ===")
+-+    try:
+-+        response = requests.get(f"{BACKEND_URL}/meals/history/{TEST_USER_ID}?days=7", timeout=30)
+-+        if response.status_code == 200:
+-+            data = response.json()
+-+            print(f"✅ PASS Meal History - Found {data['count']} meals")
+-+            return True
+-+        else:
+-+            print(f"❌ FAIL Meal History - Status: {response.status_code}")
+-+            return False
+-+    except Exception as e:
+-+        print(f"❌ FAIL Meal History - Error: {str(e)}")
+-+        return False
+-+
+-+def test_voice_logging():
+-+    """Test voice logging (will fail due to invalid API key)"""
+-+    print("=== Testing Voice Logging API ===")
+-+    voice_data = {
+-+        "text": "I had 2 rotis and dal for dinner",
+-+        "user_id": TEST_USER_ID,
+-+        "meal_type": "dinner"
+-+    }
+-+    
+-+    try:
+-+        response = requests.post(f"{BACKEND_URL}/meals/log-voice", json=voice_data, timeout=60)
+-+        if response.status_code == 200:
+-+            print("✅ PASS Voice Logging")
+-+            return True
+-+        else:
+-+            print(f"❌ FAIL Voice Logging - Status: {response.status_code}")
+-+            if "401" in response.text or "invalid_api_key" in response.text:
+-+                print("   Issue: Invalid OpenAI API key (sk-emergent... is not valid)")
+-+            return False
+-+    except Exception as e:
+-+        print(f"❌ FAIL Voice Logging - Error: {str(e)}")
+-+        return False
+-+
+-+def test_photo_analysis():
+-+    """Test photo analysis (will fail due to invalid API key)"""
+-+    print("=== Testing Photo Analysis API ===")
+-+    test_image_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+-+    
+-+    photo_data = {
+-+        "image_base64": test_image_b64,
+-+        "user_id": TEST_USER_ID
+-+    }
+-+    
+-+    try:
+-+        response = requests.post(f"{BACKEND_URL}/meals/log-photo", json=photo_data, timeout=60)
+-+        if response.status_code == 200:
+-+            print("✅ PASS Photo Analysis")
+-+            return True
+-+        else:
+-+            print(f"❌ FAIL Photo Analysis - Status: {response.status_code}")
+-+            if "401" in response.text or "invalid_api_key" in response.text:
+-+                print("   Issue: Invalid OpenAI API key (sk-emergent... is not valid)")
+-+            return False
+-+    except Exception as e:
+-+        print(f"❌ FAIL Photo Analysis - Error: {str(e)}")
+-+        return False
+-+
+-+if __name__ == "__main__":
+-+    print("🔧 Testing Fixed Issues")
+-+    print("=" * 50)
+-+    
+-+    results = []
+-+    results.append(test_meal_history())
+-+    results.append(test_voice_logging())
+-+    results.append(test_photo_analysis())
+-+    
+-+    print("\n📊 SUMMARY")
+-+    print("=" * 50)
+-+    passed = sum(results)
+-+    total = len(results)
+-+    print(f"Passed: {passed}/{total}")
+-+    
+-+    if results[0]:
+-+        print("✅ Meal History API - FIXED")
+-+    if not results[1]:
+-+        print("❌ Voice Logging API - OpenAI API key issue")
+-+    if not results[2]:
+-+        print("❌ Photo Analysis API - OpenAI API key issue")
+-\ No newline at end of file
+-diff --git a/test_result.md b/test_result.md
+-index 9aa8bba..cd25782 100644
+---- a/test_result.md
+-+++ b/test_result.md
+-@@ -131,15 +131,18 @@ backend:
+-   
+-   - task: "AI Photo Analysis"
+-     implemented: true
+--    working: "NA"
+-+    working: false
+-     file: "/app/backend/server.py"
+--    stuck_count: 0
+-+    stuck_count: 1
+-     priority: "high"
+--    needs_retesting: true
+-+    needs_retesting: false
+-     status_history:
+-         - working: "NA"
+-           agent: "main"
+-           comment: "POST /api/meals/log-photo endpoint uses OpenAI GPT-4 Vision API for food recognition and coin detection. Uses Emergent LLM key. Needs testing with actual image data."
+-+        - working: false
+-+          agent: "testing"
+-+          comment: "API endpoint responds but fails with 401 Unauthorized. OpenAI API key 'sk-emergent-1296706658d9dBc9a6' is invalid - not a valid OpenAI key format. Valid keys start with 'sk-proj-' or 'sk-'. This appears to be a MOCKED key."
+-   
+-   - task: "Meal Logging API"
+-     implemented: true
+-@@ -155,15 +158,18 @@ backend:
+-   
+-   - task: "Meal History API"
+-     implemented: true
+--    working: "NA"
+-+    working: true
+-     file: "/app/backend/server.py"
+-     stuck_count: 0
+-     priority: "medium"
+--    needs_retesting: true
+-+    needs_retesting: false
+-     status_history:
+-         - working: "NA"
+-           agent: "main"
+-           comment: "GET /api/meals/history/{user_id} endpoint implemented with days filter. Returns chronological meal list. Needs testing with multiple meals."
+-+        - working: true
+-+          agent: "testing"
+-+          comment: "Fixed MongoDB ObjectId serialization issue by excluding _id field. API now returns meal history correctly. Tested with 2 meals successfully."
+-   
+-   - task: "Daily Stats API"
+-     implemented: true
+-@@ -179,15 +185,18 @@ backend:
+-   
+-   - task: "Voice Logging Parser"
+-     implemented: true
+--    working: "NA"
+-+    working: false
+-     file: "/app/backend/server.py"
+--    stuck_count: 0
+-+    stuck_count: 1
+-     priority: "medium"
+--    needs_retesting: true
+-+    needs_retesting: false
+-     status_history:
+-         - working: "NA"
+-           agent: "main"
+-           comment: "POST /api/meals/log-voice uses GPT-4 to parse voice text into structured food data. Needs testing with actual voice input text."
+-+        - working: false
+-+          agent: "testing"
+-+          comment: "API endpoint responds but fails with 401 Unauthorized. OpenAI API key 'sk-emergent-1296706658d9dBc9a6' is invalid - not a valid OpenAI key format. Valid keys start with 'sk-proj-' or 'sk-'. This appears to be a MOCKED key."
+- 
+- frontend:
+-   - task: "Onboarding Flow"
+-@@ -282,17 +291,16 @@ metadata:
+- 
+- test_plan:
+-   current_focus:
+--    - "User Onboarding API"
+--    - "Food Database Search API"
+--    - "Meal Logging API"
+--    - "Daily Stats API"
+-     - "AI Photo Analysis"
+-     - "Voice Logging Parser"
+--    - "Meal History API"
+--  stuck_tasks: []
+--  test_all: true
+--  test_priority: "high_first"
+-+  stuck_tasks:
+-+    - "AI Photo Analysis"
+-+    - "Voice Logging Parser"
+-+  test_all: false
+-+  test_priority: "stuck_first"
+- 
+- agent_communication:
+-     - agent: "main"
+--      message: "NutriSnap MVP implementation complete. Backend has 7 API endpoints, 25 Indian foods in database, OpenAI integration for AI features. Frontend has complete user journey: onboarding → dashboard → meal logging (photo/manual/voice) → history → profile. Ready for comprehensive backend testing. Frontend UI testing should be done separately after backend validation."
+-\ No newline at end of file
+-+      message: "NutriSnap MVP implementation complete. Backend has 7 API endpoints, 25 Indian foods in database, OpenAI integration for AI features. Frontend has complete user journey: onboarding → dashboard → meal logging (photo/manual/voice) → history → profile. Ready for comprehensive backend testing. Frontend UI testing should be done separately after backend validation."
+-+    - agent: "testing"
+-+      message: "Backend testing completed. CRITICAL ISSUE: OpenAI API key 'sk-emergent-1296706658d9dBc9a6' is INVALID/MOCKED - not a valid OpenAI format. All AI features (photo analysis, voice logging) fail with 401 Unauthorized. Fixed meal history MongoDB serialization issue. Core APIs (user management, food search, meal logging, stats) working correctly with accurate BMR calculations and macro splits."
+-\ No newline at end of file
