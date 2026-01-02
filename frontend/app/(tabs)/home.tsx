@@ -432,7 +432,7 @@ export default function HomeScreen() {
                     </View>
                   </View>
                 </View>
-              </BlurView>
+              </View>
             )}
           </View>
         </Animated.View>
