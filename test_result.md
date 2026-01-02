@@ -158,15 +158,18 @@ backend:
   
   - task: "Meal History API"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "medium"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         - working: "NA"
           agent: "main"
           comment: "GET /api/meals/history/{user_id} endpoint implemented with days filter. Returns chronological meal list. Needs testing with multiple meals."
+        - working: true
+          agent: "testing"
+          comment: "Fixed MongoDB ObjectId serialization issue by excluding _id field. API now returns meal history correctly. Tested with 2 meals successfully."
   
   - task: "Daily Stats API"
     implemented: true
