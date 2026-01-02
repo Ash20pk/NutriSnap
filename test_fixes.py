@@ -6,7 +6,7 @@ Quick test for the fixed meal history and AI endpoints
 import requests
 import json
 
-BACKEND_URL = "https://design-preview-49.preview.emergentagent.com/api"
+BACKEND_URL = "https://snapmeal-5.preview.emergentagent.com/api"
 TEST_USER_ID = "686c41c1-21a5-450a-9c48-e2117ac8f9dc"
 
 def test_meal_history():

@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 import time
 
 # Backend URL from frontend .env
-BACKEND_URL = "https://design-preview-49.preview.emergentagent.com/api"
+BACKEND_URL = "https://snapmeal-5.preview.emergentagent.com/api"
 
 class NutriSnapTester:
     def __init__(self):
