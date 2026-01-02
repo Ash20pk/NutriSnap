@@ -535,4 +535,29 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Colors.white,
   },
+  proTipCard: {
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    marginHorizontal: 20,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: Colors.accent,
+  },
+  proTipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  proTipTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.accent,
+  },
+  proTipText: {
+    fontSize: 14,
+    color: Colors.white,
+    lineHeight: 20,
+    opacity: 0.9,
+  },
 });
