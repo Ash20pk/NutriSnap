@@ -210,7 +210,7 @@ async def analyze_food_image(image_base64: str) -> Dict[str, Any]:
             }
             
             Focus on Indian cuisine if applicable.""",
-            image_contents=[image_content]
+            file_contents=[image_content]
         )
         
         # Send message and get response
