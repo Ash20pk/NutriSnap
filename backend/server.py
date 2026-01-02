@@ -216,12 +216,17 @@ async def analyze_food_image(image_base64: str) -> Dict[str, Any]:
         # Send message and get response
         response = await chat.send_message(user_message)
         
+        # Debug: log the raw response
+        logger.info(f"Raw LLM response: {response}")
+        
         # Extract JSON from response
         content = response
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0].strip()
         elif "```" in content:
             content = content.split("```")[1].split("```")[0].strip()
+        
+        logger.info(f"Extracted content for JSON parsing: {content}")
         
         result = json.loads(content)
         return result
