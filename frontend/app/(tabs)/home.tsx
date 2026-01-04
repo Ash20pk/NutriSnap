@@ -8,24 +8,23 @@ import {
   RefreshControl,
   Dimensions,
   Animated,
-  Platform,
+  Modal,
+  Easing,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
-import { fontStyles } from '../../constants/Fonts';
 import { useUser } from '../../context/UserContext';
 import { mealApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
-import { format, subDays, startOfWeek, endOfWeek } from 'date-fns';
+import { format } from 'date-fns';
 import { BarChart, PieChart } from 'react-native-gifted-charts';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import PageHeader from '../../components/PageHeader';
 import DuoButton from '../../components/DuoButton';
 import AnimatedCard from '../../components/AnimatedCard';
 import * as Haptics from 'expo-haptics';
-import { Modal } from 'react-native';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = width - 40;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -39,36 +38,20 @@ export default function HomeScreen() {
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
+  const shineAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (user) {
-      fetchStats();
-      fetchWeeklyData();
-    }
-  }, [user]);
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(bounceAnim, {
+    Animated.loop(
+      Animated.timing(shineAnim, {
         toValue: 1,
-        tension: 40,
-        friction: 6,
+        duration: 2500,
+        easing: Easing.bezier(0.4, 0, 0.2, 1),
         useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
+      })
+    ).start();
+  }, [shineAnim]);
 
-  const fetchStats = async () => {
+  const fetchStats = React.useCallback(async () => {
     if (!user) return;
     setLoading(true);
     try {
@@ -79,9 +62,9 @@ export default function HomeScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
-  const fetchWeeklyData = async () => {
+  const fetchWeeklyData = React.useCallback(async () => {
     if (!user) return;
     try {
       const history = await mealApi.getHistory(user.id, 7);
@@ -107,7 +90,35 @@ export default function HomeScreen() {
     } catch (error) {
       console.error('Error fetching weekly data:', error);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      fetchStats();
+      fetchWeeklyData();
+    }
+  }, [user, fetchStats, fetchWeeklyData]);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(bounceAnim, {
+        toValue: 1,
+        tension: 40,
+        friction: 6,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [bounceAnim, fadeAnim, slideAnim]);
 
   const calculateProgress = (current: number, target: number) => {
     return Math.min((current / target) * 100, 100);
@@ -126,7 +137,6 @@ export default function HomeScreen() {
       setHasShownGoalToday(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       
-      // Start sparkle animations
       const animations = sparkleAnims.map((anim, i) => 
         Animated.loop(
           Animated.sequence([
@@ -146,7 +156,7 @@ export default function HomeScreen() {
       );
       Animated.parallel(animations).start();
     }
-  }, [hasMetGoal, loading, stats]);
+  }, [hasMetGoal, hasShownGoalToday, loading, stats, sparkleAnims]);
 
   const renderSparkle = (anim: Animated.Value, index: number) => {
     const positions = [
@@ -198,9 +208,35 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
+      <PageHeader 
+        title={`Hello, ${user?.name}`} 
+        subtitle={hasMetGoal 
+          ? "You've hit your calorie goal! 🎯" 
+          : `${Math.round((stats?.targets?.calories || 2000) - (stats?.total_calories || 0))} kcal remaining today`}
+        rightComponent={
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              style={styles.profileIconButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                router.push('/(tabs)/profile');
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="person-outline" size={20} color={Colors.text} />
+            </TouchableOpacity>
+
+            <View style={styles.streakBadge}>
+              <Ionicons name="flame" size={20} color={Colors.accent} />
+              <Text style={styles.streakText}>5</Text>
+            </View>
+          </View>
+        }
+      />
 
       <ScrollView
-        contentContainerStyle={styles.contentContainer}
+        style={styles.flex}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl 
@@ -214,43 +250,72 @@ export default function HomeScreen() {
           />
         }
       >
-        {/* Header */}
-        <PageHeader 
-          title={`Hello, ${user?.name}`} 
-          subtitle={hasMetGoal 
-            ? "You've hit your calorie goal! 🎯" 
-            : `${Math.round((stats?.targets?.calories || 2000) - (stats?.total_calories || 0))} kcal remaining today`}
-          rightComponent={
-            <View style={styles.headerRight}>
-              <TouchableOpacity
-                style={styles.profileIconButton}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                  router.push('/(tabs)/profile');
-                }}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="person-outline" size={20} color={Colors.text} />
-              </TouchableOpacity>
+        {/* Weekly Snapshot Banner */}
+        <AnimatedCard delay={100} type="pop" style={styles.bannerContainer}>
+          <TouchableOpacity 
+            style={styles.bannerCard}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+              router.push('/weekly-wrap');
+            }}
+            activeOpacity={0.9}
+          >
+            <LinearGradient 
+              colors={[Colors.primary, Colors.accent]} 
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill} 
+            />
+            
+            <Animated.View
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  transform: [
+                    {
+                      translateX: shineAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-width, width * 1.5],
+                      }),
+                    },
+                    { rotate: '25deg' },
+                  ],
+                },
+              ]}
+            >
+              <LinearGradient
+                colors={['transparent', 'rgba(255,255,255,0.0)', 'rgba(255,255,255,0.3)', 'rgba(255,255,255,0.0)', 'transparent']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{ width: 150, height: '200%', top: -50 }}
+              />
+            </Animated.View>
 
-              <View style={styles.streakBadge}>
-                <Ionicons name="flame" size={20} color={Colors.accent} />
-                <Text style={styles.streakText}>5</Text>
+            <View style={[styles.bannerCircle, { top: -30, right: -20, width: 120, height: 120 }]} />
+            <View style={[styles.bannerCircle, { bottom: -40, left: 40, width: 150, height: 150 }]} />
+            <View style={styles.bannerIconFloating}>
+              <Ionicons name="stats-chart" size={120} color={Colors.white} />
+            </View>
+
+            <View style={styles.bannerBadge}>
+              <Text style={styles.bannerBadgeText}>NEW UPDATE</Text>
+            </View>
+            
+            <View style={styles.bannerContent}>
+              <View style={styles.bannerTextContainer}>
+                <Text style={styles.bannerTitle}>Weekly Report is Ready!</Text>
+                <Text style={styles.bannerSubtitle}>
+                  You&apos;ve completed another week of healthy eating. See your progress!
+                </Text>
+                <View style={styles.bannerCTA}>
+                  <Text style={styles.bannerCTAText}>SHOW ME</Text>
+                </View>
+              </View>
+              <View style={styles.bannerImageContainer}>
+                <Ionicons name="trophy" size={60} color={Colors.warning} />
               </View>
             </View>
-          }
-        />
-
-        {/* Weekly Wrap-Up Button */}
-        <AnimatedCard delay={100} type="pop" style={{ paddingHorizontal: 20, marginBottom: 20 }}>
-          <DuoButton
-            title="Weekly Snapshot"
-            onPress={() => router.push('/weekly-wrap')}
-            color={Colors.white}
-            shadowColor={Colors.border}
-            textStyle={{ color: Colors.primary }}
-            size="medium"
-          />
+          </TouchableOpacity>
         </AnimatedCard>
 
         {/* Motivational Message */}
@@ -288,7 +353,7 @@ export default function HomeScreen() {
 
         {/* Today's Calories - Glass Card */}
         <AnimatedCard delay={300} type="slide" style={styles.section}>
-          <Text style={styles.sectionTitle}>Today's Calories</Text>
+          <Text style={styles.sectionTitle}>Today&apos;s Calories</Text>
           <View style={styles.standardCard}>
             <View style={styles.caloriesContent}>
               <View style={styles.caloriesHeader}>
@@ -387,12 +452,12 @@ export default function HomeScreen() {
         {/* Weekly Trend Chart - Glass Card */}
         {weeklyData.length > 0 && (
           <AnimatedCard delay={500} type="slide" style={styles.section}>
-            <Text style={styles.sectionTitle}>This Week's Trend</Text>
+            <Text style={styles.sectionTitle}>This Week&apos;s Trend</Text>
             <View style={styles.standardCard}>
               <View style={styles.chartContent}>
                 <BarChart
                   data={weeklyData}
-                  width={CARD_WIDTH - 80}
+                  width={width - 88}
                   height={180}
                   barWidth={28}
                   spacing={18}
@@ -433,7 +498,7 @@ export default function HomeScreen() {
             </View>
 
             <Text style={styles.goalModalText}>
-              You've hit your calorie target for today. Consistency is key to success!
+              You&apos;ve hit your calorie target for today. Consistency is key to success!
             </Text>
             
             <View style={styles.goalStatsRow}>
@@ -467,7 +532,6 @@ export default function HomeScreen() {
               style={styles.shareLink}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                // Share functionality could go here
               }}
             >
               <Ionicons name="share-outline" size={18} color={Colors.primary} />
@@ -485,9 +549,100 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  contentContainer: {
-    paddingHorizontal: 20,
+  flex: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 24,
     paddingBottom: 20,
+  },
+  bannerContainer: {
+    marginBottom: 24,
+    marginTop: 8,
+  },
+  bannerCard: {
+    backgroundColor: Colors.accent,
+    borderRadius: 32,
+    padding: 24,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderBottomWidth: 10,
+    borderBottomColor: 'rgba(0,0,0,0.2)',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  bannerCircle: {
+    position: 'absolute',
+    backgroundColor: Colors.white,
+    opacity: 0.1,
+    borderRadius: 100,
+  },
+  bannerBadge: {
+    backgroundColor: Colors.warning,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.2)',
+    borderBottomWidth: 4,
+  },
+  bannerBadgeText: {
+    color: Colors.white,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  bannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  bannerTextContainer: {
+    flex: 1,
+  },
+  bannerTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: Colors.white,
+    lineHeight: 28,
+    marginBottom: 8,
+  },
+  bannerSubtitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.8)',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  bannerCTA: {
+    backgroundColor: Colors.white,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
+    borderBottomWidth: 4,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  bannerCTAText: {
+    color: Colors.accent,
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  bannerImageContainer: {
+    width: 80,
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bannerIconFloating: {
+    position: 'absolute',
+    right: -10,
+    bottom: -10,
+    opacity: 0.2,
+    transform: [{ rotate: '-15deg' }, { scale: 1.5 }],
   },
   headerRight: {
     flexDirection: 'row',
@@ -495,17 +650,15 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   profileIconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.white,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 4,
   },
   streakBadge: {
     flexDirection: 'row',
@@ -513,58 +666,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 14,
     gap: 6,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 4,
   },
   streakText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.text,
-  },
-  wrapUpButton: {
-    marginBottom: 20,
-    borderRadius: 20,
-    overflow: 'hidden',
-    backgroundColor: Colors.white,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  wrapUpContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    gap: 12,
-  },
-  wrapUpIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: Colors.primary + '15',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  wrapUpText: {
-    flex: 1,
-  },
-  wrapUpTitle: {
-    fontSize: 18,
     fontWeight: '900',
     color: Colors.text,
-    marginBottom: 2,
-  },
-  wrapUpSubtitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.textSecondary,
-    lineHeight: 18,
   },
   motivationSection: {
     marginBottom: 24,

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   SafeAreaView,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { CameraView, Camera } from 'expo-camera';
 import { Colors } from '../constants/Colors';
@@ -15,12 +16,11 @@ import { useUser } from '../context/UserContext';
 import { mealApi } from '../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import * as FileSystem from 'expo-file-system';
-
 import * as Haptics from 'expo-haptics';
-
 import DuoButton from '../components/DuoButton';
 import AnimatedCard from '../components/AnimatedCard';
+
+const { width } = Dimensions.get('window');
 
 export default function CameraScreen() {
   const router = useRouter();
@@ -34,23 +34,16 @@ export default function CameraScreen() {
   const [lidarEnabled, setLidarEnabled] = useState(true);
   const [barcodeData, setBarcodeData] = useState<any>(null);
 
-  // Check if this is for barcode scanning
-  const isBarcodeScan = params?.mode === 'barcode';
-
   useEffect(() => {
     (async () => {
       const { status } = await Camera.requestCameraPermissionsAsync();
       setHasPermission(status === 'granted');
       
-      // Check for LiDAR availability (iOS Pro devices)
       if (Platform.OS === 'ios') {
-        // LiDAR is available on iPhone 12 Pro and later
-        // This is a simplified check - in production, use a proper capability check
-        setHasLiDAR(true); // Assume available for now
+        setHasLiDAR(true);
       }
     })();
 
-    // If barcode data is passed, set it
     if (params?.barcodeData) {
       try {
         setBarcodeData(JSON.parse(params.barcodeData as string));
@@ -59,21 +52,6 @@ export default function CameraScreen() {
       }
     }
   }, [params]);
-
-  const calculateVolumeFromDepth = async (depthData: any) => {
-    // Simplified volume calculation from depth data
-    // In production, this would use advanced 3D mesh analysis
-    try {
-      // Estimate volume based on depth map
-      // This is a placeholder - real implementation would process the depth buffer
-      const estimatedVolume = 250; // ml
-      const estimatedWeight = estimatedVolume * 1.0; // Assuming density ~1g/ml
-      return estimatedWeight;
-    } catch (error) {
-      console.error('Error calculating volume:', error);
-      return null;
-    }
-  };
 
   const takePicture = async () => {
     if (!cameraRef.current || !user) return;
@@ -84,7 +62,6 @@ export default function CameraScreen() {
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.7,
         base64: true,
-        // Enable depth data capture if LiDAR is available
         ...(hasLiDAR && lidarEnabled && Platform.OS === 'ios' && {
           enableDepthData: true,
         }),
@@ -94,71 +71,45 @@ export default function CameraScreen() {
         throw new Error('Failed to capture image');
       }
 
-      let portionEstimate = null;
-      let depthAnalysis = '';
-
-      // Process depth data if available (LiDAR)
-      if (photo.depthData && hasLiDAR && lidarEnabled) {
-        portionEstimate = await calculateVolumeFromDepth(photo.depthData);
-        depthAnalysis = `\n\n📐 LiDAR Analysis: Estimated ${portionEstimate}g based on 3D depth measurement`;
-      }
-
-      // If this is a barcode scan follow-up
       if (barcodeData) {
         Alert.alert(
           'Portion Captured! 📸',
-          `Product: ${barcodeData.name}\n` +
-          `${depthAnalysis || '\n📏 Analyzing portion size...'}\n\n` +
-          `Logging your meal now...`,
+          `Product: ${barcodeData.name}\n\nAnalyzing portion size...`,
           [
             {
               text: 'Log Meal',
               onPress: async () => {
-                // Calculate portion consumed (assume 50% for now)
-                const portionFactor = portionEstimate ? portionEstimate / 100 : 0.5;
-                
                 await mealApi.logMeal({
                   user_id: user.id,
                   meal_type: 'snack',
                   foods: [{
                     name: barcodeData.name,
-                    quantity: Math.round(barcodeData.serving_size * portionFactor),
-                    calories: Math.round(barcodeData.calories * portionFactor),
-                    protein: Math.round(barcodeData.protein * portionFactor),
-                    carbs: Math.round(barcodeData.carbs * portionFactor),
-                    fat: Math.round(barcodeData.fat * portionFactor),
+                    quantity: Math.round(barcodeData.serving_size * 0.5),
+                    calories: Math.round(barcodeData.calories * 0.5),
+                    protein: Math.round(barcodeData.protein * 0.5),
+                    carbs: Math.round(barcodeData.carbs * 0.5),
+                    fat: Math.round(barcodeData.fat * 0.5),
                   }],
                   image_base64: photo.base64,
                   logging_method: 'barcode',
-                  notes: `Scanned barcode, ${hasLiDAR && lidarEnabled ? 'LiDAR measured' : 'estimated'} portion`,
+                  notes: `Scanned barcode, estimated portion`,
                 });
-                Alert.alert('Success', 'Meal logged successfully!');
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
                 router.back();
               },
             },
-            {
-              text: 'Retake',
-              style: 'cancel',
-            },
+            { text: 'Retake', style: 'cancel' },
           ]
         );
-        setIsProcessing(false);
         return;
       }
 
-      // Regular photo analysis with AI
       const analysis = await mealApi.logPhoto(photo.base64, user.id);
 
       if (analysis.foods && analysis.foods.length > 0) {
-        const coinStatus = analysis.coin_detected 
-          ? '✅ Coin detected for accurate portions' 
-          : (hasLiDAR && lidarEnabled) 
-            ? '📐 LiDAR measured portions' 
-            : '⚠️ No coin detected - portions estimated';
-
         Alert.alert(
           'Food Detected! 🎉',
-          `Found: ${analysis.foods.map((f: any) => f.name).join(', ')}\n\n${coinStatus}${depthAnalysis}`,
+          `Found: ${analysis.foods.map((f: any) => f.name).join(', ')}`,
           [
             {
               text: 'Log Meal',
@@ -171,22 +122,15 @@ export default function CameraScreen() {
                   logging_method: 'photo',
                   notes: analysis.notes || '',
                 });
-                Alert.alert('Success', 'Meal logged successfully!');
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
                 router.back();
               },
             },
-            {
-              text: 'Retake',
-              style: 'cancel',
-            },
+            { text: 'Retake', style: 'cancel' },
           ]
         );
       } else {
-        Alert.alert(
-          'No Food Detected',
-          'Could not identify food in the image. Please try again with better lighting.',
-          [{ text: 'OK' }]
-        );
+        Alert.alert('No Food Detected', 'Could not identify food. Please try again with better lighting.');
       }
     } catch (error) {
       console.error('Error taking picture:', error);
@@ -194,11 +138,6 @@ export default function CameraScreen() {
     } finally {
       setIsProcessing(false);
     }
-  };
-
-  const toggleCameraFacing = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    setFacing(current => (current === 'back' ? 'front' : 'back'));
   };
 
   if (hasPermission === null) {
@@ -212,25 +151,16 @@ export default function CameraScreen() {
   if (hasPermission === false) {
     return (
       <View style={styles.container}>
+        <Ionicons name="camera-outline" size={64} color={Colors.error} />
         <Text style={styles.permissionText}>No access to camera</Text>
-        <DuoButton
-          title="Go Back"
-          onPress={() => router.back()}
-          color={Colors.primary}
-          size="medium"
-        />
+        <DuoButton title="Go Back" onPress={() => router.back()} color={Colors.primary} size="medium" />
       </View>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <CameraView 
-        style={styles.camera} 
-        facing={facing}
-        ref={cameraRef}
-      >
-        {/* Header */}
+      <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
         <View style={styles.header}>
           <TouchableOpacity 
             style={styles.closeButton} 
@@ -242,7 +172,6 @@ export default function CameraScreen() {
             <Ionicons name="close" size={28} color={Colors.white} />
           </TouchableOpacity>
           
-          {/* LiDAR Indicator */}
           {hasLiDAR && (
             <TouchableOpacity 
               style={[styles.lidarBadge, lidarEnabled && styles.lidarBadgeActive]}
@@ -254,7 +183,7 @@ export default function CameraScreen() {
               <Ionicons 
                 name={lidarEnabled ? "cube" : "cube-outline"} 
                 size={20} 
-                color={lidarEnabled ? Colors.white : Colors.textLight} 
+                color={lidarEnabled ? Colors.white : 'rgba(255,255,255,0.6)'} 
               />
               <Text style={[styles.lidarText, lidarEnabled && styles.lidarTextActive]}>
                 LiDAR
@@ -263,82 +192,67 @@ export default function CameraScreen() {
           )}
         </View>
 
-        {/* Instructions */}
         <View style={styles.overlay}>
           <AnimatedCard type="slide" delay={100} style={styles.instructionContainer}>
-            <Ionicons name="information-circle" size={24} color={Colors.white} />
+            <View style={styles.instructionIconWrap}>
+              <Ionicons 
+                name={barcodeData ? "basket-outline" : "camera-outline"} 
+                size={24} 
+                color={Colors.white} 
+              />
+            </View>
             <Text style={styles.instructionText}>
               {barcodeData 
-                ? `📦 Take photo of how much you ate of ${barcodeData.name}`
-                : hasLiDAR && lidarEnabled
-                ? '📐 LiDAR active - automatic 3D measurement enabled!'
-                : '🪙 Place a coin next to your food for accurate portion tracking'}
+                ? `Take a photo of your portion of ${barcodeData.name}`
+                : 'Position your food clearly in the center of the frame'}
             </Text>
           </AnimatedCard>
 
-          {/* Pro Tip Card */}
+          <View style={styles.aimingOverlay}>
+            <View style={styles.aimingCorner} />
+            <View style={[styles.aimingCorner, styles.aimingCornerTR]} />
+            <View style={[styles.aimingCorner, styles.aimingCornerBL]} />
+            <View style={[styles.aimingCorner, styles.aimingCornerBR]} />
+            
+            {!barcodeData && (
+              <View style={styles.coinHint}>
+                <View style={styles.coinCircle}>
+                  <Text style={styles.coinEmoji}>🪙</Text>
+                </View>
+                <Text style={styles.coinText}>PLACE COIN FOR SCALE</Text>
+              </View>
+            )}
+          </View>
+
           {!barcodeData && (
             <AnimatedCard type="pop" delay={300} style={styles.proTipCard}>
               <View style={styles.proTipHeader}>
-                <Ionicons name="bulb" size={24} color={Colors.accent} />
-                <Text style={styles.proTipTitle}>💡 Pro Tip!</Text>
+                <Ionicons name="bulb" size={20} color={Colors.warning} />
+                <Text style={styles.proTipTitle}>PRO TIP</Text>
               </View>
               <Text style={styles.proTipText}>
-                {hasLiDAR && lidarEnabled 
-                  ? "LiDAR is measuring 3D depth for precise portions. Position food at center for best results!" 
-                  : "Place a standard coin (₹5 or ₹10) next to your food. This helps our AI measure portions accurately!"}
+                Good lighting and a standard coin help our AI measure portions accurately!
               </Text>
             </AnimatedCard>
-          )}
-
-          {/* Barcode Info Card */}
-          {barcodeData && (
-            <AnimatedCard type="pop" delay={300} style={styles.barcodeInfoCard}>
-              <Text style={styles.barcodeInfoTitle}>{barcodeData.name}</Text>
-              <Text style={styles.barcodeInfoText}>
-                {barcodeData.calories} cal • Serving: {barcodeData.serving_size}g
-              </Text>
-            </AnimatedCard>
-          )}
-
-          {/* Coin/LiDAR indicator */}
-          {!barcodeData && (
-            <View style={styles.coinIndicator}>
-              {hasLiDAR && lidarEnabled ? (
-                <>
-                  <AnimatedCard type="pop" delay={500} style={styles.lidarScanningBox}>
-                    <View style={styles.scanCorner} />
-                    <View style={[styles.scanCorner, styles.scanCornerTR]} />
-                    <View style={[styles.scanCorner, styles.scanCornerBL]} />
-                    <View style={[styles.scanCorner, styles.scanCornerBR]} />
-                  </AnimatedCard>
-                  <Text style={styles.coinLabel}>📐 3D Scanning Active</Text>
-                </>
-              ) : (
-                <>
-                  <AnimatedCard type="pop" delay={500} style={styles.coinCircle}>
-                    <Ionicons name="ellipse" size={40} color="rgba(255, 255, 255, 0.3)" />
-                  </AnimatedCard>
-                  <Text style={styles.coinLabel}>Place coin here 🪙</Text>
-                </>
-              )}
-            </View>
           )}
         </View>
 
-        {/* Controls */}
         <View style={styles.controls}>
           <TouchableOpacity
             style={styles.controlButton}
-            onPress={toggleCameraFacing}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              setFacing(current => (current === 'back' ? 'front' : 'back'));
+            }}
           >
-            <Ionicons name="camera-reverse" size={32} color={Colors.white} />
+            <Ionicons name="camera-reverse-outline" size={28} color={Colors.white} />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.captureButton, isProcessing && styles.captureButtonDisabled]}
             onPress={takePicture}
             disabled={isProcessing}
+            activeOpacity={0.8}
           >
             {isProcessing ? (
               <ActivityIndicator size="large" color={Colors.white} />
@@ -347,7 +261,7 @@ export default function CameraScreen() {
             )}
           </TouchableOpacity>
 
-          <View style={styles.controlButton} />
+          <View style={styles.controlButtonDummy} />
         </View>
       </CameraView>
     </SafeAreaView>
@@ -368,11 +282,12 @@ const styles = StyleSheet.create({
   header: {
     position: 'absolute',
     top: 20,
-    left: 20,
-    right: 20,
+    left: 24,
+    right: 24,
     zIndex: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
   closeButton: {
     width: 44,
@@ -381,26 +296,30 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   lidarBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   lidarBadgeActive: {
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
   },
   lidarText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textLight,
+    fontSize: 13,
+    fontWeight: '900',
+    color: 'rgba(255,255,255,0.6)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   lidarTextActive: {
     color: Colors.white,
@@ -409,112 +328,127 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'space-between',
     paddingTop: 100,
-    paddingBottom: 180,
+    paddingBottom: 160,
+    paddingHorizontal: 24,
   },
   instructionContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: 'rgba(13, 8, 8, 0.8)',
-    marginHorizontal: 20,
+    gap: 14,
+    backgroundColor: 'rgba(13, 8, 8, 0.85)',
     padding: 16,
-    borderRadius: 20,
+    borderRadius: 24,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  instructionIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   instructionText: {
     flex: 1,
     fontSize: 14,
     color: Colors.white,
     lineHeight: 20,
-    fontWeight: '700',
+    fontWeight: '800',
   },
-  barcodeInfoCard: {
-    backgroundColor: Colors.primary,
-    marginHorizontal: 20,
-    padding: 16,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    borderBottomWidth: 6,
-    borderBottomColor: 'rgba(0, 0, 0, 0.2)',
-  },
-  barcodeInfoTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: Colors.white,
-    marginBottom: 4,
-    textTransform: 'uppercase',
-  },
-  barcodeInfoText: {
-    fontSize: 14,
-    color: Colors.white,
-    opacity: 0.9,
-    fontWeight: '700',
-  },
-  coinIndicator: {
-    alignItems: 'center',
-  },
-  coinCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 3,
-    borderColor: Colors.white,
-    borderStyle: 'dashed',
+  aimingOverlay: {
+    width: width * 0.75,
+    aspectRatio: 1,
+    alignSelf: 'center',
+    position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
   },
-  lidarScanningBox: {
-    width: 120,
-    height: 120,
-    marginBottom: 12,
-    position: 'relative',
-  },
-  scanCorner: {
+  aimingCorner: {
     position: 'absolute',
-    width: 30,
-    height: 30,
-    borderColor: Colors.primary,
-    borderWidth: 4,
+    width: 40,
+    height: 40,
+    borderColor: Colors.white,
+    borderWidth: 3,
     top: 0,
     left: 0,
     borderRightWidth: 0,
     borderBottomWidth: 0,
+    borderRadius: 4,
+    opacity: 0.8,
   },
-  scanCornerTR: {
+  aimingCornerTR: {
     left: undefined,
     right: 0,
     borderLeftWidth: 0,
-    borderRightWidth: 4,
+    borderRightWidth: 3,
   },
-  scanCornerBL: {
+  aimingCornerBL: {
     top: undefined,
     bottom: 0,
     borderTopWidth: 0,
-    borderBottomWidth: 4,
+    borderBottomWidth: 3,
   },
-  scanCornerBR: {
+  aimingCornerBR: {
     top: undefined,
     bottom: 0,
     left: undefined,
     right: 0,
     borderLeftWidth: 0,
-    borderRightWidth: 4,
+    borderRightWidth: 3,
     borderTopWidth: 0,
-    borderBottomWidth: 4,
+    borderBottomWidth: 3,
   },
-  coinLabel: {
-    fontSize: 13,
+  coinHint: {
+    alignItems: 'center',
+    gap: 10,
+  },
+  coinCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  coinEmoji: {
+    fontSize: 24,
+    opacity: 0.6,
+  },
+  coinText: {
     color: Colors.white,
-    backgroundColor: 'rgba(13, 8, 8, 0.7)',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 12,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
+    opacity: 0.7,
+  },
+  proTipCard: {
+    backgroundColor: 'rgba(13, 8, 8, 0.85)',
+    padding: 16,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: Colors.warning + '40',
+    borderBottomWidth: 6,
+  },
+  proTipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  proTipTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: Colors.warning,
+    letterSpacing: 1,
+  },
+  proTipText: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.8)',
+    lineHeight: 18,
+    fontWeight: '700',
   },
   controls: {
     position: 'absolute',
@@ -530,16 +464,19 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(13, 8, 8, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
+  controlButtonDummy: {
+    width: 56,
+  },
   captureButton: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     backgroundColor: Colors.white,
     justifyContent: 'center',
     alignItems: 'center',
@@ -551,9 +488,9 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   captureButtonInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: Colors.primary,
     borderBottomWidth: 4,
     borderBottomColor: 'rgba(0, 0, 0, 0.2)',
@@ -561,40 +498,10 @@ const styles = StyleSheet.create({
   permissionText: {
     fontSize: 18,
     color: Colors.white,
+    marginTop: 20,
     marginBottom: 24,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  backButton: {
-    // Handled by DuoButton style
-  },
-  proTipCard: {
-    backgroundColor: 'rgba(13, 8, 8, 0.8)',
-    marginHorizontal: 20,
-    padding: 16,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: Colors.accent,
-    borderBottomWidth: 6,
-    borderBottomColor: 'rgba(0, 0, 0, 0.3)',
-  },
-  proTipHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  proTipTitle: {
-    fontSize: 16,
     fontWeight: '900',
-    color: Colors.accent,
+    textAlign: 'center',
     textTransform: 'uppercase',
-  },
-  proTipText: {
-    fontSize: 14,
-    color: Colors.white,
-    lineHeight: 20,
-    fontWeight: '700',
-    opacity: 0.9,
   },
 });

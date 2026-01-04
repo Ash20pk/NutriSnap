@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,15 +12,14 @@ import { Colors } from '../../constants/Colors';
 import { useUser } from '../../context/UserContext';
 import { mealApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
-import { format, subDays, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
-import { BarChart, LineChart, PieChart } from 'react-native-gifted-charts';
+import { format } from 'date-fns';
+import { BarChart, PieChart } from 'react-native-gifted-charts';
 import * as Haptics from 'expo-haptics';
 import PageHeader from '../../components/PageHeader';
-import DuoButton from '../../components/DuoButton';
 import AnimatedCard from '../../components/AnimatedCard';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = width - 40;
+const CARD_WIDTH = width - 48;
 
 export default function AnalyticsScreen() {
   const { user } = useUser();
@@ -28,36 +27,10 @@ export default function AnalyticsScreen() {
   const [timeRange, setTimeRange] = useState<'week' | 'month'>('week');
   const [weeklyData, setWeeklyData] = useState<any[]>([]);
   const [macroDistribution, setMacroDistribution] = useState<any[]>([]);
-  const [caloriesTrend, setCaloriesTrend] = useState<any[]>([]);
   const [mealTypeBreakdown, setMealTypeBreakdown] = useState<any>({});
   const [averages, setAverages] = useState<any>({});
 
-  useEffect(() => {
-    if (user) {
-      fetchAnalytics();
-    }
-  }, [user, timeRange]);
-
-  const fetchAnalytics = async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const days = timeRange === 'week' ? 7 : 30;
-      const history = await mealApi.getHistory(user.id, days);
-      
-      processWeeklyData(history.meals);
-      processMacroDistribution(history.meals);
-      processCaloriesTrend(history.meals);
-      processMealTypeBreakdown(history.meals);
-      calculateAverages(history.meals);
-    } catch (error) {
-      console.error('Error fetching analytics:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const processWeeklyData = (meals: any[]) => {
+  const processWeeklyData = useCallback((meals: any[]) => {
     const dayTotals: any = {};
     const days = timeRange === 'week' ? 
       ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] :
@@ -81,9 +54,9 @@ export default function AnalyticsScreen() {
       spacing: index === 0 ? 0 : undefined,
     }));
     setWeeklyData(chartData);
-  };
+  }, [timeRange]);
 
-  const processMacroDistribution = (meals: any[]) => {
+  const processMacroDistribution = useCallback((meals: any[]) => {
     let totalProtein = 0;
     let totalCarbs = 0;
     let totalFat = 0;
@@ -96,42 +69,28 @@ export default function AnalyticsScreen() {
 
     const pieData = [
       {
-        value: totalProtein,
+        value: totalProtein || 1,
         color: Colors.protein,
         text: `${Math.round(totalProtein)}g`,
         label: 'Protein',
       },
       {
-        value: totalCarbs,
+        value: totalCarbs || 1,
         color: Colors.carbs,
         text: `${Math.round(totalCarbs)}g`,
         label: 'Carbs',
       },
       {
-        value: totalFat,
+        value: totalFat || 1,
         color: Colors.fat,
         text: `${Math.round(totalFat)}g`,
         label: 'Fat',
       },
     ];
     setMacroDistribution(pieData);
-  };
+  }, []);
 
-  const processCaloriesTrend = (meals: any[]) => {
-    const sortedMeals = [...meals].sort((a, b) => 
-      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-
-    const trend = sortedMeals.map((meal, index) => ({
-      value: meal.total_calories,
-      label: format(new Date(meal.timestamp), 'dd/MM'),
-      dataPointText: Math.round(meal.total_calories).toString(),
-    }));
-
-    setCaloriesTrend(trend.slice(-7)); // Last 7 entries
-  };
-
-  const processMealTypeBreakdown = (meals: any[]) => {
+  const processMealTypeBreakdown = useCallback((meals: any[]) => {
     const breakdown: any = {
       breakfast: { count: 0, calories: 0 },
       lunch: { count: 0, calories: 0 },
@@ -148,9 +107,9 @@ export default function AnalyticsScreen() {
     });
 
     setMealTypeBreakdown(breakdown);
-  };
+  }, []);
 
-  const calculateAverages = (meals: any[]) => {
+  const calculateAverages = useCallback((meals: any[]) => {
     if (meals.length === 0) {
       setAverages({ calories: 0, protein: 0, carbs: 0, fat: 0, mealsPerDay: 0 });
       return;
@@ -169,199 +128,217 @@ export default function AnalyticsScreen() {
       fat: Math.round(totalFat / days),
       mealsPerDay: (meals.length / days).toFixed(1),
     });
-  };
+  }, [timeRange]);
+
+  const fetchAnalytics = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const days = timeRange === 'week' ? 7 : 30;
+      const history = await mealApi.getHistory(user.id, days);
+      
+      processWeeklyData(history.meals);
+      processMacroDistribution(history.meals);
+      processMealTypeBreakdown(history.meals);
+      calculateAverages(history.meals);
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, timeRange, processWeeklyData, processMacroDistribution, processMealTypeBreakdown, calculateAverages]);
+
+  useEffect(() => {
+    if (user) {
+      fetchAnalytics();
+    }
+  }, [user, fetchAnalytics]);
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl 
-          refreshing={loading} 
-          onRefresh={fetchAnalytics} 
-          tintColor={Colors.primary}
-        />
-      }
-    >
-        {/* Header */}
-        <PageHeader 
-          title="Analytics" 
-          subtitle="Your nutrition insights"
-        />
-
-      {/* Time Range Selector */}
-      <View style={styles.timeRangeContainer}>
-        <TouchableOpacity
-          style={[
-            styles.timeRangeButton,
-            timeRange === 'week' && styles.timeRangeButtonActive,
-          ]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-            setTimeRange('week');
-          }}
-        >
-          <Text
+    <View style={styles.container}>
+      <PageHeader 
+        title="Analytics" 
+        subtitle="Your nutrition insights"
+      />
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl 
+            refreshing={loading} 
+            onRefresh={fetchAnalytics} 
+            tintColor={Colors.primary}
+          />
+        }
+      >
+        <View style={styles.timeRangeContainer}>
+          <TouchableOpacity
             style={[
-              styles.timeRangeText,
-              timeRange === 'week' && styles.timeRangeTextActive,
+              styles.timeRangeButton,
+              timeRange === 'week' && styles.timeRangeButtonActive,
             ]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              setTimeRange('week');
+            }}
           >
-            Week
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.timeRangeButton,
-            timeRange === 'month' && styles.timeRangeButtonActive,
-          ]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-            setTimeRange('month');
-          }}
-        >
-          <Text
+            <Text
+              style={[
+                styles.timeRangeText,
+                timeRange === 'week' && styles.timeRangeTextActive,
+              ]}
+            >
+              Week
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[
-              styles.timeRangeText,
-              timeRange === 'month' && styles.timeRangeTextActive,
+              styles.timeRangeButton,
+              timeRange === 'month' && styles.timeRangeButtonActive,
             ]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              setTimeRange('month');
+            }}
           >
-            Month
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Average Stats Cards */}
-      <AnimatedCard delay={100} type="slide" style={styles.section}>
-        <Text style={styles.sectionTitle}>Daily Averages</Text>
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <Ionicons name="flame" size={28} color={Colors.primary} />
-            <Text style={styles.statValue}>{averages.calories}</Text>
-            <Text style={styles.statLabel}>kcal/day</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="fitness" size={28} color={Colors.protein} />
-            <Text style={styles.statValue}>{averages.protein}g</Text>
-            <Text style={styles.statLabel}>Protein</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="leaf" size={28} color={Colors.carbs} />
-            <Text style={styles.statValue}>{averages.carbs}g</Text>
-            <Text style={styles.statLabel}>Carbs</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="water" size={28} color={Colors.fat} />
-            <Text style={styles.statValue}>{averages.fat}g</Text>
-            <Text style={styles.statLabel}>Fat</Text>
-          </View>
+            <Text
+              style={[
+                styles.timeRangeText,
+                timeRange === 'month' && styles.timeRangeTextActive,
+              ]}
+            >
+              Month
+            </Text>
+          </TouchableOpacity>
         </View>
-      </AnimatedCard>
 
-      {/* Calorie Trend Chart */}
-      {weeklyData.length > 0 && (
-        <AnimatedCard delay={200} type="slide" style={styles.section}>
-          <Text style={styles.sectionTitle}>Calorie Trend</Text>
-          <View style={styles.chartCard}>
-            <BarChart
-              data={weeklyData}
-              width={CARD_WIDTH - 60}
-              height={200}
-              barWidth={timeRange === 'week' ? 32 : 8}
-              spacing={timeRange === 'week' ? 16 : 4}
-              roundedTop
-              roundedBottom
-              hideRules
-              xAxisThickness={0}
-              yAxisThickness={0}
-              yAxisTextStyle={{ color: Colors.textLight, fontSize: 10 }}
-              noOfSections={4}
-              maxValue={Math.max(...weeklyData.map(d => d.value), 2500)}
-            />
-          </View>
-        </AnimatedCard>
-      )}
-
-      {/* Macro Distribution Pie Chart */}
-      {macroDistribution.length > 0 && (
-        <AnimatedCard delay={300} type="slide" style={styles.section}>
-          <Text style={styles.sectionTitle}>Macro Distribution</Text>
-          <View style={styles.pieCard}>
-            <PieChart
-              data={macroDistribution}
-              donut
-              radius={90}
-              innerRadius={60}
-              centerLabelComponent={() => (
-                <View style={styles.pieCenter}>
-                  <Text style={styles.pieCenterText}>Total</Text>
-                  <Text style={styles.pieCenterValue}>Macros</Text>
-                </View>
-              )}
-            />
-            <View style={styles.pieLegend}>
-              {macroDistribution.map((item, index) => (
-                <View key={index} style={styles.legendRow}>
-                  <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                  <Text style={styles.legendLabel}>{item.label}</Text>
-                  <Text style={styles.legendValue}>{item.text}</Text>
-                </View>
-              ))}
+        <AnimatedCard delay={100} type="slide" style={styles.section}>
+          <Text style={styles.sectionTitle}>Daily Averages</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Ionicons name="flame" size={28} color={Colors.primary} />
+              <Text style={styles.statValue}>{averages.calories || 0}</Text>
+              <Text style={styles.statLabel}>kcal/day</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="fitness" size={28} color={Colors.protein} />
+              <Text style={styles.statValue}>{averages.protein || 0}g</Text>
+              <Text style={styles.statLabel}>Protein</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="leaf" size={28} color={Colors.carbs} />
+              <Text style={styles.statValue}>{averages.carbs || 0}g</Text>
+              <Text style={styles.statLabel}>Carbs</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="water" size={28} color={Colors.fat} />
+              <Text style={styles.statValue}>{averages.fat || 0}g</Text>
+              <Text style={styles.statLabel}>Fat</Text>
             </View>
           </View>
         </AnimatedCard>
-      )}
 
-      {/* Meal Type Breakdown */}
-      <AnimatedCard delay={400} type="slide" style={styles.section}>
-        <Text style={styles.sectionTitle}>Meal Type Breakdown</Text>
-        <View style={styles.mealTypeCard}>
-          {Object.entries(mealTypeBreakdown).map(([type, data]: [string, any]) => (
-            <View key={type} style={styles.mealTypeRow}>
-              <View style={styles.mealTypeInfo}>
-                <Ionicons
-                  name={
-                    type === 'breakfast' ? 'sunny' :
-                    type === 'lunch' ? 'restaurant' :
-                    type === 'dinner' ? 'moon' : 'fast-food'
-                  }
-                  size={24}
-                  color={Colors.primary}
-                />
-                <Text style={styles.mealTypeName}>
-                  {type.charAt(0).toUpperCase() + type.slice(1)}
-                </Text>
-              </View>
-              <View style={styles.mealTypeStats}>
-                <Text style={styles.mealTypeCount}>{data.count} meals</Text>
-                <Text style={styles.mealTypeCalories}>
-                  {Math.round(data.calories)} kcal
-                </Text>
+        {weeklyData.length > 0 && (
+          <AnimatedCard delay={200} type="slide" style={styles.section}>
+            <Text style={styles.sectionTitle}>Calorie Trend</Text>
+            <View style={styles.chartCard}>
+              <BarChart
+                data={weeklyData}
+                width={CARD_WIDTH - 64}
+                height={200}
+                barWidth={timeRange === 'week' ? 32 : 8}
+                spacing={timeRange === 'week' ? 16 : 4}
+                roundedTop
+                roundedBottom
+                hideRules
+                xAxisThickness={0}
+                yAxisThickness={0}
+                yAxisTextStyle={{ color: Colors.textLight, fontSize: 10 }}
+                noOfSections={4}
+                maxValue={Math.max(...weeklyData.map(d => d.value), 2500)}
+              />
+            </View>
+          </AnimatedCard>
+        )}
+
+        {macroDistribution.length > 0 && (
+          <AnimatedCard delay={300} type="slide" style={styles.section}>
+            <Text style={styles.sectionTitle}>Macro Distribution</Text>
+            <View style={styles.pieCard}>
+              <PieChart
+                data={macroDistribution}
+                donut
+                radius={90}
+                innerRadius={60}
+                centerLabelComponent={() => (
+                  <View style={styles.pieCenter}>
+                    <Text style={styles.pieCenterText}>Total</Text>
+                    <Text style={styles.pieCenterValue}>Macros</Text>
+                  </View>
+                )}
+              />
+              <View style={styles.pieLegend}>
+                {macroDistribution.map((item, index) => (
+                  <View key={index} style={styles.legendRow}>
+                    <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                    <Text style={styles.legendLabel}>{item.label}</Text>
+                    <Text style={styles.legendValue}>{item.text}</Text>
+                  </View>
+                ))}
               </View>
             </View>
-          ))}
-        </View>
-      </AnimatedCard>
+          </AnimatedCard>
+        )}
 
-      {/* Insights Card */}
-      <AnimatedCard delay={500} type="pop" style={styles.insightCard}>
-        <View style={styles.insightHeader}>
-          <Ionicons name="sparkles" size={24} color={Colors.accent} />
-          <Text style={styles.insightTitle}>Smart Insights</Text>
-        </View>
-        <Text style={styles.insightText}>
-          💪 You're averaging {averages.mealsPerDay} meals per day. Great consistency!
-        </Text>
-        <Text style={styles.insightText}>
-          {averages.calories < (user?.daily_calorie_target || 2000) ? 
-            "🎯 You're under your calorie target on average. Consider adding nutrient-dense snacks!" :
-            "✨ Your calorie intake is on track with your goals!"}
-        </Text>
-      </AnimatedCard>
+        <AnimatedCard delay={400} type="slide" style={styles.section}>
+          <Text style={styles.sectionTitle}>Meal Type Breakdown</Text>
+          <View style={styles.mealTypeCard}>
+            {Object.entries(mealTypeBreakdown).map(([type, data]: [string, any]) => (
+              <View key={type} style={styles.mealTypeRow}>
+                <View style={styles.mealTypeInfo}>
+                  <Ionicons
+                    name={
+                      type === 'breakfast' ? 'sunny' :
+                      type === 'lunch' ? 'restaurant' :
+                      type === 'dinner' ? 'moon' : 'fast-food'
+                    }
+                    size={24}
+                    color={Colors.primary}
+                  />
+                  <Text style={styles.mealTypeName}>
+                    {type.charAt(0).toUpperCase() + type.slice(1)}
+                  </Text>
+                </View>
+                <View style={styles.mealTypeStats}>
+                  <Text style={styles.mealTypeCount}>{data.count} meals</Text>
+                  <Text style={styles.mealTypeCalories}>
+                    {Math.round(data.calories)} kcal
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </AnimatedCard>
 
-      <View style={{ height: 100 }} />
-    </ScrollView>
+        <AnimatedCard delay={500} type="pop" style={styles.insightCard}>
+          <View style={styles.insightHeader}>
+            <Ionicons name="sparkles" size={24} color={Colors.accent} />
+            <Text style={styles.insightTitle}>Smart Insights</Text>
+          </View>
+          <Text style={styles.insightText}>
+            💪 You&apos;re averaging {averages.mealsPerDay || 0} meals per day. Great consistency!
+          </Text>
+          <Text style={styles.insightText}>
+            {averages.calories < (user?.daily_calorie_target || 2000) ? 
+              "🎯 You&apos;re under your calorie target on average. Consider adding nutrient-dense snacks!" :
+              "✨ Your calorie intake is on track with your goals!"}
+          </Text>
+        </AnimatedCard>
+
+        <View style={{ height: 100 }} />
+      </ScrollView>
+    </View>
   );
 }
 
@@ -370,8 +347,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  scrollView: {
+    flex: 1,
+  },
   contentContainer: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     paddingBottom: 20,
   },
   timeRangeContainer: {
@@ -382,7 +362,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     borderWidth: 2,
     borderColor: Colors.border,
-    borderBottomWidth: 4,
+    borderBottomWidth: 6,
   },
   timeRangeButton: {
     flex: 1,
@@ -420,7 +400,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   statCard: {
-    width: (width - 52) / 2,
+    width: (width - 60) / 2,
     backgroundColor: Colors.white,
     borderRadius: 20,
     padding: 16,
@@ -542,10 +522,11 @@ const styles = StyleSheet.create({
   insightCard: {
     backgroundColor: Colors.white,
     borderRadius: 24,
-    padding: 20,
+    padding: 24,
     borderWidth: 2,
     borderColor: Colors.primary + '40',
     borderBottomWidth: 8,
+    marginBottom: 24,
   },
   insightHeader: {
     flexDirection: 'row',

@@ -1,47 +1,161 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Platform,
   Share,
   Dimensions,
+  Animated,
+  StatusBar,
+  Pressable,
+  Easing,
+  Alert,
 } from 'react-native';
 import { Colors } from '../constants/Colors';
-import { fontStyles } from '../constants/Fonts';
 import { useUser } from '../context/UserContext';
 import { mealApi } from '../utils/api';
 import { Ionicons } from '@expo/vector-icons';
-import { format, startOfWeek, endOfWeek } from 'date-fns';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import PageHeader from '../components/PageHeader';
 import { captureRef } from 'react-native-view-shot';
 import * as MediaLibrary from 'expo-media-library';
 import * as Haptics from 'expo-haptics';
-
-import DuoButton from '../components/DuoButton';
 import AnimatedCard from '../components/AnimatedCard';
+import DuoButton from '../components/DuoButton';
 
-const { width, height } = Dimensions.get('window');
+const { width, height: screenHeight } = Dimensions.get('window');
+
+const SLIDE_DURATION = 5000; // 5 seconds per slide
 
 export default function WeeklyWrapScreen() {
   const router = useRouter();
   const { user } = useUser();
   const [weeklyStats, setWeeklyStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [currentSlide, setCurrentSlide] = useState(0);
   const [sharing, setSharing] = useState(false);
   const shareCardRef = useRef<View>(null);
+  
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const floatingAnim = useRef(new Animated.Value(0)).current;
+  const rotatingAnim = useRef(new Animated.Value(0)).current;
+  const confettiAnim = useRef(new Animated.Value(0)).current;
+
+  const slides = useMemo(() => [
+    {
+      id: 'intro',
+      title: 'Your Week\nin Review',
+      subtitle: 'NutriSnap Wrapped 2024',
+      gradient: [Colors.primary, Colors.accent] as const,
+      icon: 'sparkles',
+    },
+    {
+      id: 'meals',
+      title: 'Meal Maven',
+      value: weeklyStats?.totalMeals || 0,
+      label: 'Meals Logged',
+      description: (weeklyStats?.totalMeals || 0) > 15 ? "You're a logging machine!" : "Keeping track of every bite.",
+      gradient: [Colors.warning, '#D35400'] as const,
+      icon: 'restaurant',
+    },
+    {
+      id: 'calories',
+      title: 'Daily Fuel',
+      value: weeklyStats?.avgCalories || 0,
+      label: 'Avg kcal / day',
+      description: weeklyStats?.avgCalories < (user?.daily_calorie_target || 2000) 
+        ? "You're keeping it light! Great job." 
+        : "Fueling that engine for greatness.",
+      gradient: [Colors.primary, Colors.primaryLight] as const,
+      icon: 'flame',
+    },
+    {
+      id: 'macros',
+      title: 'Macro\nMastery',
+      macros: [
+        { label: 'PRO', value: weeklyStats?.totalProtein, color: Colors.protein },
+        { label: 'CHO', value: weeklyStats?.totalCarbs, color: Colors.carbs },
+        { label: 'FAT', value: weeklyStats?.totalFat, color: Colors.fat },
+      ],
+      description: "Balance is your superpower.",
+      gradient: [Colors.accent, Colors.accentLight] as const,
+      icon: 'pie-chart',
+    },
+    {
+      id: 'foods',
+      title: 'The Usual\nSuspects',
+      foods: weeklyStats?.topFoods || [],
+      description: "Your taste buds have a type!",
+      gradient: [Colors.warning, Colors.highLevels] as const,
+      icon: 'heart',
+    },
+    {
+      id: 'archetype',
+      title: 'Your Nutri\nPersona',
+      value: weeklyStats?.archetype?.name,
+      label: 'Archetype',
+      description: weeklyStats?.archetype?.desc,
+      gradient: [Colors.primary, Colors.accent] as const,
+      icon: (weeklyStats?.archetype?.icon as any) || 'person',
+    },
+    {
+      id: 'consistency',
+      title: 'Consistency\nKing',
+      value: `${weeklyStats?.consistency || 0}%`,
+      label: 'Weekly Goal Hit',
+      description: (weeklyStats?.consistency || 0) > 80 ? "Unstoppable momentum!" : "Progress, not perfection.",
+      gradient: [Colors.success, Colors.primaryLight] as const,
+      icon: 'checkmark-circle',
+    },
+    {
+      id: 'summary',
+      title: 'The Full\nPicture',
+      gradient: [Colors.primary, Colors.black] as const,
+      icon: 'trophy',
+    }
+  ], [weeklyStats, user?.daily_calorie_target]);
 
   useEffect(() => {
-    if (user) {
-      fetchWeeklyStats();
+    if (currentSlide === slides.length - 1) {
+      confettiAnim.setValue(0);
+      Animated.timing(confettiAnim, {
+        toValue: 1,
+        duration: 3000,
+        useNativeDriver: true,
+      }).start();
     }
-  }, [user]);
+  }, [currentSlide, slides.length, confettiAnim]);
 
-  const fetchWeeklyStats = async () => {
+  useEffect(() => {
+    Animated.parallel([
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(floatingAnim, {
+            toValue: 1,
+            duration: 2000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(floatingAnim, {
+            toValue: 0,
+            duration: 2000,
+            useNativeDriver: true,
+          }),
+        ])
+      ),
+      Animated.loop(
+        Animated.timing(rotatingAnim, {
+          toValue: 1,
+          duration: 10000,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      )
+    ]).start();
+  }, [floatingAnim, rotatingAnim]);
+
+  const fetchWeeklyStats = useCallback(async () => {
     if (!user) return;
     try {
       const history = await mealApi.getHistory(user.id, 7);
@@ -59,8 +173,10 @@ export default function WeeklyWrapScreen() {
         totalCarbs += meal.total_carbs;
         totalFat += meal.total_fat;
         
-        mealCounts[meal.meal_type as keyof typeof mealCounts] = 
-          (mealCounts[meal.meal_type as keyof typeof mealCounts] || 0) + 1;
+        const type = meal.meal_type as keyof typeof mealCounts;
+        if (mealCounts.hasOwnProperty(type)) {
+          mealCounts[type]++;
+        }
         
         meal.foods.forEach((food: any) => {
           topFoods[food.name] = (topFoods[food.name] || 0) + 1;
@@ -72,6 +188,23 @@ export default function WeeklyWrapScreen() {
         .slice(0, 3)
         .map(([name]) => name);
 
+      // Calculate Archetype
+      const pKcal = totalProtein * 4;
+      const cKcal = totalCarbs * 4;
+      const fKcal = totalFat * 9;
+      const totalMacroKcal = pKcal + cKcal + fKcal;
+      
+      let archetype = { name: 'The Balancer', icon: 'scale', desc: 'You keep your macros in perfect harmony.' };
+      if (totalMacroKcal > 0) {
+        const pPct = (pKcal / totalMacroKcal) * 100;
+        const cPct = (cPct / totalMacroKcal) * 100;
+        const fPct = (fPct / totalMacroKcal) * 100;
+
+        if (pPct > 30) archetype = { name: 'Protein Pro', icon: 'fitness', desc: 'Muscle building is your middle name.' };
+        else if (cPct > 55) archetype = { name: 'Carb Crusader', icon: 'leaf', desc: 'Fueling your energy with nature’s best.' };
+        else if (fPct > 40) archetype = { name: 'Fat Fanatic', icon: 'water', desc: 'You know healthy fats are the secret sauce.' };
+      }
+
       setWeeklyStats({
         totalMeals: history.meals.length,
         avgCalories: Math.round(totalCalories / 7),
@@ -80,565 +213,738 @@ export default function WeeklyWrapScreen() {
         totalFat: Math.round(totalFat),
         topFoods: topFoodsList,
         mealCounts,
-        consistency: Math.round((history.meals.length / 21) * 100), // Out of 3 meals/day
+        consistency: Math.round((history.meals.length / 21) * 100),
+        archetype,
       });
     } catch (error) {
       console.error('Error fetching weekly stats:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
-  const handleShare = async () => {
+  useEffect(() => {
+    if (user) {
+      fetchWeeklyStats();
+    }
+  }, [user, fetchWeeklyStats]);
+
+  const nextSlide = useCallback(() => {
+    if (currentSlide < slides.length - 1) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      setCurrentSlide(prev => prev + 1);
+    } else {
+      router.back();
+    }
+  }, [currentSlide, slides.length, router]);
+
+  const prevSlide = useCallback(() => {
+    if (currentSlide > 0) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      setCurrentSlide(prev => prev - 1);
+    }
+  }, [currentSlide]);
+
+  const startSlideTimer = useCallback(() => {
+    progressAnim.setValue(0);
+    Animated.timing(progressAnim, {
+      toValue: 1,
+      duration: SLIDE_DURATION,
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (finished && currentSlide < slides.length - 1) {
+        nextSlide();
+      }
+    });
+  }, [currentSlide, slides.length, progressAnim, nextSlide]);
+
+  useEffect(() => {
+    if (!loading && weeklyStats) {
+      startSlideTimer();
+    }
+    return () => progressAnim.stopAnimation();
+  }, [loading, currentSlide, weeklyStats, startSlideTimer, progressAnim]);
+
+  const handleShare = useCallback(async () => {
     setSharing(true);
     try {
-      // Capture the share card
+      if (Platform.OS === 'ios') {
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission needed', 'We need permission to save the image to your library');
+          setSharing(false);
+          return;
+        }
+      }
+
       const uri = await captureRef(shareCardRef, {
         format: 'png',
         quality: 0.9,
       });
       
-      // Save to media library
       if (Platform.OS === 'ios') {
         await MediaLibrary.saveToLibraryAsync(uri);
       }
       
-      // Share the image
       await Share.share({
         url: Platform.OS === 'ios' ? uri : `file://${uri}`,
         title: 'My Weekly NutriSnap',
-        message: `Check out my weekly nutrition summary! 📸\n\nTotal Meals: ${weeklyStats.totalMeals}\nAvg Calories: ${weeklyStats.avgCalories}\nConsistency: ${weeklyStats.consistency}%\n\n#NutriSnap #WeeklyWrap`,
+        message: `My Weekly NutriSnap Wrapped! 📸\n\nConsistency: ${weeklyStats?.consistency || 0}%\n\n#NutriSnap #WeeklyWrap`,
       });
     } catch (error) {
       console.error('Error sharing:', error);
+      Alert.alert('Sharing failed', 'Something went wrong while trying to share your wrap.');
     } finally {
       setSharing(false);
     }
-  };
+  }, [weeklyStats, shareCardRef]);
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.loadingText}>Preparing your wrap...</Text>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <StatusBar barStyle="light-content" />
+        <LinearGradient colors={[Colors.primary, Colors.accent]} style={StyleSheet.absoluteFill} />
+        <View style={styles.loadingContent}>
+          <Ionicons name="nutrition" size={60} color={Colors.white} />
+          <Text style={styles.loadingText}>Preparing your wrap...</Text>
+        </View>
       </View>
     );
   }
 
+  const slide = slides[currentSlide];
+
   return (
     <View style={styles.container}>
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-          {/* Header */}
-          <PageHeader 
-            title="Weekly Snapshot" 
-            subtitle={`${format(startOfWeek(new Date()), 'MMM d')} - ${format(endOfWeek(new Date()), 'MMM d, yyyy')}`}
-            rightComponent={
-              <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
-                <Ionicons name="close" size={24} color={Colors.text} />
-              </TouchableOpacity>
-            }
-          />
+      <StatusBar barStyle="light-content" />
+      
+      <LinearGradient colors={slide.gradient as any} style={StyleSheet.absoluteFill} />
 
-        {/* Stats Cards */}
-        <AnimatedCard delay={100} type="pop" style={styles.statsContainer}>
-          {/* Total Meals */}
-          <View style={styles.card}>
-            <View style={styles.statItem}>
-              <Text style={styles.cardValue}>{weeklyStats.totalMeals}</Text>
-              <Text style={styles.cardLabel}>Meals Logged</Text>
-            </View>
+      {/* Decorative Background Elements */}
+      <Animated.View 
+        style={[
+          styles.decorativeCircle,
+          {
+            top: -100,
+            left: -100,
+            transform: [
+              {
+                translateX: floatingAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 20],
+                }),
+              },
+              {
+                rotate: rotatingAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['0deg', '360deg'],
+                }),
+              },
+            ],
+          },
+        ]} 
+      />
+      <Animated.View 
+        style={[
+          styles.decorativeCircle,
+          {
+            bottom: -50,
+            right: -50,
+            width: 300,
+            height: 300,
+            opacity: 0.1,
+            transform: [
+              {
+                translateY: floatingAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, -30],
+                }),
+              },
+              {
+                rotate: rotatingAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['360deg', '0deg'],
+                }),
+              },
+            ],
+          },
+        ]} 
+      />
+      <Animated.View 
+        style={[
+          styles.decorativeTriangle,
+          {
+            top: 200,
+            right: -20,
+            opacity: 0.05,
+            transform: [
+              {
+                rotate: rotatingAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['0deg', '360deg'],
+                }),
+              },
+            ],
+          },
+        ]} 
+      />
+
+      {/* Confetti Particles */}
+      {currentSlide === slides.length - 1 && [...Array(20)].map((_, i) => (
+        <Animated.View
+          key={i}
+          style={[
+            styles.confetti,
+            {
+              left: `${Math.random() * 100}%`,
+              backgroundColor: [Colors.primary, Colors.accent, Colors.warning, Colors.protein, Colors.carbs][i % 5],
+              transform: [
+                {
+                  translateY: confettiAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-50, screenHeight + 50],
+                  }),
+                },
+                {
+                  rotate: confettiAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0deg', `${Math.random() * 360 + 360}deg`],
+                  }),
+                },
+                {
+                  translateX: Math.sin(i) * 50,
+                }
+              ],
+              opacity: confettiAnim.interpolate({
+                inputRange: [0, 0.8, 1],
+                outputRange: [1, 1, 0],
+              }),
+            },
+          ]}
+        />
+      ))}
+
+      {/* Progress Bars */}
+      <View style={styles.progressContainer}>
+        {slides.map((_, index) => (
+          <View key={index} style={styles.progressBarBg}>
+            <Animated.View 
+              style={[
+                styles.progressBarFill, 
+                { 
+                  width: index === currentSlide 
+                    ? progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
+                    : index < currentSlide ? '100%' : '0%' 
+                }
+              ]} 
+            />
           </View>
+        ))}
+      </View>
 
-          {/* Avg Calories */}
-          <View style={styles.card}>
-            <View style={styles.statItem}>
-              <Text style={styles.cardValue}>{weeklyStats.avgCalories}</Text>
-              <Text style={styles.cardLabel}>Avg Calories/Day</Text>
-            </View>
+      {/* Close Button */}
+      <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
+        <Ionicons name="close" size={28} color={Colors.white} />
+      </TouchableOpacity>
+
+      {/* Slide Content */}
+      <AnimatedCard key={currentSlide} type="slide" style={styles.slideContent}>
+        <Animated.View 
+          style={[
+            styles.iconContainer,
+            {
+              transform: [
+                {
+                  translateY: floatingAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, -15],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <Ionicons name={slide.icon as any} size={80} color="rgba(255,255,255,0.3)" style={styles.floatingIcon} />
+          <Ionicons name={slide.icon as any} size={100} color={Colors.white} />
+        </Animated.View>
+
+        <Text style={styles.slideTitle}>{slide.title}</Text>
+        
+        {slide.value !== undefined && (
+          <View style={styles.valueContainer}>
+            <Text style={styles.slideValue}>{slide.value}</Text>
+            <Text style={styles.slideLabel}>{slide.label}</Text>
           </View>
+        )}
 
-          {/* Consistency */}
-          <View style={styles.card}>
-            <View style={styles.statItem}>
-              <Text style={styles.cardValue}>{weeklyStats.consistency}%</Text>
-              <Text style={styles.cardLabel}>Consistency</Text>
-            </View>
-          </View>
-        </AnimatedCard>
-
-        {/* Top Foods */}
-        <AnimatedCard delay={200} type="slide" style={styles.card}>
-          <Text style={styles.cardTitle}>Your Top Foods</Text>
-          <View style={styles.cardContent}>
-            {weeklyStats.topFoods.map((food: string, index: number) => (
-              <View key={index} style={styles.topFoodItem}>
-                <View style={styles.topFoodRank}>
-                  <Text style={styles.topFoodRankText}>{index + 1}</Text>
-                </View>
-                <Text style={styles.topFoodName}>{food}</Text>
+        {slide.macros && (
+          <View style={styles.macrosContainer}>
+            {slide.macros.map((m, i) => (
+              <View key={i} style={styles.macroBox}>
+                <Text style={styles.macroVal}>{m.value}g</Text>
+                <Text style={styles.macroLab}>{m.label}</Text>
               </View>
             ))}
           </View>
-        </AnimatedCard>
+        )}
 
-        {/* Macros Summary */}
-        <AnimatedCard delay={300} type="slide" style={styles.card}>
-          <Text style={styles.cardTitle}>Weekly Macros</Text>
-          <View style={styles.cardContent}>
-            <View style={styles.macrosRow}>
-              <View style={styles.macroItem}>
-                <Text style={styles.macroValue}>{weeklyStats.totalProtein}g</Text>
-                <Text style={styles.macroLabel}>Protein</Text>
+        {slide.foods && (
+          <View style={styles.foodsContainer}>
+            {slide.foods.map((food: string, i: number) => (
+              <View key={i} style={styles.foodRow}>
+                <View style={styles.foodRank}><Text style={styles.foodRankText}>{i+1}</Text></View>
+                <Text style={styles.foodName}>{food}</Text>
               </View>
-              <View style={styles.macroItem}>
-                <Text style={styles.macroValue}>{weeklyStats.totalCarbs}g</Text>
-                <Text style={styles.macroLabel}>Carbs</Text>
-              </View>
-              <View style={styles.macroItem}>
-                <Text style={styles.macroValue}>{weeklyStats.totalFat}g</Text>
-                <Text style={styles.macroLabel}>Fat</Text>
-              </View>
-            </View>
+            ))}
           </View>
-        </AnimatedCard>
+        )}
 
-        {/* Motivational Message */}
-        <AnimatedCard delay={400} type="pop" style={styles.card}>
-          <View style={styles.cardContent}>
-            <Text style={styles.motivationText}>
-              {weeklyStats.consistency > 80 ? 
-                "Amazing consistency! You're crushing it!" :
-               weeklyStats.consistency > 50 ?
-                "Great job this week! Keep it up!" :
-                "Every meal logged is progress. Let's aim higher next week!"}
-            </Text>
-          </View>
-        </AnimatedCard>
+        {slide.description && (
+          <Text style={styles.slideDescription}>{slide.description}</Text>
+        )}
 
-        {/* Share Button */}
-        <AnimatedCard delay={500} type="pop" style={{ paddingHorizontal: 20, marginBottom: 40 }}>
-          <DuoButton
-            title={sharing ? 'Creating Card...' : 'Share Your Progress'}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-              handleShare();
-            }}
-            disabled={sharing}
-            loading={sharing}
-            color={Colors.white}
-            shadowColor={Colors.border}
-            textStyle={{ color: Colors.primary }}
-            size="large"
-          />
-        </AnimatedCard>
+        {slide.id === 'summary' && (
+          <View style={styles.summaryContainer}>
+            <View ref={shareCardRef} collapsable={false} style={styles.summaryCard}>
+              <LinearGradient 
+                colors={[Colors.primary, Colors.accent, Colors.secondary]} 
+                style={styles.summaryGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              />
+              
+              {/* Card Watermark Background */}
+              <View style={styles.cardWatermark}>
+                <Ionicons name="nutrition" size={200} color="rgba(255,255,255,0.05)" />
+              </View>
 
-          <View style={{ height: 40 }} />
-        </ScrollView>
-        
-        {/* Hidden Share Card for Capture */}
-        <View style={styles.shareCardContainer}>
-          <View ref={shareCardRef} style={styles.shareCard}>
-            {/* Background Pattern */}
-            <View style={styles.shareBackgroundPattern}>
-              <View style={[styles.patternCircle, styles.circle1]} />
-              <View style={[styles.patternCircle, styles.circle2]} />
-              <View style={[styles.patternCircle, styles.circle3]} />
-            </View>
-            
-            {/* Main Content */}
-            <View style={styles.shareCardContent}>
-              {/* Header */}
-              <View style={styles.shareHeader}>
-                <View style={styles.shareHeaderTop}>
-                  <View style={styles.shareLogoContainer}>
-                    <Ionicons name="nutrition" size={32} color={Colors.white} />
-                    <Text style={styles.shareLogo}>NUTRISNAP</Text>
+              <View style={styles.summaryHeader}>
+                <View style={styles.summaryHeaderLeft}>
+                  <View style={styles.smallAvatar}>
+                    <Text style={styles.smallAvatarText}>{user?.name?.[0]?.toUpperCase()}</Text>
                   </View>
-                  <Text style={styles.shareWeekLabel}>WEEKLY REPORT</Text>
+                  <View>
+                    <Text style={styles.summaryUser}>{user?.name}</Text>
+                    <Text style={styles.summaryYear}>WRAPPED 2024</Text>
+                  </View>
                 </View>
-                <Text style={styles.shareDate}>
-                  {format(startOfWeek(new Date()), 'MMM d').toUpperCase()} - {format(endOfWeek(new Date()), 'MMM d, yyyy').toUpperCase()}
-                </Text>
+                <Ionicons name="nutrition" size={24} color={Colors.white} />
               </View>
               
-              {/* Main Stats - Simplified */}
-              <View style={styles.shareMainStats}>
-                <View style={styles.shareMainStatItem}>
-                  <Text style={styles.shareMainStatValue}>{weeklyStats.totalProtein}g</Text>
-                  <Text style={styles.shareMainStatLabel}>PROTEIN</Text>
+              <View style={styles.summaryStats}>
+                <View style={styles.sumStatRow}>
+                  <View style={styles.sumStat}>
+                    <Text style={styles.sumVal}>{weeklyStats?.totalMeals || 0}</Text>
+                    <Text style={styles.sumLab}>MEALS LOGGED</Text>
+                  </View>
+                  <View style={styles.sumStat}>
+                    <Text style={styles.sumVal}>{weeklyStats?.consistency || 0}%</Text>
+                    <Text style={styles.sumLab}>GOAL HIT</Text>
+                  </View>
                 </View>
-                <View style={styles.shareDivider} />
-                <View style={styles.shareMainStatItem}>
-                  <Text style={styles.shareMainStatValue}>{weeklyStats.totalCarbs}g</Text>
-                  <Text style={styles.shareMainStatLabel}>CARBS</Text>
-                </View>
-                <View style={styles.shareDivider} />
-                <View style={styles.shareMainStatItem}>
-                  <Text style={styles.shareMainStatValue}>{weeklyStats.totalFat}g</Text>
-                  <Text style={styles.shareMainStatLabel}>FAT</Text>
-                </View>
-              </View>
-              
-              {/* Top Foods */}
-              <View style={styles.shareTopFoods}>
-                <Text style={styles.shareSectionTitle}>TOP FOODS</Text>
-                <View style={styles.shareFoodsList}>
-                  {weeklyStats.topFoods.slice(0, 3).map((food: string, index: number) => (
-                    <View key={index} style={styles.shareFoodItem}>
-                      <View style={styles.shareFoodRank}>
-                        <Text style={styles.shareFoodRankText}>{index + 1}</Text>
-                      </View>
-                      <Text style={styles.shareFoodName}>{food}</Text>
-                    </View>
-                  ))}
+
+                <View style={styles.sumStatRow}>
+                  <View style={styles.sumStat}>
+                    <Text style={styles.sumValSmall}>{weeklyStats?.avgCalories || 0}</Text>
+                    <Text style={styles.sumLab}>AVG KCAL</Text>
+                  </View>
+                  <View style={styles.sumStat}>
+                    <Text style={styles.sumValSmall}>{weeklyStats?.totalProtein || 0}g</Text>
+                    <Text style={styles.sumLab}>PROTEIN</Text>
+                  </View>
                 </View>
               </View>
-              
-              {/* Footer */}
-              <View style={styles.shareFooter}>
-                <View style={styles.shareFooterLine} />
-                <Text style={styles.shareFooterText}>TRACK YOUR NUTRITION JOURNEY</Text>
-                <View style={styles.shareFooterBrand}>
-                  <Ionicons name="nutrition" size={16} color={Colors.white} />
-                  <Text style={styles.shareFooterBrandText}>NUTRISNAP</Text>
-                </View>
+
+              <View style={styles.sumTopFoodsCard}>
+                <Text style={styles.sumTitle}>MY TOP FOODS</Text>
+                {weeklyStats?.topFoods.map((f: string, i: number) => (
+                  <View key={i} style={styles.sumFoodRow}>
+                    <Text style={styles.sumFoodRank}>{i+1}</Text>
+                    <Text style={styles.sumFoodName}>{f}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.cardFooter}>
+                <Text style={styles.footerBrand}>NUTRISNAP</Text>
+                <View style={styles.footerDivider} />
+                <Text style={styles.footerTagline}>AI NUTRITION TRACKER</Text>
               </View>
             </View>
+
+            <DuoButton 
+              title={sharing ? 'PREPARING...' : 'SHARE WRAPPED'}
+              onPress={handleShare}
+              color={Colors.white}
+              shadowColor="rgba(0,0,0,0.1)"
+              textStyle={{ color: Colors.primary }}
+              style={styles.shareButton}
+              disabled={sharing}
+            />
           </View>
-        </View>
+        )}
+      </AnimatedCard>
+
+      {/* Navigation Areas */}
+      <View style={styles.navContainer}>
+        <Pressable style={styles.navSide} onPress={prevSlide} />
+        <Pressable style={styles.navSide} onPress={nextSlide} />
       </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.black,
   },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
-  closeButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: Colors.white,
-    justifyContent: 'center',
+  loadingContent: {
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderBottomWidth: 4,
+    zIndex: 10,
   },
-  statsContainer: {
-    marginBottom: 24,
-    gap: 16,
-  },
-  card: {
-    backgroundColor: Colors.white,
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderBottomWidth: 8,
-  },
-  cardTitle: {
-    fontSize: 16,
+  loadingText: {
+    color: Colors.white,
+    fontSize: 18,
     fontWeight: '900',
-    color: Colors.text,
-    marginBottom: 16,
+    marginTop: 20,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  statItem: {
-    alignItems: 'center',
-  },
-  cardContent: {
-    marginTop: 8,
-  },
-  cardValue: {
-    fontSize: 32,
-    fontWeight: '900',
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  cardLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  topFoodItem: {
+  progressContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
-    backgroundColor: Colors.backgroundSecondary,
-    padding: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    paddingHorizontal: 10,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    gap: 4,
+    zIndex: 100,
   },
-  topFoodRank: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: Colors.primary,
+  progressBarBg: {
+    flex: 1,
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: Colors.white,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 80 : 60,
+    right: 20,
+    zIndex: 100,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderBottomWidth: 3,
-    borderBottomColor: 'rgba(0,0,0,0.2)',
   },
-  topFoodRankText: {
-    fontSize: 16,
+  navContainer: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'row',
+    zIndex: 50,
+  },
+  navSide: {
+    flex: 1,
+  },
+  slideContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    zIndex: 10,
+  },
+  iconContainer: {
+    marginBottom: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  floatingIcon: {
+    position: 'absolute',
+    opacity: 0.2,
+    transform: [{ scale: 1.5 }],
+  },
+  slideTitle: {
+    fontSize: 48,
     fontWeight: '900',
     color: Colors.white,
-  },
-  topFoodName: {
-    fontSize: 15,
-    color: Colors.text,
-    fontWeight: '800',
+    textAlign: 'center',
+    lineHeight: 52,
+    marginBottom: 20,
     textTransform: 'uppercase',
   },
-  macrosRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  macroItem: {
+  valueContainer: {
     alignItems: 'center',
+    marginBottom: 30,
   },
-  macroValue: {
+  slideValue: {
+    fontSize: 80,
+    fontWeight: '900',
+    color: Colors.white,
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 10,
+  },
+  slideLabel: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.8)',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  slideDescription: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.white,
+    textAlign: 'center',
+    marginTop: 20,
+    lineHeight: 28,
+  },
+  macrosContainer: {
+    flexDirection: 'row',
+    gap: 15,
+    marginTop: 20,
+  },
+  macroBox: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    padding: 15,
+    borderRadius: 20,
+    alignItems: 'center',
+    minWidth: 80,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  macroVal: {
     fontSize: 20,
     fontWeight: '900',
-    color: Colors.text,
-  },
-  macroLabel: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    marginTop: 4,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  motivationText: {
-    fontSize: 16,
-    textAlign: 'center',
-    color: Colors.text,
-    fontWeight: '800',
-    lineHeight: 24,
-  },
-  shareButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    backgroundColor: Colors.cardBackground,
-    borderRadius: 16,
-    padding: 18,
-    borderWidth: 2,
-    borderColor: Colors.primary,
-    marginBottom: 24,
-  },
-  shareButtonDisabled: {
-    opacity: 0.6,
-  },
-  shareButtonText: {
-    ...fontStyles.button,
-    color: Colors.primary,
-  },
-  loadingText: {
-    ...fontStyles.body,
-    color: Colors.text,
-    textAlign: 'center',
-  },
-  // Share Card Styles 
-  shareCardContainer: {
-    position: 'absolute',
-    left: -9999, // Position off-screen
-  },
-  shareCard: {
-    width: 360,
-    height: 640,
-    borderRadius: 20,
-    overflow: 'hidden',
-    backgroundColor: Colors.background,
-  },
-  shareBackgroundPattern: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  patternCircle: {
-    position: 'absolute',
-    borderRadius: 999,
-    backgroundColor: Colors.primary + '10',
-  },
-  circle1: {
-    width: 200,
-    height: 200,
-    top: -50,
-    right: -50,
-  },
-  circle2: {
-    width: 150,
-    height: 150,
-    bottom: 100,
-    left: -30,
-  },
-  circle3: {
-    width: 100,
-    height: 100,
-    bottom: -30,
-    right: 50,
-  },
-  shareCardContent: {
-    flex: 1,
-    padding: 40,
-    justifyContent: 'space-between',
-  },
-  shareHeader: {
-    alignItems: 'center',
-  },
-  shareHeaderTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    marginBottom: 8,
-  },
-  shareLogoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  shareLogo: {
-    ...fontStyles.h3,
-    color: Colors.text,
-    fontWeight: '700',
-  },
-  shareWeekLabel: {
-    ...fontStyles.caption,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  shareDate: {
-    ...fontStyles.bodySmall,
-    color: Colors.textSecondary,
-  },
-  shareMainStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    marginVertical: 40,
-  },
-  shareMainStatItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  shareMainStatValue: {
-    ...fontStyles.stat,
-    color: Colors.text,
-    lineHeight: 40,
-  },
-  shareMainStatLabel: {
-    ...fontStyles.caption,
-    color: Colors.textSecondary,
-    marginTop: 4,
-  },
-  shareDivider: {
-    width: 1,
-    height: 60,
-    backgroundColor: Colors.border,
-  },
-  shareProgressSection: {
-    marginVertical: 30,
-  },
-  shareProgressLabel: {
-    ...fontStyles.caption,
-    color: Colors.textSecondary,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  shareProgressBar: {
-    height: 6,
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  shareProgressFill: {
-    height: '100%',
-    backgroundColor: Colors.primary,
-    borderRadius: 3,
-  },
-  shareProgressText: {
-    ...fontStyles.micro,
-    color: Colors.primary,
-    fontWeight: '600',
-    marginTop: 6,
-    textAlign: 'center',
-  },
-  shareTopFoods: {
-    marginVertical: 20,
-  },
-  shareSectionTitle: {
-    ...fontStyles.h4,
-    color: Colors.text,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  shareFoodsList: {
-    gap: 8,
-  },
-  shareFoodItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  shareFoodRank: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  shareFoodRankText: {
-    ...fontStyles.micro,
-    fontWeight: '700',
     color: Colors.white,
   },
-  shareFoodName: {
-    ...fontStyles.bodySmall,
-    color: Colors.text,
-    fontWeight: '500',
+  macroLab: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 4,
   },
-  shareFooter: {
-    alignItems: 'center',
+  foodsContainer: {
+    width: '100%',
+    marginTop: 20,
+    gap: 12,
   },
-  shareFooterLine: {
-    width: 60,
-    height: 2,
-    backgroundColor: Colors.primary,
-    marginBottom: 12,
-  },
-  shareFooterText: {
-    ...fontStyles.micro,
-    color: Colors.textSecondary,
-    marginBottom: 8,
-  },
-  shareFooterBrand: {
+  foodRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    padding: 15,
+    borderRadius: 20,
+    gap: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  shareFooterBrandText: {
-    ...fontStyles.caption,
-    color: Colors.text,
-    fontWeight: '600',
+  foodRank: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  foodRankText: {
+    color: Colors.primary,
+    fontWeight: '900',
+    fontSize: 18,
+  },
+  foodName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.white,
+    textTransform: 'uppercase',
+  },
+  summaryContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  summaryCard: {
+    width: width * 0.8,
+    aspectRatio: 0.7,
+    borderRadius: 32,
+    overflow: 'hidden',
+    padding: 30,
+    justifyContent: 'space-between',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  summaryGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  summaryHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  smallAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  smallAvatarText: {
+    color: Colors.white,
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  summaryUser: {
+    color: Colors.white,
+    fontSize: 16,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  summaryYear: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  summaryStats: {
+    gap: 15,
+    marginVertical: 10,
+  },
+  sumStatRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 15,
+  },
+  sumStat: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    padding: 15,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  sumVal: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: Colors.white,
+  },
+  sumValSmall: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: Colors.white,
+  },
+  sumLab: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.7)',
+    letterSpacing: 1,
+    marginTop: 4,
+  },
+  sumTopFoodsCard: {
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    padding: 20,
+    borderRadius: 24,
+    marginTop: 10,
+  },
+  sumTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: 'rgba(255,255,255,0.5)',
+    marginBottom: 12,
+    letterSpacing: 1,
+  },
+  sumFoodRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  sumFoodRank: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: Colors.white,
+    opacity: 0.5,
+    width: 15,
+  },
+  sumFoodName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.white,
+    textTransform: 'uppercase',
+  },
+  cardWatermark: {
+    position: 'absolute',
+    right: -50,
+    bottom: -50,
+    opacity: 0.5,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    gap: 10,
+  },
+  footerBrand: {
+    color: Colors.white,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  footerDivider: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  footerTagline: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  shareButton: {
+    marginTop: 30,
+    width: '100%',
+  },
+  decorativeCircle: {
+    position: 'absolute',
+    width: 400,
+    height: 400,
+    borderRadius: 200,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    zIndex: 0,
+  },
+  decorativeTriangle: {
+    position: 'absolute',
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 100,
+    borderRightWidth: 100,
+    borderBottomWidth: 173,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+    zIndex: 0,
+  },
+  confetti: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    zIndex: 100,
   },
 });

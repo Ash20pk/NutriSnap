@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useUser } from '../../context/UserContext';
 import { mealApi } from '../../utils/api';
 import PageHeader from '../../components/PageHeader';
@@ -64,7 +63,6 @@ const DIETARY_OPTIONS = [
 ];
 
 export default function ChefScreen() {
-  const router = useRouter();
   const { user } = useUser();
   const [loading, setLoading] = useState(false);
   const [generatedRecipe, setGeneratedRecipe] = useState<GeneratedRecipe | null>(null);
@@ -75,7 +73,6 @@ export default function ChefScreen() {
   const [selectedCuisine, setSelectedCuisine] = useState('');
   const [selectedDietary, setSelectedDietary] = useState('');
   const [targetMeal, setTargetMeal] = useState('');
-  const [nutritionalGaps, setNutritionalGaps] = useState('');
   const [showXp, setShowXp] = useState(false);
   const [earnedXp, setEarnedXp] = useState(0);
 
@@ -85,6 +82,45 @@ export default function ChefScreen() {
         ? prev.filter(g => g !== goal)
         : [...prev, goal]
     );
+  };
+
+  const identifyNutritionalGaps = (todayMeals: any) => {
+    // Simple logic to identify what's lacking today
+    const totals = todayMeals?.reduce((acc: any, meal: any) => ({
+      protein: acc.protein + (meal.total_protein || 0),
+      carbs: acc.carbs + (meal.total_carbs || 0),
+      fat: acc.fat + (meal.total_fat || 0),
+      calories: acc.calories + (meal.total_calories || 0),
+    }), { protein: 0, carbs: 0, fat: 0, calories: 0 }) || { protein: 0, carbs: 0, fat: 0, calories: 0 };
+
+    const gaps = [];
+    if (totals.protein < 50) gaps.push('protein');
+    if (totals.carbs < 100) gaps.push('carbs');
+    if (totals.fat < 20) gaps.push('healthy fats');
+    if (totals.calories < 1200) gaps.push('calories');
+    
+    return gaps.join(', ');
+  };
+
+  const createChefPrompt = (request: ChefRequest) => {
+    return `As a professional chef and nutritionist, create a personalized recipe based on:
+
+Available Ingredients: ${request.ingredients.join(', ')}
+Health Goals: ${request.goals.join(', ') || 'General health'}
+Preferred Cuisine: ${request.cuisine || 'Any'}
+Dietary Preference: ${request.dietaryPreference || 'No restriction'}
+Target Meal Type: ${request.targetMeal || 'Any meal'}
+Nutritional Gaps to Address: ${request.nutritionalGaps || 'None identified'}
+
+Requirements:
+- Use only the listed ingredients or suggest minimal additions
+- Focus on Indian cuisine when possible
+- Provide clear, step-by-step instructions
+- Include prep time and servings
+- Calculate approximate nutritional values
+- Add cooking tips for beginners
+
+Format response as JSON with: name, description, prepTime, servings, calories, protein, carbs, fat, ingredients (array), instructions (array), tips`;
   };
 
   const generateRecipe = async () => {
@@ -160,58 +196,17 @@ export default function ChefScreen() {
     }
   };
 
-  const identifyNutritionalGaps = (todayMeals: any) => {
-    // Simple logic to identify what's lacking today
-    const totals = todayMeals?.reduce((acc: any, meal: any) => ({
-      protein: acc.protein + (meal.total_protein || 0),
-      carbs: acc.carbs + (meal.total_carbs || 0),
-      fat: acc.fat + (meal.total_fat || 0),
-      calories: acc.calories + (meal.total_calories || 0),
-    }), { protein: 0, carbs: 0, fat: 0, calories: 0 }) || { protein: 0, carbs: 0, fat: 0, calories: 0 };
-
-    const gaps = [];
-    if (totals.protein < 50) gaps.push('protein');
-    if (totals.carbs < 100) gaps.push('carbs');
-    if (totals.fat < 20) gaps.push('healthy fats');
-    if (totals.calories < 1200) gaps.push('calories');
-    
-    return gaps.join(', ');
-  };
-
-  const createChefPrompt = (request: ChefRequest) => {
-    return `As a professional chef and nutritionist, create a personalized recipe based on:
-
-Available Ingredients: ${request.ingredients.join(', ')}
-Health Goals: ${request.goals.join(', ') || 'General health'}
-Preferred Cuisine: ${request.cuisine || 'Any'}
-Dietary Preference: ${request.dietaryPreference || 'No restriction'}
-Target Meal Type: ${request.targetMeal || 'Any meal'}
-Nutritional Gaps to Address: ${request.nutritionalGaps || 'None identified'}
-
-Requirements:
-- Use only the listed ingredients or suggest minimal additions
-- Focus on Indian cuisine when possible
-- Provide clear, step-by-step instructions
-- Include prep time and servings
-- Calculate approximate nutritional values
-- Add cooking tips for beginners
-
-Format response as JSON with: name, description, prepTime, servings, calories, protein, carbs, fat, ingredients (array), instructions (array), tips`;
-  };
-
   return (
     <View style={styles.container}>
+      <PageHeader 
+        title="AI Chef" 
+        subtitle="Personalized recipes for your goals"
+      />
       <ScrollView 
         style={styles.scrollView} 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <PageHeader 
-          title="AI Chef" 
-          subtitle="Get personalized recipes based on what you have and your goals"
-        />
-
         {/* Quick Actions */}
         <AnimatedCard delay={100} type="pop" style={styles.quickActions}>
           <TouchableOpacity 
@@ -238,6 +233,7 @@ Format response as JSON with: name, description, prepTime, servings, calories, p
 
         {/* Input Form */}
         <View style={styles.form}>
+
           {/* Ingredients */}
           <AnimatedCard delay={200} type="slide" style={styles.inputSection}>
             <Text style={styles.label}>What ingredients do you have?</Text>
@@ -439,7 +435,7 @@ Format response as JSON with: name, description, prepTime, servings, calories, p
 
             {generatedRecipe.tips && (
               <View style={styles.recipeSection}>
-                <Text style={styles.sectionTitle}>Chef's Tips</Text>
+                <Text style={styles.sectionTitle}>Chef&apos;s Tips</Text>
                 <Text style={styles.tips}>{generatedRecipe.tips}</Text>
               </View>
             )}
@@ -476,7 +472,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     paddingBottom: 20,
   },
   quickActions: {
@@ -514,6 +510,45 @@ const styles = StyleSheet.create({
   },
   form: {
     marginBottom: 32,
+  },
+  chefBubble: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 12,
+    marginBottom: 32,
+  },
+  chefAvatarSmall: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.white,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomWidth: 4,
+  },
+  chefEmoji: {
+    fontSize: 24,
+  },
+  bubbleContent: {
+    flex: 1,
+    backgroundColor: Colors.white,
+    padding: 16,
+    borderRadius: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderBottomLeftRadius: 4,
+    borderBottomRightRadius: 20,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 6,
+  },
+  bubbleText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text,
+    lineHeight: 20,
   },
   inputSection: {
     marginBottom: 24,
@@ -704,20 +739,5 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: Colors.border,
-  },
-  logButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    backgroundColor: Colors.accent,
-    padding: 16,
-    borderRadius: 12,
-    marginTop: 16,
-  },
-  logButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.white,
   },
 });

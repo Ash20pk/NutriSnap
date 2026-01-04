@@ -1,16 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { fontStyles } from '../../constants/Fonts';
 import PageHeader from '../../components/PageHeader';
 import { Ionicons } from '@expo/vector-icons';
-
 import DuoButton from '../../components/DuoButton';
 import AnimatedCard from '../../components/AnimatedCard';
-
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { TextInput } from 'react-native';
 
 const MOCK_QUESTS = [
   {
@@ -74,21 +71,23 @@ export default function QuestScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = React.useState<'quests' | 'friends'>('quests');
   const [searchQuery, setSearchQuery] = React.useState('');
-  const totalXp = MOCK_QUESTS.reduce((sum, q) => sum + q.xp, 0);
-  const earnedXp = MOCK_QUESTS.reduce((sum, q) => {
-    const pct = q.target === 0 ? 0 : Math.min(1, q.current / q.target);
-    return sum + Math.round(q.xp * pct);
-  }, 0);
-  const completedCount = MOCK_QUESTS.filter((q) => q.target > 0 && q.current >= q.target).length;
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <PageHeader title="Quest" subtitle="Complete quests and climb the leaderboard." />
-
+      <PageHeader 
+        title="Quest" 
+        subtitle="Complete quests and climb the leaderboard." 
+      />
+      
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent} 
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.tabContainer}>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'quests' && styles.activeTab]}
+            activeOpacity={0.9}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               setActiveTab('quests');
@@ -98,6 +97,7 @@ export default function QuestScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'friends' && styles.activeTab]}
+            activeOpacity={0.9}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               setActiveTab('friends');
@@ -110,7 +110,7 @@ export default function QuestScreen() {
         {activeTab === 'quests' ? (
           <>
             <AnimatedCard delay={100} type="pop" style={styles.section}>
-              <Text style={styles.sectionTitle}>Today’s quests</Text>
+              <Text style={styles.sectionTitle}>Today&apos;s quests</Text>
               <View style={styles.card}>
                 {MOCK_QUESTS.map((quest, index) => (
                   <View key={quest.id}>
@@ -240,7 +240,7 @@ export default function QuestScreen() {
                       <View style={styles.emptyFriends}>
                         <Ionicons name="search" size={48} color={Colors.border} />
                         <Text style={styles.emptyFriendsTitle}>No results</Text>
-                        <Text style={styles.emptyFriendsText}>We couldn't find anyone matching "{searchQuery}"</Text>
+                        <Text style={styles.emptyFriendsText}>We couldn&apos;t find anyone matching &quot;{searchQuery}&quot;</Text>
                       </View>
                     </View>
                   )}
@@ -342,8 +342,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  content: {
-    paddingHorizontal: 20,
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 24,
     paddingBottom: 20,
   },
   section: {
@@ -358,29 +361,34 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     fontSize: 16,
   },
-  summaryRow: {
+  tabContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
-  },
-  summaryPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
     backgroundColor: Colors.white,
+    borderRadius: 20,
+    padding: 6,
+    marginBottom: 24,
     borderWidth: 2,
     borderColor: Colors.border,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    flex: 1,
     borderBottomWidth: 6,
   },
-  summaryText: {
-    fontSize: 13,
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  activeTab: {
+    backgroundColor: Colors.primary,
+  },
+  tabText: {
+    fontSize: 14,
     fontWeight: '900',
-    color: Colors.text,
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  activeTabText: {
+    color: Colors.white,
   },
   card: {
     backgroundColor: Colors.white,
@@ -420,11 +428,6 @@ const styles = StyleSheet.create({
     color: Colors.text,
     marginBottom: 2,
     flex: 1,
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.textSecondary,
   },
   xpPill: {
     paddingHorizontal: 12,
@@ -525,6 +528,78 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 14,
   },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: 20,
+    padding: 12,
+    gap: 10,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 6,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: Colors.text,
+    fontWeight: '700',
+  },
+  resultsList: {
+    gap: 12,
+  },
+  searchResultCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: 20,
+    padding: 12,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 6,
+    gap: 12,
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: Colors.white,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: Colors.text,
+  },
+  resultMain: {
+    flex: 1,
+  },
+  resultName: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: Colors.text,
+  },
+  resultBio: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '700',
+  },
+  miniFollowBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: Colors.white,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniFollowBtnActive: {
+    backgroundColor: Colors.primary,
+  },
   leaderRow: {
     position: 'relative',
     flexDirection: 'row',
@@ -556,21 +631,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: Colors.primary,
   },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    backgroundColor: Colors.white,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: Colors.text,
-  },
   leaderMain: {
     flex: 1,
   },
@@ -585,112 +645,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontWeight: '700',
     textTransform: 'uppercase',
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    padding: 6,
-    marginBottom: 24,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderBottomWidth: 6,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  activeTab: {
-    backgroundColor: Colors.primary,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  activeTabText: {
-    color: Colors.white,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    padding: 12,
-    gap: 10,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderBottomWidth: 6,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: Colors.text,
-    fontWeight: '700',
-  },
-  emptyFriends: {
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyFriendsTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: Colors.text,
-    marginTop: 12,
-    marginBottom: 4,
-    textTransform: 'uppercase',
-  },
-  emptyFriendsText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    fontWeight: '700',
-  },
-  resultsList: {
-    gap: 12,
-  },
-  searchResultCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    padding: 12,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderBottomWidth: 6,
-    gap: 12,
-  },
-  resultMain: {
-    flex: 1,
-  },
-  resultName: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: Colors.text,
-  },
-  resultBio: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '700',
-  },
-  miniFollowBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: Colors.white,
-    borderWidth: 2,
-    borderColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  miniFollowBtnActive: {
-    backgroundColor: Colors.primary,
   },
   activityRow: {
     flexDirection: 'row',
@@ -742,5 +696,25 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '900',
     color: Colors.warning,
+  },
+  emptyFriends: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyFriendsTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: Colors.text,
+    marginTop: 12,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  emptyFriendsText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    fontWeight: '700',
   },
 });

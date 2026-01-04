@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -15,12 +14,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { Colors } from '../constants/Colors';
-import { fontStyles } from '../constants/Fonts';
 import { useAuth } from '../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import PageHeader from '../components/PageHeader';
 import AnimatedCard from '../components/AnimatedCard';
-
 import DuoButton from '../components/DuoButton';
 
 export default function AuthScreen() {
@@ -33,7 +30,6 @@ export default function AuthScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
-
 
   const canUseApple = useMemo(() => Platform.OS === 'ios', []);
 
@@ -99,107 +95,105 @@ export default function AuthScreen() {
   };
 
   return (
-    <LinearGradient colors={[Colors.background, Colors.backgroundSecondary]} style={styles.container}>
-      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.screen}>
-          <View style={styles.headerWrap}>
-            <PageHeader
-              title={mode === 'signin' ? "Let's sign you in" : 'Create Account'}
-              subtitle={
-                mode === 'signin'
-                  ? 'Sign in and elevate your nutrition game.'
-                  : 'Sign up and take the first step towards your goals.'
-              }
-            />
-          </View>
-
-          <ScrollView
-            style={styles.container}
-            contentContainerStyle={styles.contentContainer}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            <AnimatedCard type="pop" delay={100} style={styles.modalWrap}>
-              <View style={styles.card}>
-              <View style={styles.inputWrap}>
-                <Ionicons name="mail" size={18} color={Colors.textLight} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Email address"
-                  placeholderTextColor={Colors.textLight}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  value={email}
-                  onChangeText={setEmail}
-                />
-              </View>
-
-              <View style={styles.inputWrap}>
-                <Ionicons name="lock-closed" size={18} color={Colors.textLight} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Password"
-                  placeholderTextColor={Colors.textLight}
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
-                />
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                    setShowPassword((v) => !v);
-                  }}
-                  disabled={submitting || isLoading}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={18} color={Colors.textLight} />
-                </TouchableOpacity>
-              </View>
-
-              {mode === 'signin' && (
-                <TouchableOpacity
-                  style={styles.forgotRow}
-                  onPress={handleForgotPassword}
-                  disabled={submitting || isLoading}
-                >
-                  <Text style={styles.forgotText}>Forgot password</Text>
-                </TouchableOpacity>
-              )}
-
-              {mode === 'signup' && (
-                <TouchableOpacity
-                  style={styles.termsRow}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                    setAcceptedTerms((v) => !v);
-                  }}
-                  disabled={submitting || isLoading}
-                >
-                  <Ionicons
-                    name={acceptedTerms ? 'checkbox' : 'square-outline'}
-                    size={18}
-                    color={acceptedTerms ? Colors.primary : Colors.textLight}
-                  />
-                  <Text style={styles.termsText}>I have read and agree to the terms of privacy policy</Text>
-                </TouchableOpacity>
-              )}
-
-              <DuoButton
-                title={mode === 'signin' ? 'Sign in' : 'Sign up'}
-                onPress={handleEmail}
-                disabled={submitting || isLoading || (mode === 'signup' && !acceptedTerms)}
-                loading={submitting || isLoading}
-                color={Colors.primary}
-                size="large"
-                style={{ marginTop: 12 }}
+    <View style={styles.container}>
+      <PageHeader
+        title={mode === 'signin' ? "Let's sign you in" : 'Create Account'}
+        subtitle={
+          mode === 'signin'
+            ? 'Sign in and elevate your nutrition game.'
+            : 'Sign up and take the first step towards your goals.'
+        }
+      />
+      <KeyboardAvoidingView 
+        style={styles.flex} 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <AnimatedCard type="pop" delay={100} style={styles.card}>
+            <View style={styles.inputWrap}>
+              <Ionicons name="mail" size={20} color={Colors.textLight} />
+              <TextInput
+                style={styles.input}
+                placeholder="Email address"
+                placeholderTextColor={Colors.textLight}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
               />
+            </View>
 
-              <View style={styles.dividerRow}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>OR</Text>
-                <View style={styles.dividerLine} />
-              </View>
+            <View style={styles.inputWrap}>
+              <Ionicons name="lock-closed" size={20} color={Colors.textLight} />
+              <TextInput
+                style={styles.input}
+                placeholder="Password"
+                placeholderTextColor={Colors.textLight}
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  setShowPassword((v) => !v);
+                }}
+                disabled={submitting || isLoading}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={Colors.textLight} />
+              </TouchableOpacity>
+            </View>
 
+            {mode === 'signin' && (
+              <TouchableOpacity
+                style={styles.forgotRow}
+                onPress={handleForgotPassword}
+                disabled={submitting || isLoading}
+              >
+                <Text style={styles.forgotText}>Forgot password</Text>
+              </TouchableOpacity>
+            )}
+
+            {mode === 'signup' && (
+              <TouchableOpacity
+                style={styles.termsRow}
+                activeOpacity={0.8}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  setAcceptedTerms((v) => !v);
+                }}
+                disabled={submitting || isLoading}
+              >
+                <View style={[styles.checkbox, acceptedTerms && styles.checkboxActive]}>
+                  {acceptedTerms && <Ionicons name="checkmark" size={14} color={Colors.white} />}
+                </View>
+                <Text style={styles.termsText}>I agree to the terms of privacy policy</Text>
+              </TouchableOpacity>
+            )}
+
+            <DuoButton
+              title={mode === 'signin' ? 'Sign in' : 'Sign up'}
+              onPress={handleEmail}
+              disabled={submitting || isLoading || (mode === 'signup' && !acceptedTerms)}
+              loading={submitting || isLoading}
+              color={Colors.primary}
+              size="large"
+              style={{ marginTop: 12 }}
+            />
+
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>OR</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <View style={styles.socialButtons}>
               {canUseApple && (
                 <DuoButton
                   title="Continue with Apple"
@@ -209,6 +203,7 @@ export default function AuthScreen() {
                   shadowColor={Colors.border}
                   textStyle={{ color: Colors.text }}
                   size="medium"
+                  style={{ marginBottom: 12 }}
                 />
               )}
 
@@ -221,25 +216,23 @@ export default function AuthScreen() {
                 textStyle={{ color: Colors.text }}
                 size="medium"
               />
+            </View>
 
-              <View style={styles.footerRow}>
-                <Text style={styles.footerText}>
-                  {mode === 'signin' ? "Don't have an account?" : 'Already have an account?'}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                    setMode((m) => (m === 'signin' ? 'signup' : 'signin'));
-                  }}
-                  disabled={submitting || isLoading}
-                >
-                  <Text style={styles.footerLink}>{mode === 'signin' ? ' Sign up' : ' Sign in'}</Text>
-                </TouchableOpacity>
-              </View>
+            <View style={styles.footerRow}>
+              <Text style={styles.footerText}>
+                {mode === 'signin' ? "Don't have an account?" : 'Already have an account?'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                  setMode((m) => (m === 'signin' ? 'signup' : 'signin'));
+                }}
+                disabled={submitting || isLoading}
+              >
+                <Text style={styles.footerLink}>{mode === 'signin' ? ' Sign up' : ' Sign in'}</Text>
+              </TouchableOpacity>
             </View>
           </AnimatedCard>
-
-          </ScrollView>
 
           <View style={styles.bottomBrand}>
             <View style={styles.logoMark}>
@@ -247,9 +240,9 @@ export default function AuthScreen() {
             </View>
             <Text style={styles.brand}>NutriSnap</Text>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -258,40 +251,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  screen: {
+  flex: {
     flex: 1,
   },
-  headerWrap: {
-    paddingHorizontal: 20,
-    backgroundColor: Colors.background,
-  },
-  contentContainer: {
-    flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 120,
-    justifyContent: 'center',
-  },
-  modalWrap: {
-    alignItems: 'center',
-    width: '100%',
+  scrollContent: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 40,
   },
   card: {
     backgroundColor: Colors.white,
-    borderRadius: 28,
+    borderRadius: 32,
     padding: 24,
     borderWidth: 2,
     borderColor: Colors.border,
-    width: '100%',
-    maxWidth: 420,
     borderBottomWidth: 8,
+    width: '100%',
   },
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     backgroundColor: Colors.white,
-    borderRadius: 16,
+    borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 16,
@@ -308,30 +290,44 @@ const styles = StyleSheet.create({
   },
   forgotRow: {
     alignSelf: 'flex-end',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   forgotText: {
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '900',
     color: Colors.primary,
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   termsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 16,
+    gap: 12,
+    marginBottom: 20,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
   termsText: {
-    fontSize: 12,
+    fontSize: 14,
     color: Colors.textSecondary,
-    flex: 1,
     fontWeight: '700',
   },
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: 24,
     gap: 12,
   },
   dividerLine: {
@@ -343,13 +339,16 @@ const styles = StyleSheet.create({
   dividerText: {
     fontSize: 12,
     fontWeight: '900',
-    color: Colors.textSecondary,
+    color: Colors.textLight,
     textTransform: 'uppercase',
+  },
+  socialButtons: {
+    marginBottom: 24,
   },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 24,
+    marginTop: 8,
   },
   footerText: {
     fontSize: 14,
@@ -363,17 +362,16 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   bottomBrand: {
-    alignSelf: 'center',
+    marginTop: 40,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 10,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
-    opacity: 0.95,
+    justifyContent: 'center',
+    opacity: 0.8,
   },
   logoMark: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -382,10 +380,10 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(0,0,0,0.2)',
   },
   brand: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '900',
     color: Colors.text,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
 });

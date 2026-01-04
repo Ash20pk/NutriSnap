@@ -138,7 +138,6 @@ export default function Intro() {
             keyExtractor={(item) => item.key}
             horizontal
             decelerationRate="fast"
-            bounces={false}
             snapToInterval={itemSize}
             disableIntervalMomentum
             style={{ width: pageWidth, height: deckHeight, alignSelf: 'center' }}
@@ -288,8 +287,6 @@ export default function Intro() {
             <Ionicons name="arrow-forward" size={22} color={Colors.white} />
           </Animated.View>
         </View>
-
-        <Text style={styles.caption}></Text>
       </View>
     </LinearGradient>
   );
@@ -317,12 +314,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
+    borderBottomWidth: 4,
+    borderBottomColor: 'rgba(0,0,0,0.2)',
   },
   brand: {
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: '900',
     color: Colors.text,
     letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   title: {
     fontSize: 40,
@@ -330,12 +330,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: Colors.text,
     marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: Colors.textSecondary,
-    maxWidth: 360,
   },
   featureGrid: {
     marginTop: 28,
@@ -354,34 +348,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: Colors.border,
     borderBottomWidth: 8,
-    shadowColor: Colors.shadow,
-    shadowOpacity: 1,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
     overflow: 'hidden',
-  },
-  cardHeader: {
-    gap: 6,
-  },
-  featureTitle: {
-    fontSize: 36,
-    lineHeight: 42,
-    fontWeight: '900',
-    color: Colors.text,
-    marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: -0.5,
-  },
-  featureText: {
-    marginTop: 0,
-    fontSize: 14,
-    lineHeight: 20,
-    color: Colors.textSecondary,
   },
   cardVisual: {
     flex: 1,
-    backgroundColor: Colors.primary + '10',
+    backgroundColor: Colors.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -426,57 +397,26 @@ const styles = StyleSheet.create({
     borderBottomWidth: 4,
     borderBottomColor: 'rgba(0,0,0,0.2)',
   },
-  cardIconWrap: {
-    width: 92,
-    height: 92,
-    borderRadius: 46,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: Colors.shadowDark,
-    shadowOpacity: 0.2,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 5,
-  },
-  cardBlobA: {
-    position: 'absolute',
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: Colors.highLevels + '20',
-    top: -40,
-    left: -30,
-  },
-  cardBlobB: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: Colors.primary + '12',
-    bottom: -70,
-    right: -50,
-  },
   dotsRow: {
-    marginTop: 12,
+    marginTop: 20,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: Colors.primary,
   },
   bottom: {
     paddingHorizontal: 24,
-    paddingBottom: 28,
+    paddingBottom: 40,
   },
   slider: {
     height: 64,
-    backgroundColor: 'rgba(255,255,255,0.78)',
+    backgroundColor: Colors.white,
     borderRadius: 32,
     borderWidth: 2,
     borderColor: Colors.border,
@@ -495,28 +435,20 @@ const styles = StyleSheet.create({
   },
   sliderText: {
     textAlign: 'center',
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '900',
     color: Colors.text,
-    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   knob: {
     position: 'absolute',
-    left: 0,
+    left: 4,
     top: 4,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.shadowDark,
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
-  },
-  caption: {
-    marginTop: 12,
-    textAlign: 'center',
-    fontSize: 12,
-    color: Colors.textLight,
+    borderBottomWidth: 4,
+    borderBottomColor: 'rgba(0,0,0,0.2)',
   },
 });

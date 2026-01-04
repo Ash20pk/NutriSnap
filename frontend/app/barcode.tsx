@@ -6,19 +6,20 @@ import {
   TouchableOpacity,
   Alert,
   SafeAreaView,
+  Dimensions,
+  Modal,
 } from 'react-native';
 import { CameraView, Camera } from 'expo-camera';
 import { BarcodeScanningResult } from 'expo-camera';
 import { Colors } from '../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-
 import * as Haptics from 'expo-haptics';
-
 import DuoButton from '../components/DuoButton';
 import AnimatedCard from '../components/AnimatedCard';
 
-// Mock barcode database - in production, this would be an API call
+const { width } = Dimensions.get('window');
+
 const BARCODE_DATABASE: { [key: string]: any } = {
   '8901725111427': {
     name: 'Maggi 2-Minute Noodles',
@@ -60,13 +61,14 @@ const BARCODE_DATABASE: { [key: string]: any } = {
     fat: 81,
     category: 'Dairy',
   },
-  // Add more barcodes as needed
 };
 
 export default function BarcodeScreen() {
   const router = useRouter();
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
+  const [scannedProduct, setScannedProduct] = useState<any>(null);
+  const [showResultModal, setShowResultModal] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -76,57 +78,22 @@ export default function BarcodeScreen() {
   }, []);
 
   const handleBarCodeScanned = ({ type, data }: BarcodeScanningResult) => {
-    if (scanned) return;
+    if (scanned || showResultModal) return;
     
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     setScanned(true);
 
-    // Look up product in database
     const product = BARCODE_DATABASE[data];
-
     if (product) {
-      Alert.alert(
-        `Product Found! 📦`,
-        `${product.name}\n${product.brand}\n\nNutrition (per ${product.serving_size}g):\n` +
-        `🔥 ${product.calories} calories\n` +
-        `💪 ${product.protein}g protein\n` +
-        `🍞 ${product.carbs}g carbs\n` +
-        `🥑 ${product.fat}g fat\n\n` +
-        `Now take a photo of how much you consumed!`,
-        [
-          {
-            text: 'Take Photo',
-            onPress: () => {
-              router.push({
-                pathname: '/camera',
-                params: {
-                  mode: 'barcode',
-                  barcodeData: JSON.stringify(product),
-                },
-              });
-            },
-          },
-          {
-            text: 'Scan Again',
-            style: 'cancel',
-            onPress: () => setScanned(false),
-          },
-        ]
-      );
+      setScannedProduct(product);
+      setShowResultModal(true);
     } else {
       Alert.alert(
         'Product Not Found',
         `Barcode: ${data}\n\nThis product is not in our database yet. Would you like to log it manually?`,
         [
-          {
-            text: 'Manual Entry',
-            onPress: () => router.back(),
-          },
-          {
-            text: 'Scan Again',
-            style: 'cancel',
-            onPress: () => setScanned(false),
-          },
+          { text: 'Manual Entry', onPress: () => router.back() },
+          { text: 'Scan Again', style: 'cancel', onPress: () => setScanned(false) },
         ]
       );
     }
@@ -143,6 +110,7 @@ export default function BarcodeScreen() {
   if (hasPermission === false) {
     return (
       <View style={styles.container}>
+        <Ionicons name="camera-outline" size={64} color={Colors.error} />
         <Text style={styles.text}>No access to camera</Text>
         <DuoButton
           title="Go Back"
@@ -160,19 +128,10 @@ export default function BarcodeScreen() {
         style={styles.camera}
         facing="back"
         barcodeScannerSettings={{
-          barcodeTypes: [
-            'ean13',
-            'ean8',
-            'upc_a',
-            'upc_e',
-            'qr',
-            'code128',
-            'code39',
-          ],
+          barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'qr', 'code128', 'code39'],
         }}
-        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+        onBarcodeScanned={(scanned || showResultModal) ? undefined : handleBarCodeScanned}
       >
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity 
             style={styles.closeButton} 
@@ -185,38 +144,94 @@ export default function BarcodeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Scanning Frame */}
         <View style={styles.overlay}>
           <View style={styles.scanningFrame}>
             <View style={styles.corner} />
             <View style={[styles.corner, styles.cornerTR]} />
             <View style={[styles.corner, styles.cornerBL]} />
             <View style={[styles.corner, styles.cornerBR]} />
-            
             <View style={styles.scanLine} />
           </View>
           
           <AnimatedCard type="pop" delay={200} style={styles.instructionBox}>
-            <Ionicons name="scan" size={32} color={Colors.white} />
+            <Ionicons name="barcode-outline" size={32} color={Colors.white} />
             <Text style={styles.instructionTitle}>Scan Barcode</Text>
             <Text style={styles.instructionText}>
-              Position the barcode within the frame
+              Align the barcode within the frame
             </Text>
-            <Text style={styles.tip}>
-              💡 Works with packaged food items
-            </Text>
+            <View style={styles.tipBadge}>
+              <Text style={styles.tipText}>💡 TIP: HOLD STEADY</Text>
+            </View>
           </AnimatedCard>
         </View>
 
-        {/* Scanned Indicator */}
-        {scanned && (
-          <View style={styles.scannedOverlay}>
-            <View style={styles.scannedBadge}>
-              <Ionicons name="checkmark-circle" size={60} color={Colors.primary} />
-              <Text style={styles.scannedText}>Scanned!</Text>
-            </View>
+        {/* Result Modal */}
+        <Modal
+          visible={showResultModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowResultModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <AnimatedCard type="pop" style={styles.resultCard}>
+              <View style={styles.successIconWrap}>
+                <Ionicons name="checkmark-circle" size={60} color={Colors.primary} />
+              </View>
+              
+              <Text style={styles.productName}>{scannedProduct?.name}</Text>
+              <Text style={styles.productBrand}>{scannedProduct?.brand}</Text>
+              
+              <View style={styles.nutritionGrid}>
+                <View style={styles.nutritionItem}>
+                  <Text style={styles.nutritionValue}>{scannedProduct?.calories}</Text>
+                  <Text style={styles.nutritionLabel}>CALORIES</Text>
+                </View>
+                <View style={styles.nutritionDivider} />
+                <View style={styles.nutritionItem}>
+                  <Text style={styles.nutritionValue}>{scannedProduct?.protein}g</Text>
+                  <Text style={styles.nutritionLabel}>PROTEIN</Text>
+                </View>
+                <View style={styles.nutritionDivider} />
+                <View style={styles.nutritionItem}>
+                  <Text style={styles.nutritionValue}>{scannedProduct?.carbs}g</Text>
+                  <Text style={styles.nutritionLabel}>CARBS</Text>
+                </View>
+              </View>
+
+              <Text style={styles.nextStepText}>
+                Now take a photo of your portion to calculate exact calories!
+              </Text>
+
+              <View style={styles.modalButtons}>
+                <DuoButton
+                  title="Take Photo"
+                  onPress={() => {
+                    setShowResultModal(false);
+                    router.push({
+                      pathname: '/camera',
+                      params: {
+                        mode: 'barcode',
+                        barcodeData: JSON.stringify(scannedProduct),
+                      },
+                    });
+                  }}
+                  color={Colors.primary}
+                  size="large"
+                  style={{ width: '100%' }}
+                />
+                <TouchableOpacity 
+                  style={styles.cancelLink}
+                  onPress={() => {
+                    setShowResultModal(false);
+                    setScanned(false);
+                  }}
+                >
+                  <Text style={styles.cancelLinkText}>SCAN AGAIN</Text>
+                </TouchableOpacity>
+              </View>
+            </AnimatedCard>
           </View>
-        )}
+        </Modal>
       </CameraView>
     </SafeAreaView>
   );
@@ -236,8 +251,8 @@ const styles = StyleSheet.create({
   header: {
     position: 'absolute',
     top: 20,
-    left: 20,
-    right: 20,
+    left: 24,
+    right: 24,
     zIndex: 10,
   },
   closeButton: {
@@ -247,16 +262,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   overlay: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 40,
+    paddingHorizontal: 24,
   },
   scanningFrame: {
-    width: 280,
-    height: 200,
+    width: width * 0.7,
+    aspectRatio: 1.2,
     position: 'relative',
     marginBottom: 40,
   },
@@ -270,6 +287,7 @@ const styles = StyleSheet.create({
     left: 0,
     borderRightWidth: 0,
     borderBottomWidth: 0,
+    borderRadius: 4,
   },
   cornerTR: {
     left: undefined,
@@ -296,20 +314,25 @@ const styles = StyleSheet.create({
   scanLine: {
     position: 'absolute',
     top: '50%',
-    left: 0,
-    right: 0,
+    left: 10,
+    right: 10,
     height: 2,
     backgroundColor: Colors.primary,
     opacity: 0.8,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 10,
   },
   instructionBox: {
-    backgroundColor: 'rgba(13, 8, 8, 0.8)',
+    backgroundColor: 'rgba(13, 8, 8, 0.85)',
     padding: 24,
-    borderRadius: 24,
+    borderRadius: 28,
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    width: '100%',
   },
   instructionTitle: {
     fontSize: 22,
@@ -320,58 +343,116 @@ const styles = StyleSheet.create({
   },
   instructionText: {
     fontSize: 14,
-    color: Colors.white,
+    color: 'rgba(255, 255, 255, 0.8)',
     textAlign: 'center',
     fontWeight: '700',
-    opacity: 0.9,
+    marginBottom: 8,
   },
-  tip: {
-    fontSize: 13,
+  tipBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  tipText: {
+    fontSize: 11,
     color: Colors.white,
-    marginTop: 8,
-    fontWeight: '800',
-    opacity: 0.8,
-    textTransform: 'uppercase',
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
-  scannedOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(13, 8, 8, 0.7)',
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(13, 8, 8, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 24,
   },
-  scannedBadge: {
+  resultCard: {
     backgroundColor: Colors.white,
-    padding: 40,
     borderRadius: 32,
+    padding: 32,
+    width: '100%',
     alignItems: 'center',
-    gap: 16,
-    borderWidth: 4,
-    borderColor: Colors.primary,
+    borderWidth: 2,
+    borderColor: Colors.border,
     borderBottomWidth: 10,
   },
-  scannedText: {
-    fontSize: 24,
+  successIconWrap: {
+    marginBottom: 20,
+  },
+  productName: {
+    fontSize: 22,
     fontWeight: '900',
     color: Colors.text,
+    textAlign: 'center',
+    marginBottom: 4,
     textTransform: 'uppercase',
+  },
+  productBrand: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.textSecondary,
+    marginBottom: 24,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  nutritionGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 24,
+    width: '100%',
+  },
+  nutritionItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  nutritionValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: Colors.text,
+  },
+  nutritionLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Colors.textSecondary,
+    marginTop: 4,
+  },
+  nutritionDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: Colors.border,
+  },
+  nextStepText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    fontWeight: '700',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  modalButtons: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  cancelLink: {
+    marginTop: 20,
+    padding: 10,
+  },
+  cancelLinkText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: Colors.primary,
     letterSpacing: 1,
   },
   text: {
     fontSize: 16,
     color: Colors.white,
+    marginTop: 20,
     marginBottom: 24,
     fontWeight: '800',
     textAlign: 'center',
-  },
-  button: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.white,
   },
 });
