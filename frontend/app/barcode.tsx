@@ -13,6 +13,11 @@ import { Colors } from '../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
+import * as Haptics from 'expo-haptics';
+
+import DuoButton from '../components/DuoButton';
+import AnimatedCard from '../components/AnimatedCard';
+
 // Mock barcode database - in production, this would be an API call
 const BARCODE_DATABASE: { [key: string]: any } = {
   '8901725111427': {
@@ -73,6 +78,7 @@ export default function BarcodeScreen() {
   const handleBarCodeScanned = ({ type, data }: BarcodeScanningResult) => {
     if (scanned) return;
     
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     setScanned(true);
 
     // Look up product in database
@@ -138,9 +144,12 @@ export default function BarcodeScreen() {
     return (
       <View style={styles.container}>
         <Text style={styles.text}>No access to camera</Text>
-        <TouchableOpacity style={styles.button} onPress={() => router.back()}>
-          <Text style={styles.buttonText}>Go Back</Text>
-        </TouchableOpacity>
+        <DuoButton
+          title="Go Back"
+          onPress={() => router.back()}
+          color={Colors.primary}
+          size="medium"
+        />
       </View>
     );
   }
@@ -165,7 +174,13 @@ export default function BarcodeScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
+          <TouchableOpacity 
+            style={styles.closeButton} 
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              router.back();
+            }}
+          >
             <Ionicons name="close" size={28} color={Colors.white} />
           </TouchableOpacity>
         </View>
@@ -181,7 +196,7 @@ export default function BarcodeScreen() {
             <View style={styles.scanLine} />
           </View>
           
-          <View style={styles.instructionBox}>
+          <AnimatedCard type="pop" delay={200} style={styles.instructionBox}>
             <Ionicons name="scan" size={32} color={Colors.white} />
             <Text style={styles.instructionTitle}>Scan Barcode</Text>
             <Text style={styles.instructionText}>
@@ -190,7 +205,7 @@ export default function BarcodeScreen() {
             <Text style={styles.tip}>
               💡 Works with packaged food items
             </Text>
-          </View>
+          </AnimatedCard>
         </View>
 
         {/* Scanned Indicator */}
@@ -288,51 +303,65 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   instructionBox: {
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(13, 8, 8, 0.8)',
     padding: 24,
-    borderRadius: 20,
+    borderRadius: 24,
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   instructionTitle: {
     fontSize: 22,
-    fontWeight: 'bold',
+    fontWeight: '900',
     color: Colors.white,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   instructionText: {
     fontSize: 14,
     color: Colors.white,
     textAlign: 'center',
+    fontWeight: '700',
     opacity: 0.9,
   },
   tip: {
     fontSize: 13,
     color: Colors.white,
     marginTop: 8,
+    fontWeight: '800',
     opacity: 0.8,
+    textTransform: 'uppercase',
   },
   scannedOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(13, 8, 8, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   scannedBadge: {
     backgroundColor: Colors.white,
     padding: 40,
-    borderRadius: 20,
+    borderRadius: 32,
     alignItems: 'center',
-    gap: 12,
+    gap: 16,
+    borderWidth: 4,
+    borderColor: Colors.primary,
+    borderBottomWidth: 10,
   },
   scannedText: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: '900',
     color: Colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   text: {
     fontSize: 16,
     color: Colors.white,
-    marginBottom: 20,
+    marginBottom: 24,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   button: {
     backgroundColor: Colors.primary,

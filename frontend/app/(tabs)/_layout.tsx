@@ -84,9 +84,9 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="recipes"
+        name="chef"
         options={{
-          title: 'Recipes',
+          title: 'Chef',
           tabBarIcon: ({ color, focused }) => (
             <View style={[
               styles.iconContainer,
@@ -101,10 +101,29 @@ export default function TabsLayout() {
           ),
         }}
       />
+
+      <Tabs.Screen
+        name="quest"
+        options={{
+          title: 'Quest',
+          tabBarIcon: ({ color, focused }) => (
+            <View
+              style={[
+                styles.iconContainer,
+                focused && { ...styles.iconContainerActive, backgroundColor: Colors.secondary + '15' },
+              ]}
+            >
+              <Ionicons name={focused ? 'trophy' : 'trophy-outline'} size={24} color={color} />
+            </View>
+          ),
+        }}
+      />
+
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
+          href: null,
           tabBarIcon: ({ color, focused }) => (
             <View style={[
               styles.iconContainer,
@@ -130,7 +149,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    transition: 'all 0.3s ease',
   },
   iconContainerActive: {
     transform: [{ scale: 1.05 }],

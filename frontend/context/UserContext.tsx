@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from './AuthContext';
 
 interface UserProfile {
   id: string;
@@ -30,23 +31,36 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUserState] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { user: authUser, isLoading: authLoading } = useAuth();
 
   useEffect(() => {
-    loadUser();
-  }, []);
+    if (authLoading) return;
+    (async () => {
+      try {
+        if (!authUser) {
+          console.log('[UserContext] No auth user, clearing profile');
+          await AsyncStorage.removeItem('user_profile');
+          setUserState(null);
+          setIsLoading(false);
+          return;
+        }
 
-  const loadUser = async () => {
-    try {
-      const userData = await AsyncStorage.getItem('user_profile');
-      if (userData) {
-        setUserState(JSON.parse(userData));
+        // Only load cached profile, don't call backend during auth flow
+        const userData = await AsyncStorage.getItem('user_profile');
+        if (userData) {
+          console.log('[UserContext] Found cached profile');
+          setUserState(JSON.parse(userData));
+        } else {
+          console.log('[UserContext] No cached profile - will load from backend later');
+          setUserState(null);
+        }
+        setIsLoading(false);
+      } catch (error) {
+        console.error('[UserContext] Error loading user:', error);
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error('Error loading user:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    })();
+  }, [authLoading, authUser, authUser?.id]);
 
   const setUser = async (newUser: UserProfile | null) => {
     try {

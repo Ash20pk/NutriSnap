@@ -1,66 +1,70 @@
-// NutriSnap Color Palette - Earthy & Natural with Professional Touch
+// NutriSnap Color Palette - Exact colors from user
 
 export const Colors = {
-  // Primary colors - Natural Green
-  primary: '#5B7350',
-  primaryDark: '#4A6741',
-  primaryLight: '#6D8660',
+  // Main colors
+  accent: '#2F593E',
+  bg1: '#F2E5D5',
+  bg2: '#BFA893',
+  highLevels: '#F28D35',
+  blacks: '#0D0808',
   
-  // Background colors - Soft & Clean
-  background: '#FAFAF8',
-  backgroundSecondary: '#F5F3EF',
-  backgroundTertiary: '#EFEEE9',
+  // Background colors
+  background: '#F2E5D5',
+  backgroundSecondary: '#E8DCC0',
+  backgroundTertiary: '#D4C8AC',
   
   // Card colors
   cardBackground: '#FFFFFF',
-  cardBackgroundSecondary: '#FDFCF9',
-  
-  // Accent colors - Warm & Inviting
-  accent: '#E8956F',
-  accentLight: '#F4B59D',
-  accentDark: '#D67D5A',
-  
-  // Secondary accent - Calming Blue
-  secondary: '#7A9BB0',
-  secondaryLight: '#9BB5C7',
-  secondaryDark: '#5B7C91',
-  
-  // Tertiary accent - Soft Purple
-  tertiary: '#B8A4C9',
-  tertiaryLight: '#D0C2DD',
-  tertiaryDark: '#9A86AD',
+  cardBackgroundSecondary: '#FAFAFA',
   
   // Text colors
-  text: '#3C3C3C',
-  textSecondary: '#6B6B6B',
-  textLight: '#9A9A9A',
+  text: '#0D0808',
+  textSecondary: '#5A4A3A',
+  textLight: '#8B7A6A',
   textInverse: '#FFFFFF',
   
   // Status colors
-  success: '#6D8660',
-  warning: '#E8956F',
-  error: '#D66853',
-  info: '#7A9BB0',
+  success: '#2F593E',
+  warning: '#F28D35',
+  error: '#D32F2F',
+  info: '#2196F3',
   
-  // Macro colors - Distinct but natural
-  protein: '#E57373',
-  carbs: '#FFB74D',
-  fat: '#64B5F6',
+  // Macro colors
+  protein: '#F28D35',
+  carbs: '#2F593E',
+  fat: '#5A4A3A',
   
   // Neutral colors
   white: '#FFFFFF',
-  black: '#3C3C3C',
-  gray100: '#F7F7F7',
-  gray200: '#E5E5E5',
-  gray300: '#BDBDBD',
-  gray400: '#9E9E9E',
-  gray500: '#757575',
+  black: '#0D0808',
+  gray100: '#F2E5D5',
+  gray200: '#E8DCC0',
+  gray300: '#D4C8AC',
+  gray400: '#BFA893',
+  gray500: '#8B7A6A',
   
   // Border colors
-  border: '#E5E5E5',
-  borderLight: '#F0F0F0',
+  border: '#D4C8AC',
+  borderLight: '#E8DCC0',
   
   // Shadow colors
-  shadow: 'rgba(0, 0, 0, 0.08)',
-  shadowDark: 'rgba(0, 0, 0, 0.12)',
+  shadow: 'rgba(13, 8, 8, 0.08)',
+  shadowDark: 'rgba(13, 8, 8, 0.12)',
+  
+  // Additional colors
+  darkCard: '#0D0808',
+  darkCardSecondary: '#1A1414',
+  darkText: '#FFFFFF',
+  darkTextSecondary: '#BFA893',
+  chartOrange: '#F28D35',
+  chartGreen: '#2F593E',
+  
+  // Aliases for compatibility
+  primary: '#2F593E',
+  primaryDark: '#1A3A2A',
+  primaryLight: '#4A7A5A',
+  accentLight: '#4A6A4A',
+  accentDark: '#1A3A2A',
+  secondary: '#5A4A3A',
+  tertiary: '#8B7A6A',
 };

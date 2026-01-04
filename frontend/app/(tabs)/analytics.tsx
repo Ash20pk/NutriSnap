@@ -14,6 +14,10 @@ import { mealApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { format, subDays, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
 import { BarChart, LineChart, PieChart } from 'react-native-gifted-charts';
+import * as Haptics from 'expo-haptics';
+import PageHeader from '../../components/PageHeader';
+import DuoButton from '../../components/DuoButton';
+import AnimatedCard from '../../components/AnimatedCard';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 40;
@@ -180,13 +184,11 @@ export default function AnalyticsScreen() {
         />
       }
     >
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Analytics 📊</Text>
-          <Text style={styles.subtitle}>Your nutrition insights</Text>
-        </View>
-      </View>
+        {/* Header */}
+        <PageHeader 
+          title="Analytics" 
+          subtitle="Your nutrition insights"
+        />
 
       {/* Time Range Selector */}
       <View style={styles.timeRangeContainer}>
@@ -195,7 +197,10 @@ export default function AnalyticsScreen() {
             styles.timeRangeButton,
             timeRange === 'week' && styles.timeRangeButtonActive,
           ]}
-          onPress={() => setTimeRange('week')}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+            setTimeRange('week');
+          }}
         >
           <Text
             style={[
@@ -211,7 +216,10 @@ export default function AnalyticsScreen() {
             styles.timeRangeButton,
             timeRange === 'month' && styles.timeRangeButtonActive,
           ]}
-          onPress={() => setTimeRange('month')}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+            setTimeRange('month');
+          }}
         >
           <Text
             style={[
@@ -225,7 +233,7 @@ export default function AnalyticsScreen() {
       </View>
 
       {/* Average Stats Cards */}
-      <View style={styles.section}>
+      <AnimatedCard delay={100} type="slide" style={styles.section}>
         <Text style={styles.sectionTitle}>Daily Averages</Text>
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
@@ -249,11 +257,11 @@ export default function AnalyticsScreen() {
             <Text style={styles.statLabel}>Fat</Text>
           </View>
         </View>
-      </View>
+      </AnimatedCard>
 
       {/* Calorie Trend Chart */}
       {weeklyData.length > 0 && (
-        <View style={styles.section}>
+        <AnimatedCard delay={200} type="slide" style={styles.section}>
           <Text style={styles.sectionTitle}>Calorie Trend</Text>
           <View style={styles.chartCard}>
             <BarChart
@@ -272,12 +280,12 @@ export default function AnalyticsScreen() {
               maxValue={Math.max(...weeklyData.map(d => d.value), 2500)}
             />
           </View>
-        </View>
+        </AnimatedCard>
       )}
 
       {/* Macro Distribution Pie Chart */}
       {macroDistribution.length > 0 && (
-        <View style={styles.section}>
+        <AnimatedCard delay={300} type="slide" style={styles.section}>
           <Text style={styles.sectionTitle}>Macro Distribution</Text>
           <View style={styles.pieCard}>
             <PieChart
@@ -302,11 +310,11 @@ export default function AnalyticsScreen() {
               ))}
             </View>
           </View>
-        </View>
+        </AnimatedCard>
       )}
 
       {/* Meal Type Breakdown */}
-      <View style={styles.section}>
+      <AnimatedCard delay={400} type="slide" style={styles.section}>
         <Text style={styles.sectionTitle}>Meal Type Breakdown</Text>
         <View style={styles.mealTypeCard}>
           {Object.entries(mealTypeBreakdown).map(([type, data]: [string, any]) => (
@@ -334,10 +342,10 @@ export default function AnalyticsScreen() {
             </View>
           ))}
         </View>
-      </View>
+      </AnimatedCard>
 
       {/* Insights Card */}
-      <View style={styles.insightCard}>
+      <AnimatedCard delay={500} type="pop" style={styles.insightCard}>
         <View style={styles.insightHeader}>
           <Ionicons name="sparkles" size={24} color={Colors.accent} />
           <Text style={styles.insightTitle}>Smart Insights</Text>
@@ -350,7 +358,7 @@ export default function AnalyticsScreen() {
             "🎯 You're under your calorie target on average. Consider adding nutrient-dense snacks!" :
             "✨ Your calorie intake is on track with your goals!"}
         </Text>
-      </View>
+      </AnimatedCard>
 
       <View style={{ height: 100 }} />
     </ScrollView>
@@ -363,49 +371,34 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   contentContainer: {
-    paddingTop: 60,
     paddingHorizontal: 20,
     paddingBottom: 20,
-  },
-  header: {
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    fontWeight: '500',
   },
   timeRangeContainer: {
     flexDirection: 'row',
     backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 4,
+    borderRadius: 20,
+    padding: 6,
     marginBottom: 24,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 4,
   },
   timeRangeButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
     alignItems: 'center',
   },
   timeRangeButtonActive: {
     backgroundColor: Colors.primary,
   },
   timeRangeText: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '900',
     color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   timeRangeTextActive: {
     color: Colors.white,
@@ -414,10 +407,12 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '900',
     color: Colors.text,
     marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -427,46 +422,41 @@ const styles = StyleSheet.create({
   statCard: {
     width: (width - 52) / 2,
     backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 16,
     alignItems: 'center',
     gap: 8,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 6,
   },
   statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 22,
+    fontWeight: '900',
     color: Colors.text,
   },
   statLabel: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.textSecondary,
-    fontWeight: '500',
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
   chartCard: {
     backgroundColor: Colors.white,
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 20,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 8,
     alignItems: 'center',
   },
   pieCard: {
     backgroundColor: Colors.white,
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 20,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 8,
     alignItems: 'center',
   },
   pieCenter: {
@@ -475,16 +465,18 @@ const styles = StyleSheet.create({
   pieCenterText: {
     fontSize: 12,
     color: Colors.textSecondary,
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
   pieCenterValue: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '900',
     color: Colors.text,
   },
   pieLegend: {
     width: '100%',
-    marginTop: 20,
-    gap: 12,
+    marginTop: 24,
+    gap: 14,
   },
   legendRow: {
     flexDirection: 'row',
@@ -492,31 +484,31 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   legendDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 18,
+    height: 18,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
   legendLabel: {
     flex: 1,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '800',
     color: Colors.text,
   },
   legendValue: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '800',
     color: Colors.textSecondary,
   },
   mealTypeCard: {
     backgroundColor: Colors.white,
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 20,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-    gap: 16,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 8,
+    gap: 18,
   },
   mealTypeRow: {
     flexDirection: 'row',
@@ -530,48 +522,49 @@ const styles = StyleSheet.create({
   },
   mealTypeName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '900',
     color: Colors.text,
+    textTransform: 'uppercase',
   },
   mealTypeStats: {
     alignItems: 'flex-end',
   },
   mealTypeCount: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '800',
     color: Colors.text,
   },
   mealTypeCalories: {
     fontSize: 12,
     color: Colors.textSecondary,
+    fontWeight: '700',
   },
   insightCard: {
     backgroundColor: Colors.white,
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 20,
     borderWidth: 2,
-    borderColor: Colors.accent + '30',
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    borderColor: Colors.primary + '40',
+    borderBottomWidth: 8,
   },
   insightHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   insightTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '900',
     color: Colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   insightText: {
     fontSize: 14,
     color: Colors.textSecondary,
     lineHeight: 20,
-    marginBottom: 8,
+    marginBottom: 10,
+    fontWeight: '700',
   },
 });

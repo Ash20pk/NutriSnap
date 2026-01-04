@@ -1,22 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Modal,
   TextInput,
   Alert,
+  Dimensions,
   ActivityIndicator,
-  Modal,
+  Animated,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useUser } from '../../context/UserContext';
 import { mealApi, foodApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import PageHeader from '../../components/PageHeader';
+import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as Speech from 'expo-speech';
-import { useRouter } from 'expo-router';
+
+import DuoButton from '../../components/DuoButton';
+import AnimatedCard from '../../components/AnimatedCard';
+import XpPopUp from '../../components/XpPopUp';
 
 export default function LogScreen() {
   const router = useRouter();
@@ -28,6 +36,8 @@ export default function LogScreen() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [selectedFoods, setSelectedFoods] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [showXp, setShowXp] = useState(false);
+  const [earnedXp, setEarnedXp] = useState(0);
 
   const mealTypes = [
     { id: 'breakfast', label: 'Breakfast', icon: 'sunny' },
@@ -35,6 +45,37 @@ export default function LogScreen() {
     { id: 'dinner', label: 'Dinner', icon: 'moon' },
     { id: 'snack', label: 'Snack', icon: 'fast-food' },
   ];
+
+  // Animated values for cards
+  const mealTypeAnims = useRef(mealTypes.map(() => new Animated.Value(0))).current;
+  const methodAnims = useRef([new Animated.Value(0), new Animated.Value(0), new Animated.Value(0), new Animated.Value(0)]).current;
+
+  const handlePressIn = (anim: Animated.Value) => {
+    Animated.spring(anim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 100,
+      friction: 5,
+    }).start();
+  };
+
+  const handlePressOut = (anim: Animated.Value) => {
+    Animated.spring(anim, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 100,
+      friction: 5,
+    }).start();
+  };
+
+  const getCardStyle = (anim: Animated.Value) => ({
+    transform: [{
+      translateY: anim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, 4],
+      })
+    }]
+  });
 
   const handlePhotoLog = async () => {
     try {
@@ -115,7 +156,11 @@ export default function LogScreen() {
         logging_method: logMethod || 'manual',
       });
 
-      Alert.alert('Success', 'Meal logged successfully!');
+      // Calculate XP (mock logic: 10 XP per food + 10 for logging)
+      const xp = (selectedFoods.length * 10) + 10;
+      setEarnedXp(xp);
+      setShowXp(true);
+
       setSelectedFoods([]);
       setShowModal(false);
       setLogMethod(null);
@@ -133,102 +178,166 @@ export default function LogScreen() {
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Log Your Meal</Text>
-        <Text style={styles.subtitle}>Choose your meal type</Text>
-      </View>
+        {/* Header */}
+        <PageHeader 
+          title="Log Your Meal" 
+          subtitle="Choose your meal type"
+        />
 
       {/* Meal Type Selector */}
-      <View style={styles.mealTypeContainer}>
-        {mealTypes.map((type) => (
-          <TouchableOpacity
-            key={type.id}
-            style={[
-              styles.mealTypeCard,
-              mealType === type.id && styles.mealTypeCardActive,
-            ]}
-            onPress={() => setMealType(type.id)}
-          >
-            <Ionicons
-              name={type.icon as any}
-              size={28}
-              color={mealType === type.id ? Colors.white : Colors.primary}
-            />
-            <Text
-              style={[
-                styles.mealTypeLabel,
-                mealType === type.id && styles.mealTypeLabelActive,
-              ]}
-            >
-              {type.label}
-            </Text>
-          </TouchableOpacity>
+      <AnimatedCard delay={100} type="pop" style={styles.mealTypeContainer}>
+        {mealTypes.map((type, index) => (
+          <View key={type.id} style={{ width: '48%', position: 'relative' }}>
+            <View style={[styles.cardShadow, { backgroundColor: mealType === type.id ? '#1A3A2A' : 'rgba(0,0,0,0.1)', borderRadius: 20 }]} />
+            <Animated.View style={getCardStyle(mealTypeAnims[index])}>
+              <TouchableOpacity
+                activeOpacity={1}
+                onPressIn={() => handlePressIn(mealTypeAnims[index])}
+                onPressOut={() => handlePressOut(mealTypeAnims[index])}
+                style={[
+                  styles.mealTypeCard,
+                  mealType === type.id && styles.mealTypeCardActive,
+                  { width: '100%' }
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setMealType(type.id);
+                }}
+              >
+                <Ionicons
+                  name={type.icon as any}
+                  size={28}
+                  color={mealType === type.id ? Colors.primary : Colors.primaryLight}
+                />
+                <Text
+                  style={[
+                    styles.mealTypeLabel,
+                    mealType === type.id && styles.mealTypeLabelActive,
+                  ]}
+                >
+                  {type.label}
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
         ))}
-      </View>
+      </AnimatedCard>
 
       {/* Logging Methods */}
       <View style={styles.methodsContainer}>
         <Text style={styles.sectionTitle}>How would you like to log?</Text>
 
         {/* Photo Logging */}
-        <TouchableOpacity style={styles.methodCard} onPress={handlePhotoLog}>
-          <View style={styles.methodIconContainer}>
-            <Ionicons name="camera" size={32} color={Colors.primary} />
-          </View>
-          <View style={styles.methodContent}>
-            <Text style={styles.methodTitle}>Take a Photo</Text>
-            <Text style={styles.methodDescription}>
-              LiDAR + coin calibration for accurate portions
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
-        </TouchableOpacity>
+        <AnimatedCard delay={200} type="slide" style={{ position: 'relative', marginBottom: 16 }}>
+          <View style={[styles.cardShadow, { backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 24 }]} />
+          <Animated.View style={getCardStyle(methodAnims[0])}>
+            <TouchableOpacity 
+              activeOpacity={1}
+              onPressIn={() => handlePressIn(methodAnims[0])}
+              onPressOut={() => handlePressOut(methodAnims[0])}
+              style={[styles.methodCard, { marginBottom: 0 }]} 
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                handlePhotoLog();
+              }}
+            >
+              <View style={styles.methodIconContainer}>
+                <Ionicons name="camera" size={32} color={Colors.primary} />
+              </View>
+              <View style={styles.methodContent}>
+                <Text style={styles.methodTitle}>Take a Photo</Text>
+                <Text style={styles.methodDescription}>
+                  LiDAR + coin calibration for accurate portions
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
+            </TouchableOpacity>
+          </Animated.View>
+        </AnimatedCard>
 
         {/* Barcode Scanner */}
-        <TouchableOpacity 
-          style={styles.methodCard} 
-          onPress={() => router.push('/barcode')}
-        >
-          <View style={[styles.methodIconContainer, { backgroundColor: Colors.secondary + '15' }]}>
-            <Ionicons name="barcode" size={32} color={Colors.secondary} />
-          </View>
-          <View style={styles.methodContent}>
-            <Text style={styles.methodTitle}>Scan Barcode</Text>
-            <Text style={styles.methodDescription}>
-              Scan packaged food, then photo your portion
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
-        </TouchableOpacity>
+        <AnimatedCard delay={300} type="slide" style={{ position: 'relative', marginBottom: 16 }}>
+          <View style={[styles.cardShadow, { backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 24 }]} />
+          <Animated.View style={getCardStyle(methodAnims[1])}>
+            <TouchableOpacity 
+              activeOpacity={1}
+              onPressIn={() => handlePressIn(methodAnims[1])}
+              onPressOut={() => handlePressOut(methodAnims[1])}
+              style={[styles.methodCard, { marginBottom: 0 }]} 
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                router.push('/barcode');
+              }}
+            >
+              <View style={[styles.methodIconContainer, { backgroundColor: Colors.secondary + '15' }]}>
+                <Ionicons name="barcode" size={32} color={Colors.secondary} />
+              </View>
+              <View style={styles.methodContent}>
+                <Text style={styles.methodTitle}>Scan Barcode</Text>
+                <Text style={styles.methodDescription}>
+                  Scan packaged food, then photo your portion
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
+            </TouchableOpacity>
+          </Animated.View>
+        </AnimatedCard>
 
         {/* Voice Logging */}
-        <TouchableOpacity style={styles.methodCard} onPress={handleVoiceLog}>
-          <View style={[styles.methodIconContainer, { backgroundColor: Colors.accent + '15' }]}>
-            <Ionicons name="mic" size={32} color={Colors.accent} />
-          </View>
-          <View style={styles.methodContent}>
-            <Text style={styles.methodTitle}>Voice Input</Text>
-            <Text style={styles.methodDescription}>
-              Tell us what you ate
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
-        </TouchableOpacity>
+        <AnimatedCard delay={400} type="slide" style={{ position: 'relative', marginBottom: 16 }}>
+          <View style={[styles.cardShadow, { backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 24 }]} />
+          <Animated.View style={getCardStyle(methodAnims[2])}>
+            <TouchableOpacity 
+              activeOpacity={1}
+              onPressIn={() => handlePressIn(methodAnims[2])}
+              onPressOut={() => handlePressOut(methodAnims[2])}
+              style={[styles.methodCard, { marginBottom: 0 }]} 
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                handleVoiceLog();
+              }}
+            >
+              <View style={[styles.methodIconContainer, { backgroundColor: Colors.accent + '15' }]}>
+                <Ionicons name="mic" size={32} color={Colors.accent} />
+              </View>
+              <View style={styles.methodContent}>
+                <Text style={styles.methodTitle}>Voice Input</Text>
+                <Text style={styles.methodDescription}>
+                  Tell us what you ate
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
+            </TouchableOpacity>
+          </Animated.View>
+        </AnimatedCard>
 
         {/* Manual Logging */}
-        <TouchableOpacity style={styles.methodCard} onPress={handleManualLog}>
-          <View style={[styles.methodIconContainer, { backgroundColor: Colors.success + '15' }]}>
-            <Ionicons name="create" size={32} color={Colors.success} />
-          </View>
-          <View style={styles.methodContent}>
-            <Text style={styles.methodTitle}>Manual Entry</Text>
-            <Text style={styles.methodDescription}>
-              Search and add foods manually
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
-        </TouchableOpacity>
+        <AnimatedCard delay={500} type="slide" style={{ position: 'relative', marginBottom: 16 }}>
+          <View style={[styles.cardShadow, { backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 24 }]} />
+          <Animated.View style={getCardStyle(methodAnims[3])}>
+            <TouchableOpacity 
+              activeOpacity={1}
+              onPressIn={() => handlePressIn(methodAnims[3])}
+              onPressOut={() => handlePressOut(methodAnims[3])}
+              style={[styles.methodCard, { marginBottom: 0 }]} 
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                handleManualLog();
+              }}
+            >
+              <View style={[styles.methodIconContainer, { backgroundColor: Colors.success + '15' }]}>
+                <Ionicons name="create" size={32} color={Colors.success} />
+              </View>
+              <View style={styles.methodContent}>
+                <Text style={styles.methodTitle}>Manual Entry</Text>
+                <Text style={styles.methodDescription}>
+                  Search and add foods manually
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
+            </TouchableOpacity>
+          </Animated.View>
+        </AnimatedCard>
       </View>
 
       {/* Manual/Voice Input Modal */}
@@ -301,22 +410,23 @@ export default function LogScreen() {
             )}
 
             {/* Save Button */}
-            <TouchableOpacity
-              style={[styles.saveButton, selectedFoods.length === 0 && styles.saveButtonDisabled]}
+            <DuoButton
+              title="Save Meal"
               onPress={saveMeal}
               disabled={loading || selectedFoods.length === 0}
-            >
-              {loading ? (
-                <ActivityIndicator color={Colors.white} />
-              ) : (
-                <Text style={styles.saveButtonText}>Save Meal</Text>
-              )}
-            </TouchableOpacity>
+              loading={loading}
+              color={Colors.primary}
+              size="medium"
+              style={{ marginTop: 8 }}
+            />
           </View>
         </View>
       </Modal>
 
       <View style={{ height: 100 }} />
+      {showXp && (
+        <XpPopUp xp={earnedXp} onComplete={() => setShowXp(false)} />
+      )}
     </ScrollView>
   );
 }
@@ -327,21 +437,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   contentContainer: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
-  header: {
-    marginTop: 40,
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: Colors.text,
-  },
-  subtitle: {
+  sectionTitle: {
     fontSize: 16,
-    color: Colors.textSecondary,
-    marginTop: 4,
+    fontWeight: '900',
+    color: Colors.text,
+    marginBottom: 16,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   mealTypeContainer: {
     flexDirection: 'row',
@@ -349,161 +454,183 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 32,
   },
+  cardShadow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 4,
+    bottom: -4,
+  },
   mealTypeCard: {
-    width: '48%',
     backgroundColor: Colors.white,
     borderWidth: 2,
     borderColor: Colors.border,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 20,
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   mealTypeCardActive: {
-    backgroundColor: Colors.primary,
     borderColor: Colors.primary,
+    backgroundColor: Colors.primary + '05',
   },
   mealTypeLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '900',
     color: Colors.text,
+    textTransform: 'uppercase',
   },
   mealTypeLabelActive: {
-    color: Colors.white,
+    color: Colors.primary,
   },
   methodsContainer: {
     marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.text,
-    marginBottom: 16,
   },
   methodCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.white,
-    borderRadius: 16,
+    borderRadius: 24,
     padding: 16,
-    marginBottom: 12,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    borderWidth: 2,
+    borderColor: Colors.border,
   },
   methodIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
+    width: 60,
+    height: 60,
+    borderRadius: 18,
     backgroundColor: Colors.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.border,
   },
   methodContent: {
     flex: 1,
     marginLeft: 16,
   },
   methodTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '900',
     color: Colors.text,
     marginBottom: 4,
   },
   methodDescription: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.textSecondary,
+    fontWeight: '700',
+    lineHeight: 18,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(13, 8, 8, 0.6)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     padding: 24,
     maxHeight: '90%',
+    borderTopWidth: 4,
+    borderTopColor: Colors.border,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 22,
+    fontWeight: '900',
     color: Colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-    gap: 8,
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 20,
+    gap: 10,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 4,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
     color: Colors.text,
+    fontWeight: '700',
   },
   searchResults: {
-    maxHeight: 200,
-    marginBottom: 16,
+    maxHeight: 250,
+    marginBottom: 20,
   },
   searchResultItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    padding: 16,
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 4,
   },
   foodName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '900',
     color: Colors.text,
   },
   foodInfo: {
-    fontSize: 14,
+    fontSize: 12,
     color: Colors.textSecondary,
     marginTop: 4,
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
   selectedFoodsContainer: {
-    marginBottom: 16,
+    marginBottom: 24,
   },
   selectedTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '900',
     color: Colors.text,
     marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   selectedFoodItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 4,
   },
   selectedFoodInfo: {
     flex: 1,
   },
   selectedFoodName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '900',
     color: Colors.text,
   },
   selectedFoodDetails: {
-    fontSize: 14,
+    fontSize: 12,
     color: Colors.textSecondary,
     marginTop: 4,
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
   saveButton: {
     backgroundColor: Colors.primary,

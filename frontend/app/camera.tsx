@@ -17,6 +17,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as FileSystem from 'expo-file-system';
 
+import * as Haptics from 'expo-haptics';
+
+import DuoButton from '../components/DuoButton';
+import AnimatedCard from '../components/AnimatedCard';
+
 export default function CameraScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -73,6 +78,7 @@ export default function CameraScreen() {
   const takePicture = async () => {
     if (!cameraRef.current || !user) return;
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
     setIsProcessing(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({
@@ -191,6 +197,7 @@ export default function CameraScreen() {
   };
 
   const toggleCameraFacing = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setFacing(current => (current === 'back' ? 'front' : 'back'));
   };
 
@@ -206,9 +213,12 @@ export default function CameraScreen() {
     return (
       <View style={styles.container}>
         <Text style={styles.permissionText}>No access to camera</Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>Go Back</Text>
-        </TouchableOpacity>
+        <DuoButton
+          title="Go Back"
+          onPress={() => router.back()}
+          color={Colors.primary}
+          size="medium"
+        />
       </View>
     );
   }
@@ -222,7 +232,13 @@ export default function CameraScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
+          <TouchableOpacity 
+            style={styles.closeButton} 
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              router.back();
+            }}
+          >
             <Ionicons name="close" size={28} color={Colors.white} />
           </TouchableOpacity>
           
@@ -230,7 +246,10 @@ export default function CameraScreen() {
           {hasLiDAR && (
             <TouchableOpacity 
               style={[styles.lidarBadge, lidarEnabled && styles.lidarBadgeActive]}
-              onPress={() => setLidarEnabled(!lidarEnabled)}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                setLidarEnabled(!lidarEnabled);
+              }}
             >
               <Ionicons 
                 name={lidarEnabled ? "cube" : "cube-outline"} 
@@ -246,7 +265,7 @@ export default function CameraScreen() {
 
         {/* Instructions */}
         <View style={styles.overlay}>
-          <View style={styles.instructionContainer}>
+          <AnimatedCard type="slide" delay={100} style={styles.instructionContainer}>
             <Ionicons name="information-circle" size={24} color={Colors.white} />
             <Text style={styles.instructionText}>
               {barcodeData 
@@ -255,11 +274,11 @@ export default function CameraScreen() {
                 ? '📐 LiDAR active - automatic 3D measurement enabled!'
                 : '🪙 Place a coin next to your food for accurate portion tracking'}
             </Text>
-          </View>
+          </AnimatedCard>
 
           {/* Pro Tip Card */}
           {!barcodeData && (
-            <View style={styles.proTipCard}>
+            <AnimatedCard type="pop" delay={300} style={styles.proTipCard}>
               <View style={styles.proTipHeader}>
                 <Ionicons name="bulb" size={24} color={Colors.accent} />
                 <Text style={styles.proTipTitle}>💡 Pro Tip!</Text>
@@ -269,17 +288,17 @@ export default function CameraScreen() {
                   ? "LiDAR is measuring 3D depth for precise portions. Position food at center for best results!" 
                   : "Place a standard coin (₹5 or ₹10) next to your food. This helps our AI measure portions accurately!"}
               </Text>
-            </View>
+            </AnimatedCard>
           )}
 
           {/* Barcode Info Card */}
           {barcodeData && (
-            <View style={styles.barcodeInfoCard}>
+            <AnimatedCard type="pop" delay={300} style={styles.barcodeInfoCard}>
               <Text style={styles.barcodeInfoTitle}>{barcodeData.name}</Text>
               <Text style={styles.barcodeInfoText}>
                 {barcodeData.calories} cal • Serving: {barcodeData.serving_size}g
               </Text>
-            </View>
+            </AnimatedCard>
           )}
 
           {/* Coin/LiDAR indicator */}
@@ -287,19 +306,19 @@ export default function CameraScreen() {
             <View style={styles.coinIndicator}>
               {hasLiDAR && lidarEnabled ? (
                 <>
-                  <View style={styles.lidarScanningBox}>
+                  <AnimatedCard type="pop" delay={500} style={styles.lidarScanningBox}>
                     <View style={styles.scanCorner} />
                     <View style={[styles.scanCorner, styles.scanCornerTR]} />
                     <View style={[styles.scanCorner, styles.scanCornerBL]} />
                     <View style={[styles.scanCorner, styles.scanCornerBR]} />
-                  </View>
+                  </AnimatedCard>
                   <Text style={styles.coinLabel}>📐 3D Scanning Active</Text>
                 </>
               ) : (
                 <>
-                  <View style={styles.coinCircle}>
+                  <AnimatedCard type="pop" delay={500} style={styles.coinCircle}>
                     <Ionicons name="ellipse" size={40} color="rgba(255, 255, 255, 0.3)" />
-                  </View>
+                  </AnimatedCard>
                   <Text style={styles.coinLabel}>Place coin here 🪙</Text>
                 </>
               )}
@@ -396,52 +415,61 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(13, 8, 8, 0.8)',
     marginHorizontal: 20,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   instructionText: {
     flex: 1,
     fontSize: 14,
     color: Colors.white,
     lineHeight: 20,
+    fontWeight: '700',
   },
   barcodeInfoCard: {
     backgroundColor: Colors.primary,
     marginHorizontal: 20,
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderBottomWidth: 6,
+    borderBottomColor: 'rgba(0, 0, 0, 0.2)',
   },
   barcodeInfoTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '900',
     color: Colors.white,
     marginBottom: 4,
+    textTransform: 'uppercase',
   },
   barcodeInfoText: {
     fontSize: 14,
     color: Colors.white,
     opacity: 0.9,
+    fontWeight: '700',
   },
   coinIndicator: {
     alignItems: 'center',
   },
   coinCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     borderWidth: 3,
     borderColor: Colors.white,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   lidarScanningBox: {
     width: 120,
     height: 120,
-    marginBottom: 8,
+    marginBottom: 12,
     position: 'relative',
   },
   scanCorner: {
@@ -449,7 +477,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderColor: Colors.primary,
-    borderWidth: 3,
+    borderWidth: 4,
     top: 0,
     left: 0,
     borderRightWidth: 0,
@@ -459,13 +487,13 @@ const styles = StyleSheet.create({
     left: undefined,
     right: 0,
     borderLeftWidth: 0,
-    borderRightWidth: 3,
+    borderRightWidth: 4,
   },
   scanCornerBL: {
     top: undefined,
     bottom: 0,
     borderTopWidth: 0,
-    borderBottomWidth: 3,
+    borderBottomWidth: 4,
   },
   scanCornerBR: {
     top: undefined,
@@ -473,18 +501,20 @@ const styles = StyleSheet.create({
     left: undefined,
     right: 0,
     borderLeftWidth: 0,
-    borderRightWidth: 3,
+    borderRightWidth: 4,
     borderTopWidth: 0,
-    borderBottomWidth: 3,
+    borderBottomWidth: 4,
   },
   coinLabel: {
-    fontSize: 12,
+    fontSize: 13,
     color: Colors.white,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    backgroundColor: 'rgba(13, 8, 8, 0.7)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderRadius: 12,
-    fontWeight: '600',
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   controls: {
     position: 'absolute',
@@ -497,18 +527,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   controlButton: {
-    width: 50,
-    height: 50,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(13, 8, 8, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   captureButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     backgroundColor: Colors.white,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
-    borderColor: Colors.primary,
+    borderColor: Colors.border,
+    borderBottomWidth: 10,
   },
   captureButtonDisabled: {
     opacity: 0.5,
@@ -518,30 +555,28 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     backgroundColor: Colors.primary,
+    borderBottomWidth: 4,
+    borderBottomColor: 'rgba(0, 0, 0, 0.2)',
   },
   permissionText: {
     fontSize: 18,
-    color: Colors.text,
-    marginBottom: 20,
+    color: Colors.white,
+    marginBottom: 24,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   backButton: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  backButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: Colors.white,
+    // Handled by DuoButton style
   },
   proTipCard: {
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(13, 8, 8, 0.8)',
     marginHorizontal: 20,
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 24,
     borderWidth: 2,
     borderColor: Colors.accent,
+    borderBottomWidth: 6,
+    borderBottomColor: 'rgba(0, 0, 0, 0.3)',
   },
   proTipHeader: {
     flexDirection: 'row',
@@ -551,13 +586,15 @@ const styles = StyleSheet.create({
   },
   proTipTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '900',
     color: Colors.accent,
+    textTransform: 'uppercase',
   },
   proTipText: {
     fontSize: 14,
     color: Colors.white,
     lineHeight: 20,
+    fontWeight: '700',
     opacity: 0.9,
   },
 });

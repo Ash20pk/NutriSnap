@@ -19,7 +19,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#5B7350"
+        "backgroundColor": "#2F593E"
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
@@ -36,13 +36,14 @@
     },
     "plugins": [
       "expo-router",
+      "expo-apple-authentication",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/splash-image.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#5B7350"
+          "backgroundColor": "#2F593E"
         }
       ],
       [
