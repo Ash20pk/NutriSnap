@@ -11,7 +11,6 @@ import {
   // ActivityIndicator,
   Alert,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { Colors } from '../constants/Colors';
@@ -135,31 +134,28 @@ export default function Onboarding() {
   })();
 
   return (
-    <LinearGradient colors={[Colors.background, Colors.backgroundSecondary]} style={styles.container}>
-      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <View style={styles.screen}>
-          <View style={styles.headerWrap}>
-            <PageHeader
-              title={stepMeta.title}
-              subtitle={stepMeta.subtitle}
-              rightComponent={
-                <View style={styles.stepPill}>
-                  <Text style={styles.stepPillText}>Step {step} of 4</Text>
-                </View>
-              }
-            />
-
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${(step / 4) * 100}%` }]} />
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <View style={styles.screen}>
+        <PageHeader
+          title={stepMeta.title}
+          subtitle={stepMeta.subtitle}
+          rightComponent={
+            <View style={styles.stepPill}>
+              <Text style={styles.stepPillText}>Step {step} of 4</Text>
             </View>
-          </View>
+          }
+        />
 
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${(step / 4) * 100}%` }]} />
+        </View>
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
 
           {step === 1 && (
             <AnimatedCard type="pop" delay={100} style={styles.stepContainer}>
@@ -363,34 +359,33 @@ export default function Onboarding() {
 
           </ScrollView>
 
-          <View style={styles.bottomBar}>
-            <DuoButton
-              title="Back"
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                setStep(step - 1);
-              }}
-              disabled={step === 1 || loading}
-              color={Colors.white}
-              shadowColor={Colors.border}
-              textStyle={{ color: Colors.primary }}
-              style={{ flex: 1 }}
-              size="medium"
-            />
+        <View style={styles.bottomBar}>
+          <DuoButton
+            title="Back"
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              setStep(step - 1);
+            }}
+            disabled={step === 1 || loading}
+            color={Colors.white}
+            shadowColor={Colors.border}
+            textStyle={{ color: Colors.primary }}
+            style={{ flex: 1 }}
+            size="medium"
+          />
 
-            <DuoButton
-              title={step === 4 ? 'Finish' : 'Continue'}
-              onPress={handleNext}
-              disabled={loading}
-              loading={loading}
-              color={Colors.primary}
-              style={{ flex: 2 }}
-              size="medium"
-            />
-          </View>
+          <DuoButton
+            title={step === 4 ? 'Finish' : 'Continue'}
+            onPress={handleNext}
+            disabled={loading}
+            loading={loading}
+            color={Colors.primary}
+            style={{ flex: 2 }}
+            size="medium"
+          />
         </View>
-      </KeyboardAvoidingView>
-    </LinearGradient>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -402,25 +397,20 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
-  headerWrap: {
-    backgroundColor: Colors.background,
-    paddingHorizontal: 24,
-  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 12,
+    paddingTop: 24,
     paddingBottom: 140,
-    justifyContent: 'center',
   },
   stepPill: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.75)',
+    backgroundColor: Colors.white,
     borderWidth: 1,
     borderColor: Colors.borderLight,
   },
@@ -431,19 +421,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   progressTrack: {
-    marginTop: 16,
-    marginBottom: 8,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: Colors.border,
+    marginTop: 8,
+    marginBottom: 10,
+    height: 12,
+    borderRadius: 10,
+    backgroundColor: Colors.borderLight,
     overflow: 'hidden',
+    marginHorizontal: 24,
   },
   progressFill: {
     height: '100%',
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: Colors.primary,
-    borderBottomWidth: 4,
-    borderBottomColor: 'rgba(0,0,0,0.2)',
   },
   stepContainer: {
     marginTop: 8,
@@ -463,7 +452,7 @@ const styles = StyleSheet.create({
   },
   fieldCard: {
     backgroundColor: Colors.white,
-    borderRadius: 20,
+    borderRadius: 24,
     borderWidth: 2,
     borderColor: Colors.border,
     paddingHorizontal: 16,
@@ -499,7 +488,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderWidth: 2,
     borderColor: Colors.border,
-    borderRadius: 20,
+    borderRadius: 24,
     paddingVertical: 16,
     borderBottomWidth: 6,
   },
@@ -523,7 +512,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 14,
     paddingVertical: 14,
-    borderRadius: 20,
+    borderRadius: 24,
     backgroundColor: Colors.white,
     borderWidth: 2,
     borderColor: Colors.border,
@@ -548,7 +537,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderWidth: 2,
     borderColor: Colors.border,
-    borderRadius: 20,
+    borderRadius: 24,
     paddingVertical: 20,
     paddingHorizontal: 16,
     alignItems: 'center',
@@ -577,7 +566,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderWidth: 2,
     borderColor: Colors.border,
-    borderRadius: 20,
+    borderRadius: 24,
     paddingVertical: 16,
     paddingHorizontal: 18,
     marginBottom: 12,
@@ -610,7 +599,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     backgroundColor: Colors.white,
-    borderRadius: 20,
+    borderRadius: 24,
     borderWidth: 2,
     borderColor: Colors.border,
     paddingVertical: 16,
@@ -630,8 +619,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: 24,
+    paddingTop: 16,
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
     flexDirection: 'row',
     gap: 12,

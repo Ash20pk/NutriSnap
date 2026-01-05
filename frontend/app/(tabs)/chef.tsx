@@ -12,7 +12,7 @@ import {
 import { Colors } from '../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '../../context/UserContext';
-import { mealApi } from '../../utils/api';
+import { chefApi, mealApi } from '../../utils/api';
 import PageHeader from '../../components/PageHeader';
 import DuoButton from '../../components/DuoButton';
 import AnimatedCard from '../../components/AnimatedCard';
@@ -144,14 +144,7 @@ Format response as JSON with: name, description, prepTime, servings, calories, p
         nutritionalGaps: gaps
       });
 
-      // Call AI to generate recipe
-      const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/chef/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
-      });
-      
-      const data = await response.json();
+      const data = await chefApi.generate(prompt);
       setGeneratedRecipe(data.recipe);
     } catch (error) {
       console.error('Error generating recipe:', error);

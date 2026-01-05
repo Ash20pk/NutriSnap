@@ -166,15 +166,22 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
-    console.error('[API Response Error]', {
-      message: error.message,
-      code: error.code,
-      status: error.response?.status,
-      data: error.response?.data,
-      url: error.config?.baseURL + error.config?.url,
-    });
+    const status = error.response?.status;
+    const requestUrl = `${error.config?.baseURL ?? ''}${error.config?.url ?? ''}`;
+    const isExpectedMissingProfile =
+      status === 404 && (error.config?.url === '/user/me' || requestUrl.endsWith('/api/user/me'));
 
-    if (error.response?.status === 401) {
+    if (!isExpectedMissingProfile) {
+      console.error('[API Response Error]', {
+        message: error.message,
+        code: error.code,
+        status,
+        data: error.response?.data,
+        url: requestUrl,
+      });
+    }
+
+    if (status === 401) {
       try {
         await supabase.auth.signOut();
       } catch {
@@ -202,11 +209,6 @@ export const userApi = {
     return response.data;
   },
   getMe: async () => {
-    if (USE_MOCK_DATA) {
-      const { data } = await supabase.auth.getUser();
-      const id = data.user?.id ?? 'mock-user';
-      return getMockProfile(id);
-    }
     const response = await api.get('/user/me');
     return response.data;
   },
@@ -308,6 +310,14 @@ export const mealApi = {
     const response = await api.get(`/meals/stats/${userId}`, {
       params: date ? { date } : {},
     });
+    return response.data;
+  },
+};
+
+// Chef API
+export const chefApi = {
+  generate: async (prompt: string) => {
+    const response = await api.post('/chef/generate', { prompt });
     return response.data;
   },
 };

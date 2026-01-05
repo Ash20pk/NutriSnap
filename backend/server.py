@@ -1,38 +1,239 @@
-from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException
+from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException, Depends, Header
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
+from contextlib import asynccontextmanager
 import uuid
 from datetime import datetime, timedelta
 import base64
 import json
-
-# Emergent integrations for LLM
-from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+from openai import AsyncOpenAI
+import jwt
+from jwt import PyJWKClient
+import asyncpg
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+# Postgres (Supabase) connection
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+pg_pool: asyncpg.Pool | None = None
 
-# Emergent LLM Key for AI features
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+# OpenAI Key for AI features
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
+OPENAI_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-4o')
+openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global pg_pool
+
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL is not set. Configure it to your Supabase Postgres connection string.")
+
+    pg_pool = await asyncpg.create_pool(
+        DATABASE_URL,
+        min_size=1,
+        max_size=int(os.environ.get("PG_POOL_MAX", "10")),
+        command_timeout=30,
+    )
+
+    async with pg_pool.acquire() as conn:
+        await _ensure_schema(conn)
+
+    try:
+        yield
+    finally:
+        if pg_pool is not None:
+            await pg_pool.close()
+            pg_pool = None
 
 # Create the main app
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 api_router = APIRouter(prefix="/api")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+
+async def _ensure_schema(conn: asyncpg.Connection):
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS profiles (
+            id uuid PRIMARY KEY,
+            name text NOT NULL,
+            age integer NOT NULL,
+            gender text NOT NULL,
+            height double precision NOT NULL,
+            weight double precision NOT NULL,
+            goal text NOT NULL,
+            activity_level text NOT NULL,
+            dietary_preference text NOT NULL,
+            daily_calorie_target double precision NOT NULL,
+            protein_target double precision NOT NULL,
+            carbs_target double precision NOT NULL,
+            fat_target double precision NOT NULL,
+            onboarding_completed boolean NOT NULL DEFAULT true,
+            created_at timestamptz NOT NULL DEFAULT now()
+        );
+
+        CREATE TABLE IF NOT EXISTS meals (
+            id uuid PRIMARY KEY,
+            user_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+            meal_type text NOT NULL,
+            foods jsonb NOT NULL,
+            total_calories double precision NOT NULL,
+            total_protein double precision NOT NULL,
+            total_carbs double precision NOT NULL,
+            total_fat double precision NOT NULL,
+            image_base64 text NULL,
+            logging_method text NOT NULL,
+            notes text NULL,
+            timestamp timestamptz NOT NULL DEFAULT now()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_meals_user_ts ON meals (user_id, timestamp DESC);
+        """
+    )
+
+
+def _require_pool() -> asyncpg.Pool:
+    if pg_pool is None:
+        raise RuntimeError("Postgres pool is not initialized")
+    return pg_pool
+
+
+def _uuid(value: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(str(value))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid UUID")
+
+
+def _profile_from_record(record: asyncpg.Record) -> dict:
+    return {
+        "id": str(record["id"]),
+        "name": record["name"],
+        "age": record["age"],
+        "gender": record["gender"],
+        "height": record["height"],
+        "weight": record["weight"],
+        "goal": record["goal"],
+        "activity_level": record["activity_level"],
+        "dietary_preference": record["dietary_preference"],
+        "daily_calorie_target": record["daily_calorie_target"],
+        "protein_target": record["protein_target"],
+        "carbs_target": record["carbs_target"],
+        "fat_target": record["fat_target"],
+        "created_at": record["created_at"],
+        "onboarding_completed": record["onboarding_completed"],
+    }
+
+
+def _meal_from_record(record: asyncpg.Record) -> dict:
+    return {
+        "id": str(record["id"]),
+        "user_id": str(record["user_id"]),
+        "meal_type": record["meal_type"],
+        "foods": record["foods"],
+        "total_calories": record["total_calories"],
+        "total_protein": record["total_protein"],
+        "total_carbs": record["total_carbs"],
+        "total_fat": record["total_fat"],
+        "image_base64": record["image_base64"],
+        "logging_method": record["logging_method"],
+        "notes": record["notes"],
+        "timestamp": record["timestamp"],
+    }
+
+# Supabase Auth
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_JWT_AUD = os.environ.get("SUPABASE_JWT_AUD", "authenticated")
+SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "")
+SUPABASE_JWT_ISSUER = os.environ.get(
+    "SUPABASE_JWT_ISSUER",
+    f"{SUPABASE_URL.rstrip('/')}/auth/v1" if SUPABASE_URL else "",
+)
+SUPABASE_JWKS_URL = os.environ.get(
+    "SUPABASE_JWKS_URL",
+    f"{SUPABASE_JWT_ISSUER.rstrip('/')}/.well-known/jwks.json" if SUPABASE_JWT_ISSUER else "",
+)
+
+_supabase_jwk_client: PyJWKClient | None = None
+
+
+def _get_bearer_token(authorization: str | None) -> str:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    parts = authorization.split(" ", 1)
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid Authorization header")
+    return parts[1].strip()
+
+
+def _verify_supabase_token(token: str) -> dict:
+    try:
+        global _supabase_jwk_client
+
+        if not SUPABASE_JWT_ISSUER:
+            raise RuntimeError("Supabase JWT verification is not configured. Set SUPABASE_URL (or SUPABASE_JWT_ISSUER).")
+
+        header = jwt.get_unverified_header(token)
+        alg = str(header.get("alg", ""))
+
+        if alg == "HS256":
+            if not SUPABASE_JWT_SECRET:
+                raise RuntimeError("SUPABASE_JWT_SECRET is not set (required for HS256 Supabase JWT verification)")
+            decoded = jwt.decode(
+                token,
+                SUPABASE_JWT_SECRET,
+                algorithms=["HS256"],
+                audience=SUPABASE_JWT_AUD,
+                issuer=SUPABASE_JWT_ISSUER,
+            )
+        elif alg in ("RS256", "ES256"):
+            if not SUPABASE_JWKS_URL:
+                raise RuntimeError(
+                    "SUPABASE_JWKS_URL is not set (required for asymmetric Supabase JWT verification)"
+                )
+
+            if _supabase_jwk_client is None:
+                _supabase_jwk_client = PyJWKClient(SUPABASE_JWKS_URL)
+
+            signing_key = _supabase_jwk_client.get_signing_key_from_jwt(token).key
+            decoded = jwt.decode(
+                token,
+                signing_key,
+                algorithms=[alg],
+                audience=SUPABASE_JWT_AUD,
+                issuer=SUPABASE_JWT_ISSUER,
+            )
+        else:
+            raise HTTPException(status_code=401, detail=f"Invalid token: unsupported alg {alg}")
+
+        if not decoded or "sub" not in decoded:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return decoded
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
+
+async def get_current_uid(authorization: str | None = Header(default=None)) -> str:
+    token = _get_bearer_token(authorization)
+    decoded = _verify_supabase_token(token)
+    return str(decoded.get("sub"))
+
+
+def _require_user_match(uid: str, user_id: str):
+    if uid != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden: user mismatch")
 
 # ============ MODELS ============
 
@@ -62,6 +263,11 @@ class UserProfileCreate(BaseModel):
     goal: str
     activity_level: str
     dietary_preference: str
+
+
+class GoalsUpdateRequest(BaseModel):
+    goal: str
+    activity_level: str
 
 class FoodItem(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -177,22 +383,43 @@ def calculate_calorie_target(weight: float, height: float, age: int, gender: str
         "fat_target": round(fat, 2)
     }
 
+def _normalize_base64_image(image_base64: str) -> str:
+    if not image_base64:
+        return image_base64
+    if "," in image_base64 and image_base64.strip().lower().startswith("data:"):
+        return image_base64.split(",", 1)[1]
+    return image_base64
+
+def _extract_json_from_text(text: str) -> str:
+    content = text or ""
+    if "```json" in content:
+        return content.split("```json", 1)[1].split("```", 1)[0].strip()
+    if "```" in content:
+        return content.split("```", 1)[1].split("```", 1)[0].strip()
+    return content.strip()
+
 async def analyze_food_image(image_base64: str) -> Dict[str, Any]:
-    """Analyze food image using OpenAI Vision API via Emergent Integration"""
+    """Analyze food image using OpenAI Vision API"""
     try:
-        # Create a new LlmChat instance for this analysis
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"food-analysis-{uuid.uuid4()}",
-            system_message="You are a nutrition expert analyzing food images. Always respond with valid JSON only."
-        ).with_model("openai", "gpt-4o")
-        
-        # Create image content from base64
-        image_content = ImageContent(image_base64=image_base64)
-        
-        # Create the user message with image
-        user_message = UserMessage(
-            text="""Analyze this food image and identify all food items.
+        if openai_client is None:
+            raise RuntimeError("OPENAI_API_KEY is not set")
+
+        normalized_image_base64 = _normalize_base64_image(image_base64)
+        image_url = f"data:image/jpeg;base64,{normalized_image_base64}"
+
+        response = await openai_client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a nutrition expert analyzing food images. Always respond with valid JSON only.",
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": """Analyze this food image and identify all food items.
             Look for a coin in the image for scale reference (Indian coins: ₹1=16mm, ₹2=25mm, ₹5=23mm, ₹10=27mm).
             
             Return ONLY a JSON response (no markdown, no explanation) with this format:
@@ -210,25 +437,24 @@ async def analyze_food_image(image_base64: str) -> Dict[str, Any]:
             }
             
             Focus on Indian cuisine if applicable.""",
-            file_contents=[image_content]
+                        },
+                        {"type": "image_url", "image_url": {"url": image_url}},
+                    ],
+                },
+            ],
+            temperature=0,
+            response_format={"type": "json_object"},
         )
-        
-        # Send message and get response
-        response = await chat.send_message(user_message)
-        
+
         # Debug: log the raw response
         logger.info(f"Raw LLM response: {response}")
-        
-        # Extract JSON from response
-        content = response
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0].strip()
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0].strip()
-        
-        logger.info(f"Extracted content for JSON parsing: {content}")
-        
-        result = json.loads(content)
+
+        content = response.choices[0].message.content if response.choices else ""
+        extracted = _extract_json_from_text(content)
+
+        logger.info(f"Extracted content for JSON parsing: {extracted}")
+
+        result = json.loads(extracted)
         return result
     except Exception as e:
         logger.error(f"Error analyzing image: {str(e)}")
@@ -278,7 +504,7 @@ async def root():
 # ===== User Management =====
 
 @api_router.post("/user/onboard", response_model=UserProfile)
-async def onboard_user(user_data: UserProfileCreate):
+async def onboard_user(user_data: UserProfileCreate, uid: str = Depends(get_current_uid)):
     """Create user profile with calculated targets"""
     try:
         # Calculate targets
@@ -294,48 +520,129 @@ async def onboard_user(user_data: UserProfileCreate):
         # Create user profile
         user_dict = user_data.dict()
         user_dict.update(targets)
-        user_profile = UserProfile(**user_dict)
+        user_profile = UserProfile(id=uid, **user_dict)
         
-        # Save to database
-        await db.users.insert_one(user_profile.dict())
-        
-        return user_profile
+        pool = _require_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO profiles (
+                    id, name, age, gender, height, weight,
+                    goal, activity_level, dietary_preference,
+                    daily_calorie_target, protein_target, carbs_target, fat_target,
+                    onboarding_completed
+                ) VALUES (
+                    $1,$2,$3,$4,$5,$6,
+                    $7,$8,$9,
+                    $10,$11,$12,$13,
+                    $14
+                )
+                ON CONFLICT (id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    age = EXCLUDED.age,
+                    gender = EXCLUDED.gender,
+                    height = EXCLUDED.height,
+                    weight = EXCLUDED.weight,
+                    goal = EXCLUDED.goal,
+                    activity_level = EXCLUDED.activity_level,
+                    dietary_preference = EXCLUDED.dietary_preference,
+                    daily_calorie_target = EXCLUDED.daily_calorie_target,
+                    protein_target = EXCLUDED.protein_target,
+                    carbs_target = EXCLUDED.carbs_target,
+                    fat_target = EXCLUDED.fat_target,
+                    onboarding_completed = EXCLUDED.onboarding_completed
+                RETURNING *
+                """,
+                _uuid(uid),
+                user_profile.name,
+                user_profile.age,
+                user_profile.gender,
+                user_profile.height,
+                user_profile.weight,
+                user_profile.goal,
+                user_profile.activity_level,
+                user_profile.dietary_preference,
+                user_profile.daily_calorie_target,
+                user_profile.protein_target,
+                user_profile.carbs_target,
+                user_profile.fat_target,
+                user_profile.onboarding_completed,
+            )
+
+        if not row:
+            raise HTTPException(status_code=500, detail="Failed to create profile")
+        return UserProfile(**_profile_from_record(row))
     except Exception as e:
         logger.error(f"Error onboarding user: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@api_router.get("/user/{user_id}", response_model=UserProfile)
-async def get_user(user_id: str):
-    """Get user profile"""
-    user = await db.users.find_one({"id": user_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return UserProfile(**user)
 
-@api_router.put("/user/{user_id}/goals")
-async def update_goals(user_id: str, goal: str, activity_level: str):
-    """Update user goals and recalculate targets"""
-    user = await db.users.find_one({"id": user_id})
-    if not user:
+@api_router.get("/user/me", response_model=UserProfile)
+async def get_me(uid: str = Depends(get_current_uid)):
+    """Get current user's profile"""
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM profiles WHERE id = $1", _uuid(uid))
+    if not row:
         raise HTTPException(status_code=404, detail="User not found")
+    return UserProfile(**_profile_from_record(row))
+
+@api_router.get("/user/{user_id}", response_model=UserProfile)
+async def get_user(user_id: str, uid: str = Depends(get_current_uid)):
+    """Get user profile"""
+    _require_user_match(uid, user_id)
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM profiles WHERE id = $1", _uuid(user_id))
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+    return UserProfile(**_profile_from_record(row))
+
+@api_router.put("/user/{user_id}/goals", response_model=UserProfile)
+async def update_goals(user_id: str, payload: GoalsUpdateRequest, uid: str = Depends(get_current_uid)):
+    """Update user goals and recalculate targets"""
+    _require_user_match(uid, user_id)
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        user_row = await conn.fetchrow("SELECT * FROM profiles WHERE id = $1", _uuid(user_id))
+        if not user_row:
+            raise HTTPException(status_code=404, detail="User not found")
     
     # Recalculate targets
     targets = calculate_calorie_target(
-        user["weight"],
-        user["height"],
-        user["age"],
-        user["gender"],
-        activity_level,
-        goal
+        float(user_row["weight"]),
+        float(user_row["height"]),
+        int(user_row["age"]),
+        str(user_row["gender"]),
+        payload.activity_level,
+        payload.goal
     )
-    
-    # Update database
-    await db.users.update_one(
-        {"id": user_id},
-        {"$set": {**targets, "goal": goal, "activity_level": activity_level}}
-    )
-    
-    return {"message": "Goals updated successfully", "targets": targets}
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE profiles
+            SET goal = $2,
+                activity_level = $3,
+                daily_calorie_target = $4,
+                protein_target = $5,
+                carbs_target = $6,
+                fat_target = $7
+            WHERE id = $1
+            RETURNING *
+            """,
+            _uuid(user_id),
+            payload.goal,
+            payload.activity_level,
+            targets["daily_calorie_target"],
+            targets["protein_target"],
+            targets["carbs_target"],
+            targets["fat_target"],
+        )
+
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+    return UserProfile(**_profile_from_record(row))
 
 # ===== Food Database =====
 
@@ -365,9 +672,10 @@ async def get_categories():
 # ===== Meal Logging =====
 
 @api_router.post("/meals/log-photo")
-async def log_meal_photo(request: PhotoAnalysisRequest):
+async def log_meal_photo(request: PhotoAnalysisRequest, uid: str = Depends(get_current_uid)):
     """Log meal from photo using AI analysis"""
     try:
+        _require_user_match(uid, request.user_id)
         # Analyze image
         analysis = await analyze_food_image(request.image_base64)
         
@@ -392,9 +700,10 @@ async def log_meal_photo(request: PhotoAnalysisRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.post("/meals/log", response_model=MealLog)
-async def log_meal(meal_data: MealLogCreate):
+async def log_meal(meal_data: MealLogCreate, uid: str = Depends(get_current_uid)):
     """Log a meal manually or save photo analysis result"""
     try:
+        _require_user_match(uid, meal_data.user_id)
         # Calculate totals
         total_calories = sum([f["calories"] for f in meal_data.foods])
         total_protein = sum([f["protein"] for f in meal_data.foods])
@@ -410,28 +719,66 @@ async def log_meal(meal_data: MealLogCreate):
         })
         
         meal_log = MealLog(**meal_dict)
-        
-        # Save to database
-        await db.meals.insert_one(meal_log.dict())
-        
-        return meal_log
+
+        pool = _require_pool()
+        async with pool.acquire() as conn:
+            # Ensure user exists (foreign key depends on it)
+            profile_exists = await conn.fetchval("SELECT 1 FROM profiles WHERE id = $1", _uuid(meal_data.user_id))
+            if not profile_exists:
+                raise HTTPException(status_code=404, detail="User not found")
+
+            row = await conn.fetchrow(
+                """
+                INSERT INTO meals (
+                    id, user_id, meal_type, foods,
+                    total_calories, total_protein, total_carbs, total_fat,
+                    image_base64, logging_method, notes, timestamp
+                ) VALUES (
+                    $1,$2,$3,$4::jsonb,
+                    $5,$6,$7,$8,
+                    $9,$10,$11,$12
+                )
+                RETURNING *
+                """,
+                _uuid(meal_log.id),
+                _uuid(meal_log.user_id),
+                meal_log.meal_type,
+                json.dumps(meal_log.foods),
+                float(meal_log.total_calories),
+                float(meal_log.total_protein),
+                float(meal_log.total_carbs),
+                float(meal_log.total_fat),
+                meal_log.image_base64,
+                meal_log.logging_method,
+                meal_log.notes,
+                meal_log.timestamp,
+            )
+
+        if not row:
+            raise HTTPException(status_code=500, detail="Failed to log meal")
+        return MealLog(**_meal_from_record(row))
     except Exception as e:
         logger.error(f"Error logging meal: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.post("/meals/log-voice")
-async def log_meal_voice(request: VoiceLogRequest):
+async def log_meal_voice(request: VoiceLogRequest, uid: str = Depends(get_current_uid)):
     """Parse voice input and log meal"""
     try:
-        # Use Emergent Integration to parse voice input
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"voice-parse-{uuid.uuid4()}",
-            system_message="You are a nutrition assistant. Parse meal descriptions into structured JSON. Always respond with valid JSON only."
-        ).with_model("openai", "gpt-4o")
-        
-        user_message = UserMessage(
-            text=f"""Parse this meal description into structured data:
+        _require_user_match(uid, request.user_id)
+        if openai_client is None:
+            raise RuntimeError("OPENAI_API_KEY is not set")
+
+        response = await openai_client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a nutrition assistant. Parse meal descriptions into structured JSON. Always respond with valid JSON only.",
+                },
+                {
+                    "role": "user",
+                    "content": f"""Parse this meal description into structured data:
             "{request.text}"
             
             Return ONLY a JSON response (no markdown, no explanation) with this format:
@@ -444,18 +791,17 @@ async def log_meal_voice(request: VoiceLogRequest):
                 ]
             }}
             
-            Focus on Indian cuisine. Estimate quantities if not specified."""
+            Focus on Indian cuisine. Estimate quantities if not specified.""",
+                },
+            ],
+            temperature=0,
+            response_format={"type": "json_object"},
         )
-        
-        response = await chat.send_message(user_message)
-        
-        content = response
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0].strip()
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0].strip()
-        
-        result = json.loads(content)
+
+        content = response.choices[0].message.content if response.choices else ""
+        extracted = _extract_json_from_text(content)
+
+        result = json.loads(extracted)
         
         # Match foods to database
         matched_foods = []
@@ -469,57 +815,126 @@ async def log_meal_voice(request: VoiceLogRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/meals/history/{user_id}")
-async def get_meal_history(user_id: str, days: int = 7):
+async def get_meal_history(user_id: str, days: int = 7, uid: str = Depends(get_current_uid)):
     """Get meal history for user"""
-    start_date = datetime.utcnow() - timedelta(days=days)
-    
-    meals = await db.meals.find({
-        "user_id": user_id,
-        "timestamp": {"$gte": start_date}
-    }, {"_id": 0}).sort("timestamp", -1).to_list(1000)
-    
+    _require_user_match(uid, user_id)
+    if days < 1 or days > 3650:
+        raise HTTPException(status_code=400, detail="Invalid days")
+
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT *
+            FROM meals
+            WHERE user_id = $1
+              AND timestamp >= (now() - make_interval(days => $2::int))
+            ORDER BY timestamp DESC
+            LIMIT 1000
+            """,
+            _uuid(user_id),
+            int(days),
+        )
+
+    meals = [_meal_from_record(r) for r in rows]
     return {"meals": meals, "count": len(meals)}
 
 @api_router.get("/meals/stats/{user_id}")
-async def get_daily_stats(user_id: str, date: str = None):
+async def get_daily_stats(user_id: str, date: str = None, uid: str = Depends(get_current_uid)):
     """Get nutrition stats for a specific day"""
-    if date:
-        target_date = datetime.fromisoformat(date)
-    else:
-        target_date = datetime.utcnow()
-    
-    # Get meals for the day
+    _require_user_match(uid, user_id)
+    try:
+        if date:
+            target_date = datetime.fromisoformat(date)
+        else:
+            target_date = datetime.utcnow()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid date")
+
     start_of_day = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
     end_of_day = target_date.replace(hour=23, minute=59, second=59, microsecond=999999)
-    
-    meals = await db.meals.find({
-        "user_id": user_id,
-        "timestamp": {"$gte": start_of_day, "$lte": end_of_day}
-    }).to_list(1000)
-    
-    # Calculate totals
-    total_calories = sum([m["total_calories"] for m in meals])
-    total_protein = sum([m["total_protein"] for m in meals])
-    total_carbs = sum([m["total_carbs"] for m in meals])
-    total_fat = sum([m["total_fat"] for m in meals])
-    
-    # Get user targets
-    user = await db.users.find_one({"id": user_id})
-    
+
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        agg = await conn.fetchrow(
+            """
+            SELECT
+                COUNT(*)::int AS meals_logged,
+                COALESCE(SUM(total_calories), 0)::double precision AS total_calories,
+                COALESCE(SUM(total_protein), 0)::double precision AS total_protein,
+                COALESCE(SUM(total_carbs), 0)::double precision AS total_carbs,
+                COALESCE(SUM(total_fat), 0)::double precision AS total_fat
+            FROM meals
+            WHERE user_id = $1
+              AND timestamp >= $2
+              AND timestamp <= $3
+            """,
+            _uuid(user_id),
+            start_of_day,
+            end_of_day,
+        )
+
+        user_row = await conn.fetchrow(
+            """
+            SELECT daily_calorie_target, protein_target, carbs_target, fat_target
+            FROM profiles
+            WHERE id = $1
+            """,
+            _uuid(user_id),
+        )
+
+    if not user_row:
+        raise HTTPException(status_code=404, detail="User not found")
+
     return {
         "date": target_date.isoformat(),
-        "meals_logged": len(meals),
-        "total_calories": round(total_calories, 2),
-        "total_protein": round(total_protein, 2),
-        "total_carbs": round(total_carbs, 2),
-        "total_fat": round(total_fat, 2),
+        "meals_logged": int(agg["meals_logged"] if agg else 0),
+        "total_calories": round(float(agg["total_calories"] if agg else 0), 2),
+        "total_protein": round(float(agg["total_protein"] if agg else 0), 2),
+        "total_carbs": round(float(agg["total_carbs"] if agg else 0), 2),
+        "total_fat": round(float(agg["total_fat"] if agg else 0), 2),
         "targets": {
-            "calories": user.get("daily_calorie_target", 2000) if user else 2000,
-            "protein": user.get("protein_target", 150) if user else 150,
-            "carbs": user.get("carbs_target", 200) if user else 200,
-            "fat": user.get("fat_target", 65) if user else 65
-        }
+            "calories": float(user_row["daily_calorie_target"]),
+            "protein": float(user_row["protein_target"]),
+            "carbs": float(user_row["carbs_target"]),
+            "fat": float(user_row["fat_target"]),
+        },
     }
+
+@api_router.post("/chef/generate")
+async def generate_recipe(request: dict, uid: str = Depends(get_current_uid)):
+    """Generate personalized recipe using AI"""
+    try:
+        _ = uid
+        if openai_client is None:
+            raise RuntimeError("OPENAI_API_KEY is not set")
+        
+        prompt = request.get("prompt", "")
+        
+        response = await openai_client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a professional chef and nutritionist. Always respond with valid JSON only.",
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
+            ],
+            temperature=0.7,
+            response_format={"type": "json_object"},
+        )
+        
+        content = response.choices[0].message.content if response.choices else ""
+        extracted = _extract_json_from_text(content)
+        recipe = json.loads(extracted)
+        
+        return {"recipe": recipe}
+    except Exception as e:
+        logger.error(f"Error generating recipe: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Include router
 app.include_router(api_router)
@@ -531,7 +946,3 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
