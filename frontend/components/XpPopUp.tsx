@@ -28,7 +28,7 @@ export default function XpPopUp({ xp, onComplete }: XpPopUpProps) {
     ]).start(() => {
       onComplete();
     });
-  }, []);
+  }, [animatedValue, onComplete]);
 
   const opacity = animatedValue.interpolate({
     inputRange: [0, 0.2, 1, 1.5, 2],

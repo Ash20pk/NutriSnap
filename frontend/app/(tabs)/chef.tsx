@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
-  Dimensions,
+  // Dimensions,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,7 +19,7 @@ import AnimatedCard from '../../components/AnimatedCard';
 import XpPopUp from '../../components/XpPopUp';
 import * as Haptics from 'expo-haptics';
 
-const { width } = Dimensions.get('window');
+// const { width } = Dimensions.get('window');
 
 interface ChefRequest {
   ingredients: string[];
@@ -565,14 +565,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderWidth: 2,
     borderColor: Colors.border,
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: 24,
+    padding: 20,
     fontSize: 16,
     color: Colors.text,
-    minHeight: 100,
+    minHeight: 120,
     textAlignVertical: 'top',
     fontWeight: '700',
-    borderBottomWidth: 6,
+    borderBottomWidth: 8,
   },
   hint: {
     fontSize: 12,
@@ -597,9 +597,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderWidth: 2,
     borderColor: Colors.border,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     borderBottomWidth: 6,
   },
   optionChipSelected: {
@@ -686,15 +686,17 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   stepNumber: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     borderRadius: 12,
     backgroundColor: Colors.primary,
     color: Colors.white,
     textAlign: 'center',
-    lineHeight: 32,
-    fontSize: 16,
+    lineHeight: 36,
+    fontSize: 18,
     fontWeight: '900',
+    borderBottomWidth: 4,
+    borderBottomColor: 'rgba(0,0,0,0.2)',
   },
   instructionText: {
     flex: 1,
@@ -706,12 +708,12 @@ const styles = StyleSheet.create({
   nutritionGrid: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: Colors.white,
-    padding: 16,
-    borderRadius: 20,
+    backgroundColor: '#F8F9FA',
+    padding: 20,
+    borderRadius: 24,
     borderWidth: 2,
     borderColor: Colors.border,
-    borderBottomWidth: 4,
+    borderBottomWidth: 6,
   },
   nutritionItem: {
     alignItems: 'center',

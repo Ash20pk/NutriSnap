@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors } from '../../constants/Colors';
-import { fontStyles } from '../../constants/Fonts';
 import { Ionicons } from '@expo/vector-icons';
 import PageHeader from '../../components/PageHeader';
 import DuoButton from '../../components/DuoButton';
@@ -20,7 +19,7 @@ const MOCK_BADGES = [
 ];
 
 export default function PublicProfileScreen() {
-  const { id, name } = useLocalSearchParams();
+  const { name } = useLocalSearchParams();
   const router = useRouter();
   const [isFollowing, setIsFollowing] = useState(false);
 
@@ -141,9 +140,9 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   closeButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     backgroundColor: Colors.white,
     alignItems: 'center',
     justifyContent: 'center',
@@ -158,22 +157,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: Colors.border,
-    borderBottomWidth: 8,
+    borderBottomWidth: 10,
     marginTop: 16,
   },
   avatarWrap: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 32,
+    width: 110,
+    height: 110,
+    borderRadius: 36,
     backgroundColor: Colors.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: Colors.border,
-    borderBottomWidth: 8,
+    borderBottomWidth: 10,
   },
   avatarText: {
     fontSize: 40,
@@ -181,62 +180,65 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   userName: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '900',
     color: Colors.text,
     textTransform: 'uppercase',
-    marginBottom: 8,
+    marginBottom: 10,
     textAlign: 'center',
+    letterSpacing: 0.5,
   },
   userBio: {
-    fontSize: 14,
+    fontSize: 15,
     color: Colors.textSecondary,
     textAlign: 'center',
     fontWeight: '700',
-    lineHeight: 20,
-    marginBottom: 20,
+    lineHeight: 22,
+    marginBottom: 24,
     paddingHorizontal: 10,
   },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 30,
-    marginBottom: 24,
+    gap: 32,
+    marginBottom: 28,
     width: '100%',
   },
   statItem: {
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '900',
     color: Colors.text,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '800',
     color: Colors.textSecondary,
     textTransform: 'uppercase',
-    marginTop: 2,
+    marginTop: 4,
+    letterSpacing: 0.5,
   },
   statDivider: {
     width: 2,
-    height: 30,
+    height: 36,
     backgroundColor: Colors.border,
     opacity: 0.5,
   },
   followButton: {
     width: '100%',
+    marginTop: 8,
   },
   section: {
-    marginTop: 32,
+    marginTop: 36,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '900',
     color: Colors.text,
-    marginBottom: 16,
+    marginBottom: 18,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
@@ -244,14 +246,61 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.white,
-    borderRadius: 24,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 28,
+    padding: 20,
+    marginBottom: 16,
     borderWidth: 2,
     borderColor: Colors.border,
-    borderBottomWidth: 6,
+    borderBottomWidth: 8,
   },
   recipeIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: Colors.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 4,
+  },
+  recipeInfo: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  recipeName: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  recipeMeta: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  badgesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+  },
+  badgeCardWrapper: {
+    width: '47.5%',
+  },
+  badgeCard: {
+    width: '100%',
+    backgroundColor: Colors.white,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    padding: 16,
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 12,
+    borderBottomWidth: 8,
+  },
+  badgeIconWrap: {
     width: 52,
     height: 52,
     borderRadius: 16,
@@ -260,57 +309,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: Colors.border,
-  },
-  recipeInfo: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  recipeName: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: Colors.text,
+    borderBottomWidth: 4,
     marginBottom: 4,
   },
-  recipeMeta: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  badgesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  badgeCardWrapper: {
-    width: '48%',
-  },
-  badgeCard: {
-    width: '100%',
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderBottomWidth: 6,
-  },
-  badgeIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: Colors.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: Colors.border,
-  },
   badgeTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '900',
     color: Colors.text,
-    flex: 1,
+    textAlign: 'center',
   },
 });

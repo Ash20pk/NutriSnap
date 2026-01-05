@@ -25,7 +25,7 @@ export default function AnimatedCard({
       delay,
       useNativeDriver: true,
     }).start();
-  }, [delay, duration]);
+  }, [delay, duration, animatedValue]);
 
   const getTransform = () => {
     switch (type) {

@@ -84,7 +84,7 @@ export default function HomeScreen() {
       const chartData = days.map(day => ({
         label: day,
         value: dayTotals[day]?.calories || 0,
-        frontColor: Colors.primary,
+        frontColor: (dayTotals[day]?.calories || 0) > 0 ? Colors.primary : 'transparent',
       }));
       setWeeklyData(chartData);
     } catch (error) {
@@ -188,7 +188,9 @@ export default function HomeScreen() {
     );
   };
 
-  const macroData = [
+  const hasAnyMacros = (stats?.total_protein || 0) > 0 || (stats?.total_carbs || 0) > 0 || (stats?.total_fat || 0) > 0;
+
+  const macroData = hasAnyMacros ? [
     {
       value: stats?.total_protein || 0,
       color: Colors.protein,
@@ -204,6 +206,8 @@ export default function HomeScreen() {
       color: Colors.fat,
       text: `${Math.round(stats?.total_fat || 0)}g`,
     },
+  ] : [
+    { value: 1, color: 'transparent' }
   ];
 
   return (
@@ -318,41 +322,8 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </AnimatedCard>
 
-        {/* Motivational Message */}
-        <AnimatedCard delay={200} type="slide" style={styles.motivationSection}>
-          <View style={styles.motivationCard}>
-            <View style={styles.motivationContent}>
-              <View style={styles.motivationEmojiContainer}>
-                <Text style={styles.motivationEmoji}>
-                  {caloriesProgress < 30 ? "🥗" :
-                   caloriesProgress < 70 ? "🎯" :
-                   caloriesProgress < 100 ? "🚀" :
-                   "🎉"}
-                </Text>
-              </View>
-              <View style={styles.motivationMessage}>
-                <Text style={styles.motivationTitle}>
-                  {caloriesProgress < 30 ? "Let's fuel up!" :
-                   caloriesProgress < 70 ? "Great progress!" :
-                   caloriesProgress < 100 ? "Almost there!" :
-                   "Goal crushed!"}
-                </Text>
-                <Text style={styles.motivationSubtitle}>
-                  {caloriesProgress < 30 ? "Start your day with a nutritious meal" :
-                   caloriesProgress < 70 ? "You're on track with your calories" :
-                   caloriesProgress < 100 ? "Just a little more to reach your goal" :
-                   "You've hit your daily target! Amazing!"}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.progressIndicator}>
-              <View style={[styles.progressBar, { width: `${Math.min(caloriesProgress, 100)}%` } ]} />
-            </View>
-          </View>
-        </AnimatedCard>
-
         {/* Today's Calories - Glass Card */}
-        <AnimatedCard delay={300} type="slide" style={styles.section}>
+        <AnimatedCard delay={200} type="slide" style={styles.section}>
           <Text style={styles.sectionTitle}>Today&apos;s Calories</Text>
           <View style={styles.standardCard}>
             <View style={styles.caloriesContent}>
@@ -365,20 +336,11 @@ export default function HomeScreen() {
                     of {Math.round(stats?.targets?.calories || 2000)} kcal
                   </Text>
                 </View>
-                <View style={styles.caloriesCircle}>
-                  <Text style={styles.percentageText}>
+                <View style={[styles.caloriesCircle, caloriesProgress === 0 && styles.hollowCircle]}>
+                  <Text style={[styles.percentageText, caloriesProgress === 0 && styles.hollowText]}>
                     {Math.round(caloriesProgress)}%
                   </Text>
                 </View>
-              </View>
-
-              <View style={styles.progressBarContainer}>
-                <View
-                  style={[
-                    styles.caloriesProgressBar,
-                    { width: `${Math.min(caloriesProgress, 100)}%` },
-                  ]}
-                />
               </View>
 
               <View style={styles.caloriesFooter}>
@@ -400,20 +362,23 @@ export default function HomeScreen() {
         </AnimatedCard>
 
         {/* Macro Breakdown - Glass Card */}
-        <AnimatedCard delay={400} type="slide" style={styles.section}>
+        <AnimatedCard delay={300} type="slide" style={styles.section}>
           <Text style={styles.sectionTitle}>Macro Breakdown</Text>
           <View style={styles.standardCard}>
             <View style={styles.macroContent}>
               <View style={styles.pieChartContainer}>
-                <PieChart
-                  data={macroData}
-                  donut
-                  radius={70}
-                  innerRadius={50}
-                  centerLabelComponent={() => (
-                    <Text style={styles.pieChartCenter}>Macros</Text>
-                  )}
-                />
+                <View style={[styles.pieChartWrapper, !hasAnyMacros && styles.hollowPieWrapper]}>
+                  <PieChart
+                    data={macroData}
+                    donut
+                    radius={70}
+                    innerRadius={50}
+                    backgroundColor="transparent"
+                    centerLabelComponent={() => (
+                      <Text style={styles.pieChartCenter}>Macros</Text>
+                    )}
+                  />
+                </View>
               </View>
 
               <View style={styles.macroLegend}>
@@ -451,16 +416,16 @@ export default function HomeScreen() {
 
         {/* Weekly Trend Chart - Glass Card */}
         {weeklyData.length > 0 && (
-          <AnimatedCard delay={500} type="slide" style={styles.section}>
+          <AnimatedCard delay={400} type="slide" style={styles.section}>
             <Text style={styles.sectionTitle}>This Week&apos;s Trend</Text>
             <View style={styles.standardCard}>
               <View style={styles.chartContent}>
                 <BarChart
                   data={weeklyData}
-                  width={width - 88}
+                  width={width - 100}
                   height={180}
-                  barWidth={28}
-                  spacing={18}
+                  barWidth={24}
+                  spacing={16}
                   roundedTop
                   roundedBottom
                   hideRules
@@ -469,6 +434,14 @@ export default function HomeScreen() {
                   yAxisTextStyle={{ color: Colors.textLight, fontSize: 10 }}
                   noOfSections={4}
                   maxValue={Math.max(...weeklyData.map(d => d.value), 2000)}
+                  showGradient={false}
+                  cappedBars={false}
+                  initialSpacing={10}
+                  barInnerComponent={(item: any) => (
+                    item.value === 0 ? (
+                      <View style={styles.hollowBar} />
+                    ) : null
+                  )}
                 />
               </View>
             </View>
@@ -677,64 +650,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: Colors.text,
   },
-  motivationSection: {
-    marginBottom: 24,
-  },
-  motivationCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderBottomWidth: 6,
-  },
-  motivationContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    marginBottom: 16,
-  },
-  motivationEmojiContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 20,
-    backgroundColor: Colors.backgroundSecondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.border,
-  },
-  motivationEmoji: {
-    fontSize: 32,
-  },
-  motivationMessage: {
-    flex: 1,
-  },
-  motivationTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  motivationSubtitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.textSecondary,
-    lineHeight: 18,
-  },
-  progressIndicator: {
-    height: 14,
-    backgroundColor: Colors.border,
-    borderRadius: 7,
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: Colors.primary,
-    borderRadius: 7,
-    borderBottomWidth: 3,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-  },
   standardCard: {
     backgroundColor: Colors.white,
     borderRadius: 24,
@@ -783,7 +698,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 3,
     borderColor: Colors.primary,
-    borderBottomWidth: 6,
+    borderBottomWidth: 8,
+    borderBottomColor: Colors.primaryDark + '40',
+  },
+  hollowCircle: {
+    borderColor: Colors.border,
+    borderBottomColor: Colors.border,
+    borderBottomWidth: 8,
+  },
+  hollowText: {
+    color: Colors.textSecondary,
   },
   percentageText: {
     fontSize: 18,
@@ -791,9 +715,13 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
   progressBarContainer: {
-    height: 16,
-    backgroundColor: Colors.border,
-    borderRadius: 8,
+    height: 18,
+    backgroundColor: Colors.white,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 4,
+    borderBottomColor: Colors.border,
     overflow: 'hidden',
     marginBottom: 16,
   },
@@ -832,6 +760,20 @@ const styles = StyleSheet.create({
   pieChartContainer: {
     alignItems: 'center',
     marginBottom: 24,
+  },
+  pieChartWrapper: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 140,
+    height: 140,
+  },
+  hollowPieWrapper: {
+    borderRadius: 70,
+    borderWidth: 3,
+    borderColor: Colors.border,
+    borderBottomWidth: 10,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.white,
   },
   pieChartCenter: {
     fontSize: 14,
@@ -1000,5 +942,18 @@ const styles = StyleSheet.create({
   },
   chartContent: {
     alignItems: 'center',
+    paddingLeft: 10,
+    paddingRight: 10,
+    overflow: 'visible',
+  },
+  hollowBar: {
+    flex: 1,
+    backgroundColor: Colors.white,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 6,
+    borderBottomColor: Colors.border,
+    borderRadius: 8,
+    marginHorizontal: 2,
   },
 });

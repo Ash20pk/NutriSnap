@@ -5,6 +5,100 @@ import { supabase } from './supabase';
 
 const API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || process.env.EXPO_PUBLIC_BACKEND_URL;
 
+const USE_MOCK_DATA =
+  __DEV__ &&
+  (() => {
+    const raw =
+      Constants.expoConfig?.extra?.EXPO_PUBLIC_USE_MOCK_DATA ??
+      process.env.EXPO_PUBLIC_USE_MOCK_DATA;
+    if (raw === true) return true;
+    if (typeof raw === 'string') return raw.toLowerCase() === 'true';
+    return false;
+  })();
+
+const getMockProfile = (id: string) => ({
+  id,
+  name: 'Alex',
+  age: 24,
+  gender: 'male',
+  height: 175,
+  weight: 72,
+  goal: 'lose_weight',
+  activity_level: 'moderate',
+  dietary_preference: 'balanced',
+  daily_calorie_target: 2000,
+  protein_target: 150,
+  carbs_target: 220,
+  fat_target: 65,
+  onboarding_completed: true,
+});
+
+const getMockStats = () => ({
+  total_calories: 1450,
+  total_protein: 112,
+  total_carbs: 158,
+  total_fat: 48,
+  meals_logged: 3,
+  targets: {
+    calories: 2000,
+    protein: 150,
+    carbs: 220,
+    fat: 65,
+  },
+});
+
+const getMockHistory = () => {
+  const meals = Array.from({ length: 7 }).map((_, i) => {
+    const dayOffset = 6 - i;
+    const timestamp = new Date(Date.now() - dayOffset * 24 * 60 * 60 * 1000).toISOString();
+    const total_calories = [1600, 1200, 1900, 1400, 1750, 900, 1500][i] ?? 0;
+    const total_protein = [120, 90, 140, 110, 130, 70, 115][i] ?? 0;
+    const total_carbs = [180, 140, 210, 160, 200, 110, 175][i] ?? 0;
+    const total_fat = [55, 40, 60, 45, 58, 32, 50][i] ?? 0;
+    
+    // Mock foods with "hidden" label data
+    const foods = [
+      { 
+        name: i % 2 === 0 ? 'Double Cheeseburger' : 'Grilled Chicken Salad', 
+        calories: 500, 
+        protein: 25, 
+        carbs: 40, 
+        fat: 30,
+        sugar: i % 2 === 0 ? 12 : 2,
+        sodium: i % 2 === 0 ? 1200 : 400,
+        trans_fat: i % 2 === 0 ? 1.5 : 0,
+        saturated_fat: i % 2 === 0 ? 15 : 2,
+        timestamp 
+      },
+      { 
+        name: i % 3 === 0 ? 'Diet Soda (Red 40)' : 'Protein Bar', 
+        calories: 200, 
+        protein: 15, 
+        carbs: 20, 
+        fat: 8,
+        sugar: i % 3 === 0 ? 0 : 18,
+        sodium: 150,
+        trans_fat: 0,
+        saturated_fat: 3,
+        timestamp
+      }
+    ];
+
+    return {
+      id: `mock-meal-${i + 1}`,
+      timestamp,
+      total_calories,
+      total_protein,
+      total_carbs,
+      total_fat,
+      foods,
+      meal_type: i % 3 === 0 ? 'breakfast' : i % 3 === 1 ? 'lunch' : 'dinner'
+    };
+  });
+
+  return { meals };
+};
+
 console.log('[API] Resolved API_URL:', API_URL);
 
 const api = axios.create({
@@ -108,10 +202,18 @@ export const userApi = {
     return response.data;
   },
   getMe: async () => {
+    if (USE_MOCK_DATA) {
+      const { data } = await supabase.auth.getUser();
+      const id = data.user?.id ?? 'mock-user';
+      return getMockProfile(id);
+    }
     const response = await api.get('/user/me');
     return response.data;
   },
   getUser: async (userId: string) => {
+    if (USE_MOCK_DATA) {
+      return getMockProfile(userId);
+    }
     const response = await api.get(`/user/${userId}`);
     return response.data;
   },
@@ -138,6 +240,19 @@ export const foodApi = {
 // Meal API
 export const mealApi = {
   logPhoto: async (imageBase64: string, userId: string) => {
+    if (USE_MOCK_DATA) {
+      void imageBase64;
+      return {
+        id: `mock-photo-${Date.now()}`,
+        user_id: userId,
+        created_at: new Date().toISOString(),
+        foods: [],
+        total_calories: 520,
+        total_protein: 35,
+        total_carbs: 40,
+        total_fat: 22,
+      };
+    }
     const response = await api.post('/meals/log-photo', {
       image_base64: imageBase64,
       user_id: userId,
@@ -145,10 +260,27 @@ export const mealApi = {
     return response.data;
   },
   logMeal: async (mealData: any) => {
+    if (USE_MOCK_DATA) {
+      return {
+        id: `mock-meal-${Date.now()}`,
+        ...mealData,
+        created_at: new Date().toISOString(),
+      };
+    }
     const response = await api.post('/meals/log', mealData);
     return response.data;
   },
   logVoice: async (text: string, userId: string, mealType: string) => {
+    if (USE_MOCK_DATA) {
+      void text;
+      return {
+        id: `mock-voice-${Date.now()}`,
+        user_id: userId,
+        meal_type: mealType,
+        created_at: new Date().toISOString(),
+        foods: [],
+      };
+    }
     const response = await api.post('/meals/log-voice', {
       text,
       user_id: userId,
@@ -157,12 +289,22 @@ export const mealApi = {
     return response.data;
   },
   getHistory: async (userId: string, days: number = 7) => {
+    if (USE_MOCK_DATA) {
+      void userId;
+      void days;
+      return getMockHistory();
+    }
     const response = await api.get(`/meals/history/${userId}`, {
       params: { days },
     });
     return response.data;
   },
   getStats: async (userId: string, date?: string) => {
+    if (USE_MOCK_DATA) {
+      void userId;
+      void date;
+      return getMockStats();
+    }
     const response = await api.get(`/meals/stats/${userId}`, {
       params: date ? { date } : {},
     });

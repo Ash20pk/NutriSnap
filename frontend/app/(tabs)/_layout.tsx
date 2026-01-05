@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
-import { View, Platform, StyleSheet, Text } from 'react-native';
+import { View, Platform, StyleSheet } from 'react-native';
 
 export default function TabsLayout() {
   return (
@@ -12,18 +12,21 @@ export default function TabsLayout() {
           backgroundColor: Colors.white,
           borderTopWidth: 2,
           borderTopColor: Colors.border,
-          height: Platform.OS === 'ios' ? 90 : 70,
-          paddingBottom: Platform.OS === 'ios' ? 30 : 10,
-          paddingTop: 10,
+          height: Platform.OS === 'ios' ? 100 : 80,
+          paddingBottom: Platform.OS === 'ios' ? 35 : 15,
+          paddingTop: 12,
           paddingHorizontal: 16,
           position: 'absolute',
           elevation: 0,
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
+          borderTopLeftRadius: 32,
+          borderTopRightRadius: 32,
+          borderWidth: 2,
+          borderColor: Colors.border,
+          borderBottomWidth: 0,
           shadowColor: Colors.black,
           shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.05,
-          shadowRadius: 10,
+          shadowOpacity: 0.1,
+          shadowRadius: 12,
         },
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.gray400,
@@ -150,38 +153,40 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 0,
+    borderColor: 'transparent',
   },
   centerButtonContainer: {
     position: 'absolute',
-    top: -25,
+    top: -32,
     alignItems: 'center',
     justifyContent: 'center',
   },
   centerButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
     borderColor: Colors.white,
-    borderBottomWidth: 8,
-    borderBottomColor: 'rgba(0,0,0,0.2)',
+    borderBottomWidth: 10,
+    borderBottomColor: 'rgba(0,0,0,0.25)',
     shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 10,
   },
   centerButtonActive: {
-    transform: [{ scale: 1.05 }],
+    transform: [{ scale: 0.92 }],
     borderBottomWidth: 4,
-    marginTop: 4,
+    marginTop: 6,
   },
 });

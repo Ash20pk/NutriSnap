@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
+  // ActivityIndicator,
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
