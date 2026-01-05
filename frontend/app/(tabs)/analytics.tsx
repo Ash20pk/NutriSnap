@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { BarChart, PieChart } from 'react-native-gifted-charts';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 import PageHeader from '../../components/PageHeader';
 import AnimatedCard from '../../components/AnimatedCard';
 
@@ -23,6 +24,7 @@ const CARD_WIDTH = width - 48;
 
 export default function AnalyticsScreen() {
   const { user } = useUser();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('week');
   const [weeklyData, setWeeklyData] = useState<any[]>([]);
@@ -31,8 +33,6 @@ export default function AnalyticsScreen() {
   const [averages, setAverages] = useState<any>({});
   const [topFoods, setTopFoods] = useState<any[]>([]);
   const [ingredientInsights, setIngredientInsights] = useState<any[]>([]);
-  const [selectedIssue, setSelectedIssue] = useState<any>(null);
-  const [selectedFoodDetails, setSelectedFoodDetails] = useState<any>(null);
   const [bioImpact, setBioImpact] = useState<any>({
     energy: 0,
     recovery: 0,
@@ -850,7 +850,12 @@ export default function AnalyticsScreen() {
               {bioImpact.stability < 70 && (
                 <TouchableOpacity 
                   style={styles.correctiveItem}
-                  onPress={() => setSelectedIssue({
+                  onPress={() =>
+                    router.push({
+                      pathname: '/issue-details' as any,
+                      params: {
+                        issue: encodeURIComponent(
+                          JSON.stringify({
                     title: 'Energy Spikes Detected',
                     impact: 'Sugar Stability',
                     score: bioImpact.stability,
@@ -862,7 +867,11 @@ export default function AnalyticsScreen() {
                       { label: 'Hidden Sweeteners', value: bioImpact.totals.additives > 0 ? 'Detected' : 'None', status: bioImpact.totals.additives > 0 ? 'Warning' : 'Good', desc: 'Aspartame and Sucralose can disrupt your gut microbiome and actually increase sugar cravings.' },
                       { label: 'Glycemic Load', value: 'High', status: 'Alert', desc: 'Refined carbs without fiber enter the bloodstream instantly, triggering massive insulin spikes.' }
                     ]
-                  })}
+                          })
+                        ),
+                      },
+                    } as any)
+                  }
                 >
                   <Ionicons name="warning" size={20} color="#FF9500" />
                   <View style={{ flex: 1 }}>
@@ -876,7 +885,12 @@ export default function AnalyticsScreen() {
               {bioImpact.recovery < 70 && (
                 <TouchableOpacity 
                   style={styles.correctiveItem}
-                  onPress={() => setSelectedIssue({
+                  onPress={() =>
+                    router.push({
+                      pathname: '/issue-details' as any,
+                      params: {
+                        issue: encodeURIComponent(
+                          JSON.stringify({
                     title: 'Recovery Deficit',
                     impact: 'Muscle Recovery',
                     score: bioImpact.recovery,
@@ -888,7 +902,11 @@ export default function AnalyticsScreen() {
                       { label: 'Saturated Fat', value: `${bioImpact.totals.saturatedFat}g`, status: 'Warning', desc: 'High saturated fat from processed meats triggers systemic inflammation, slowing down muscle recovery.' },
                       { label: 'Trans Fats', value: `${bioImpact.totals.transFat}g`, status: parseFloat(bioImpact.totals.transFat) > 0 ? 'Critical' : 'Good', desc: 'Found in fried foods, trans fats damage blood vessels and block nutrient delivery to muscles.' }
                     ]
-                  })}
+                          })
+                        ),
+                      },
+                    } as any)
+                  }
                 >
                   <Ionicons name="barbell" size={20} color="#FF2D55" />
                   <View style={{ flex: 1 }}>
@@ -902,7 +920,12 @@ export default function AnalyticsScreen() {
               {bioImpact.focus < 70 && (
                 <TouchableOpacity 
                   style={styles.correctiveItem}
-                  onPress={() => setSelectedIssue({
+                  onPress={() =>
+                    router.push({
+                      pathname: '/issue-details' as any,
+                      params: {
+                        issue: encodeURIComponent(
+                          JSON.stringify({
                     title: 'Brain Fog Alert',
                     impact: 'Mental Focus',
                     score: bioImpact.focus,
@@ -913,7 +936,11 @@ export default function AnalyticsScreen() {
                       { label: 'Artificial Dyes', value: bioImpact.totals.dyes > 0 ? 'Detected' : 'None', status: 'Critical', desc: 'Red 40 and Yellow 5 are linked to hyperactivity and reduced attention span in both children and adults.' },
                       { label: 'Maltodextrin', value: 'High Prob.', status: 'Warning', desc: 'A common thickener with a higher glycemic index than table sugar. It causes rapid brain energy crashes.' }
                     ]
-                  })}
+                          })
+                        ),
+                      },
+                    } as any)
+                  }
                 >
                   <Ionicons name="eye" size={20} color="#5856D6" />
                   <View style={{ flex: 1 }}>
@@ -927,7 +954,12 @@ export default function AnalyticsScreen() {
               {bioImpact.digestion < 70 && (
                 <TouchableOpacity 
                   style={styles.correctiveItem}
-                  onPress={() => setSelectedIssue({
+                  onPress={() =>
+                    router.push({
+                      pathname: '/issue-details' as any,
+                      params: {
+                        issue: encodeURIComponent(
+                          JSON.stringify({
                     title: 'Sleep/Digestion Conflict',
                     impact: 'Digestive Ease',
                     score: bioImpact.digestion,
@@ -938,7 +970,11 @@ export default function AnalyticsScreen() {
                       { label: 'Nighttime Sodium', value: `${Math.round(bioImpact.totals.sodium * 0.4)}mg`, status: 'Warning', desc: 'Consuming high sodium at night causes water retention and makes you wake up feeling "puffy" and dehydrated.' },
                       { label: 'Digestive Inhibitors', value: bioImpact.totals.additives > 0 ? 'Present' : 'None', status: 'Alert', desc: 'Emulsifiers and artificial thickeners in processed foods can irritate the gut lining, causing bloating.' }
                     ]
-                  })}
+                          })
+                        ),
+                      },
+                    } as any)
+                  }
                 >
                   <Ionicons name="moon" size={20} color="#5AC8FA" />
                   <View style={{ flex: 1 }}>
@@ -952,7 +988,12 @@ export default function AnalyticsScreen() {
               {bioImpact.antioxidants < 50 && (
                 <TouchableOpacity 
                   style={styles.correctiveItem}
-                  onPress={() => setSelectedIssue({
+                  onPress={() =>
+                    router.push({
+                      pathname: '/issue-details' as any,
+                      params: {
+                        issue: encodeURIComponent(
+                          JSON.stringify({
                     title: 'Low Micronutrient Diversity',
                     impact: 'Antioxidant Load',
                     score: bioImpact.antioxidants,
@@ -963,7 +1004,11 @@ export default function AnalyticsScreen() {
                       { label: 'Phytochemical Gap', value: 'Critical', status: 'Critical', desc: 'Your log shows very low intake of flavonoids and carotenoids found in colorful produce.' },
                       { label: 'Synthetic Preservatives', value: 'High', status: 'Warning', desc: 'Hidden BHA/BHT in packaged snacks can increase oxidative stress, requiring even MORE antioxidants to neutralize.' }
                     ]
-                  })}
+                          })
+                        ),
+                      },
+                    } as any)
+                  }
                 >
                   <Ionicons name="leaf" size={20} color="#AF52DE" />
                   <View style={{ flex: 1 }}>
@@ -986,153 +1031,6 @@ export default function AnalyticsScreen() {
             </View>
           </View>
         </AnimatedCard>
-
-        {selectedIssue && (
-          <View style={styles.modalOverlay}>
-            <AnimatedCard type="pop" style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>{selectedIssue.title}</Text>
-                <TouchableOpacity onPress={() => setSelectedIssue(null)}>
-                  <Ionicons name="close-circle" size={28} color={Colors.border} />
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.modalBody}>
-                <View style={styles.modalStatRow}>
-                  <View>
-                    <Text style={styles.modalStatLabel}>Impacted Area</Text>
-                    <Text style={styles.modalStatValue}>{selectedIssue.impact}</Text>
-                  </View>
-                  <View style={styles.modalScoreCircle}>
-                    <Text style={styles.modalScoreText}>{selectedIssue.score}%</Text>
-                  </View>
-                </View>
-
-                {selectedIssue.drivers?.length > 0 && (
-                  <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionTitle}>Negative Drivers</Text>
-                    <View style={styles.driverTags}>
-                      {selectedIssue.drivers.map((driver: string, i: number) => (
-                        <View key={i} style={styles.driverTag}>
-                          <Ionicons name="trending-down" size={14} color="#FF3B30" />
-                          <Text style={styles.driverTagText}>{driver}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
-
-                {selectedIssue.culpritFoods?.length > 0 && (
-                  <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionTitle}>Culprit Foods</Text>
-                    <View style={styles.culpritGrid}>
-                      {selectedIssue.culpritFoods.map((food: any, i: number) => (
-                        <TouchableOpacity 
-                          key={i} 
-                          style={styles.culpritBadge}
-                          onPress={() => setSelectedFoodDetails(food)}
-                        >
-                          <View style={styles.culpritHeader}>
-                            <Ionicons name="close-circle" size={16} color="#FF3B30" />
-                            <Text style={styles.culpritText} numberOfLines={1}>{food.name}</Text>
-                          </View>
-                          <View style={styles.culpritFooter}>
-                            <Text style={styles.culpritTime}>{food.timestamp ? format(new Date(food.timestamp), 'h:mm a') : 'Today'}</Text>
-                            <Ionicons name="chevron-forward" size={12} color="#FF3B30" />
-                          </View>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                )}
-
-                <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>The Fix</Text>
-                  <Text style={styles.solutionText}>{selectedIssue.solution}</Text>
-                </View>
-
-                {selectedIssue.hiddenLabels && (
-                  <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionTitle}>Label Red Flags</Text>
-                    <View style={styles.labelGrid}>
-                      {selectedIssue.hiddenLabels.map((item: any, i: number) => (
-                        <View key={i} style={styles.labelCard}>
-                          <View style={styles.labelHeader}>
-                            <Text style={styles.labelText}>{item.label}</Text>
-                            <View style={[styles.statusBadge, { backgroundColor: item.status === 'Critical' ? '#FF3B3020' : '#FF950020' }]}>
-                              <Text style={[styles.statusText, { color: item.status === 'Critical' ? '#FF3B30' : '#FF9500' }]}>{item.status}</Text>
-                            </View>
-                          </View>
-                          <Text style={styles.labelValue}>{item.value}</Text>
-                          <Text style={styles.labelDesc}>{item.desc}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
-
-                <TouchableOpacity 
-                  style={styles.modalCloseBtn}
-                  onPress={() => setSelectedIssue(null)}
-                >
-                  <Text style={styles.modalCloseBtnText}>Got it!</Text>
-                </TouchableOpacity>
-              </View>
-            </AnimatedCard>
-          </View>
-        )}
-
-        {selectedFoodDetails && (
-          <View style={[styles.modalOverlay, { zIndex: 1100 }]}>
-            <AnimatedCard type="pop" style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <View>
-                  <Text style={styles.modalTitle}>{selectedFoodDetails.name}</Text>
-                  <Text style={styles.modalSubtitle}>{selectedFoodDetails.driver} culprit</Text>
-                </View>
-                <TouchableOpacity onPress={() => setSelectedFoodDetails(null)}>
-                  <Ionicons name="close-circle" size={28} color={Colors.border} />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.modalBody}>
-                {selectedFoodDetails.flags?.length > 0 ? (
-                  <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionTitle}>Flagged Components</Text>
-                    <View style={styles.labelGrid}>
-                      {selectedFoodDetails.flags.map((flag: any, i: number) => (
-                        <View key={i} style={styles.labelCard}>
-                          <View style={styles.labelHeader}>
-                            <Text style={styles.labelText}>{flag.label}</Text>
-                            <View style={[styles.statusBadge, { backgroundColor: '#FF3B3020' }]}>
-                              <Text style={[styles.statusText, { color: '#FF3B30' }]}>{flag.status}</Text>
-                            </View>
-                          </View>
-                          <Text style={styles.labelValue}>{flag.value}</Text>
-                          <Text style={styles.labelDesc}>{flag.desc}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                ) : (
-                  <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionTitle}>Why this food?</Text>
-                    <Text style={styles.solutionText}>
-                      This item was flagged because it contains processed ingredients, hidden sweeteners, or was eaten at a time that disrupts your biological rhythm.
-                    </Text>
-                  </View>
-                )}
-
-                <TouchableOpacity 
-                  style={styles.modalCloseBtn}
-                  onPress={() => setSelectedFoodDetails(null)}
-                >
-                  <Text style={styles.modalCloseBtnText}>Close Details</Text>
-                </TouchableOpacity>
-              </View>
-            </AnimatedCard>
-          </View>
-        )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
