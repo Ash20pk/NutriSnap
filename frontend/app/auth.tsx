@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import {
   Alert,
+  Dimensions,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -22,6 +22,9 @@ import DuoButton from '../components/DuoButton';
 export default function AuthScreen() {
   const router = useRouter();
   const { isLoading, signInEmail, signUpEmail, resetPassword, signInGoogle, signInApple } = useAuth();
+
+  const { height: screenHeight } = Dimensions.get('window');
+  const isSmallScreen = screenHeight < 740;
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -107,14 +110,13 @@ export default function AuthScreen() {
         style={styles.flex} 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView
-          style={styles.flex}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <AnimatedCard type="pop" delay={100} style={styles.card}>
-            <View style={styles.inputWrap}>
+        <View style={[styles.body, isSmallScreen && styles.bodySmall]}>
+          <AnimatedCard
+            type="pop"
+            delay={100}
+            style={[styles.card, isSmallScreen && styles.cardSmall, mode === 'signup' && isSmallScreen && styles.cardSignupSmall]}
+          >
+            <View style={[styles.inputWrap, isSmallScreen && styles.inputWrapSmall]}>
               <Ionicons name="mail" size={20} color={Colors.textLight} />
               <TextInput
                 style={styles.input}
@@ -127,7 +129,7 @@ export default function AuthScreen() {
               />
             </View>
 
-            <View style={styles.inputWrap}>
+            <View style={[styles.inputWrap, isSmallScreen && styles.inputWrapSmall]}>
               <Ionicons name="lock-closed" size={20} color={Colors.textLight} />
               <TextInput
                 style={styles.input}
@@ -151,7 +153,7 @@ export default function AuthScreen() {
 
             {mode === 'signin' && (
               <TouchableOpacity
-                style={styles.forgotRow}
+                style={[styles.forgotRow, isSmallScreen && styles.forgotRowSmall]}
                 onPress={handleForgotPassword}
                 disabled={submitting || isLoading}
               >
@@ -161,7 +163,7 @@ export default function AuthScreen() {
 
             {mode === 'signup' && (
               <TouchableOpacity
-                style={styles.termsRow}
+                style={[styles.termsRow, isSmallScreen && styles.termsRowSmall]}
                 activeOpacity={0.8}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -186,23 +188,23 @@ export default function AuthScreen() {
               style={{ marginTop: 12 }}
             />
 
-            <View style={styles.dividerRow}>
+            <View style={[styles.dividerRow, isSmallScreen && styles.dividerRowSmall]}>
               <View style={styles.dividerLine} />
               <Text style={styles.dividerText}>OR</Text>
               <View style={styles.dividerLine} />
             </View>
 
-            <View style={styles.socialButtons}>
+            <View style={[styles.socialButtons, isSmallScreen && styles.socialButtonsSmall]}>
               {canUseApple && (
                 <DuoButton
                   title="Continue with Apple"
                   onPress={handleApple}
                   disabled={submitting || isLoading}
                   color={Colors.white}
-                  shadowColor={Colors.border}
+                  shadowColor={'rgba(0,0,0,0.08)'}
                   textStyle={{ color: Colors.text }}
-                  size="medium"
-                  style={{ marginBottom: 12 }}
+                  size="small"
+                  leftIcon={<Ionicons name="logo-apple" size={18} color={Colors.text} />}
                 />
               )}
 
@@ -211,9 +213,10 @@ export default function AuthScreen() {
                 onPress={handleGoogle}
                 disabled={submitting || isLoading}
                 color={Colors.white}
-                shadowColor={Colors.border}
+                shadowColor={'rgba(0,0,0,0.08)'}
                 textStyle={{ color: Colors.text }}
-                size="medium"
+                size="small"
+                leftIcon={<Ionicons name="logo-google" size={18} color={Colors.text} />}
               />
             </View>
 
@@ -233,13 +236,13 @@ export default function AuthScreen() {
             </View>
           </AnimatedCard>
 
-          <View style={styles.bottomBrand}>
-            <View style={styles.logoMark}>
+          <View style={[styles.bottomBrand, isSmallScreen && styles.bottomBrandSmall]}>
+            <View style={[styles.logoMark, isSmallScreen && styles.logoMarkSmall]}>
               <Ionicons name="leaf" size={22} color={Colors.white} />
             </View>
-            <Text style={styles.brand}>NutriSnap</Text>
+            <Text style={[styles.brand, isSmallScreen && styles.brandSmall]}>NutriSnap</Text>
           </View>
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </View>
   );
@@ -253,10 +256,16 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  scrollContent: {
+  body: {
+    flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 60,
+    paddingTop: 16,
+    paddingBottom: 20,
+    justifyContent: 'space-between',
+  },
+  bodySmall: {
+    paddingTop: 10,
+    paddingBottom: 12,
   },
   card: {
     backgroundColor: Colors.white,
@@ -266,6 +275,12 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderBottomWidth: 10,
     width: '100%',
+  },
+  cardSmall: {
+    padding: 18,
+  },
+  cardSignupSmall: {
+    padding: 16,
   },
   inputWrap: {
     flexDirection: 'row',
@@ -280,6 +295,10 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderBottomWidth: 6,
   },
+  inputWrapSmall: {
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
   input: {
     flex: 1,
     color: Colors.text,
@@ -291,6 +310,9 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     marginBottom: 24,
     paddingRight: 4,
+  },
+  forgotRowSmall: {
+    marginBottom: 14,
   },
   forgotText: {
     fontSize: 14,
@@ -305,6 +327,9 @@ const styles = StyleSheet.create({
     gap: 14,
     marginBottom: 24,
     paddingHorizontal: 4,
+  },
+  termsRowSmall: {
+    marginBottom: 14,
   },
   checkbox: {
     width: 28,
@@ -335,6 +360,9 @@ const styles = StyleSheet.create({
     marginVertical: 28,
     gap: 16,
   },
+  dividerRowSmall: {
+    marginVertical: 16,
+  },
   dividerLine: {
     flex: 1,
     height: 3,
@@ -352,6 +380,10 @@ const styles = StyleSheet.create({
   socialButtons: {
     marginBottom: 28,
     gap: 14,
+  },
+  socialButtonsSmall: {
+    marginBottom: 14,
+    gap: 10,
   },
   footerRow: {
     flexDirection: 'row',
@@ -373,11 +405,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   bottomBrand: {
-    marginTop: 48,
+    marginTop: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     opacity: 0.9,
+  },
+  bottomBrandSmall: {
+    marginTop: 10,
   },
   logoMark: {
     width: 36,
@@ -390,11 +425,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: 4,
     borderBottomColor: 'rgba(0,0,0,0.2)',
   },
+  logoMarkSmall: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    marginRight: 10,
+  },
   brand: {
     fontSize: 20,
     fontWeight: '900',
     color: Colors.text,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
+  },
+  brandSmall: {
+    fontSize: 15,
   },
 });

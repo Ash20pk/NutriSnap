@@ -17,6 +17,7 @@ interface DuoButtonProps {
   onPress: () => void;
   color?: string;
   shadowColor?: string;
+  leftIcon?: React.ReactNode;
   style?: ViewStyle;
   textStyle?: TextStyle;
   disabled?: boolean;
@@ -29,6 +30,7 @@ export default function DuoButton({
   onPress,
   color = Colors.primary,
   shadowColor,
+  leftIcon,
   style,
   textStyle,
   disabled,
@@ -100,9 +102,13 @@ export default function DuoButton({
             disabled && styles.disabled,
           ]}
         >
-          <Text style={[styles.text, { fontSize }, textStyle]}>
-            {loading ? '...' : title}
-          </Text>
+          <View style={styles.contentRow}>
+            <View style={styles.leftIconSlot}>{loading ? null : leftIcon}</View>
+            <Text style={[styles.text, { fontSize }, textStyle]}>
+              {loading ? '...' : title}
+            </Text>
+            <View style={styles.rightIconSlot} />
+          </View>
         </TouchableOpacity>
       </Animated.View>
     </View>
@@ -117,6 +123,22 @@ const styles = StyleSheet.create({
   button: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  contentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  leftIconSlot: {
+    width: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  rightIconSlot: {
+    width: 22,
+    marginLeft: 10,
   },
   shadow: {
     position: 'absolute',

@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   View,
+  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../constants/Colors';
@@ -122,34 +123,60 @@ export default function Intro() {
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
     >
-      <View style={styles.content}>
-        <View style={styles.brandRow}>
-          <View style={styles.logoMark}>
-            <Ionicons name="leaf" size={22} color={Colors.white} />
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        <View style={styles.content}>
+          <View style={styles.brandRow}>
+            <View style={styles.logoMark}>
+              <Ionicons name="leaf" size={22} color={Colors.white} />
+            </View>
+            <Text style={styles.brand}>NutriSnap</Text>
           </View>
-          <Text style={styles.brand}>NutriSnap</Text>
-        </View>
 
-        <Text style={styles.title}>Eat smarter,{"\n"}one snap at a time.</Text>
+          <Text
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
+            style={[
+              styles.title,
+              {
+                fontSize: Math.min(44, Math.max(30, screenWidth * 0.1)),
+                lineHeight: Math.min(48, Math.max(34, screenWidth * 0.11)),
+              },
+            ]}
+          >
+            Eat smarter,{"\n"}one snap at a time.
+          </Text>
 
-        <View style={styles.featureGrid}>
-          <Animated.FlatList
-            data={features}
-            keyExtractor={(item) => item.key}
-            horizontal
-            decelerationRate="fast"
-            snapToInterval={itemSize}
-            disableIntervalMomentum
-            style={{ width: pageWidth, height: deckHeight, alignSelf: 'center' }}
-            contentContainerStyle={{
-              paddingLeft: sideInset,
-              paddingRight: sideInset,
-            }}
-            showsHorizontalScrollIndicator={false}
-            onScroll={Animated.event(
-              [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-              { useNativeDriver: true }
-            )}
+          <View
+            style={[
+              styles.featureGrid,
+              {
+                height: deckHeight + 10,
+                marginTop: 12,
+              },
+            ]}
+          >
+            <Animated.FlatList
+              data={features}
+              keyExtractor={(item) => item.key}
+              horizontal
+              decelerationRate="fast"
+              snapToInterval={itemSize}
+              disableIntervalMomentum
+              style={{ width: pageWidth, height: deckHeight, alignSelf: 'center' }}
+              contentContainerStyle={{
+                paddingLeft: sideInset,
+                paddingRight: sideInset,
+              }}
+              showsHorizontalScrollIndicator={false}
+              showsVerticalScrollIndicator={false}
+              onScroll={Animated.event(
+                [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+                { useNativeDriver: true }
+              )}
             scrollEventThrottle={16}
             renderItem={({ item, index }) => {
               const isLast = index === features.length - 1;
@@ -208,7 +235,15 @@ export default function Intro() {
                     <View style={styles.cardFooter}>
                       <View style={styles.cardFooterRow}>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.cardTitle}>{item.title}</Text>
+                          <Text
+                            style={styles.cardTitle}
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                            adjustsFontSizeToFit
+                            minimumFontScale={0.65}
+                          >
+                            {item.title}
+                          </Text>
                           <Text style={styles.cardSubtitle}>{item.text}</Text>
                         </View>
 
@@ -288,6 +323,7 @@ export default function Intro() {
           </Animated.View>
         </View>
       </View>
+      </ScrollView>
     </LinearGradient>
   );
 }
@@ -299,12 +335,12 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 72,
+    paddingTop: 56,
   },
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   logoMark: {
     width: 34,
@@ -314,8 +350,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
-    borderBottomWidth: 4,
-    borderBottomColor: 'rgba(0,0,0,0.2)',
   },
   brand: {
     fontSize: 20,
@@ -332,13 +366,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   featureGrid: {
-    marginTop: 32,
+    marginTop: 0,
     flexGrow: 0,
     position: 'relative',
-    height: 480,
   },
   carouselPage: {
-    paddingTop: 8,
+    paddingTop: 0,
     paddingHorizontal: 12,
     alignItems: 'center',
   },
@@ -346,12 +379,17 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderRadius: 36,
     padding: 0,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderBottomWidth: 12,
     overflow: 'hidden',
     height: 440,
     width: Dimensions.get('window').width - 72,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 5,
   },
   cardVisual: {
     flex: 1,
@@ -371,6 +409,7 @@ const styles = StyleSheet.create({
     color: Colors.text,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    flexShrink: 1,
   },
   cardSubtitle: {
     marginTop: 6,
@@ -383,8 +422,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 24,
     backgroundColor: Colors.white,
-    borderTopWidth: 2,
-    borderTopColor: Colors.border,
   },
   cardFooterRow: {
     flexDirection: 'row',
@@ -398,11 +435,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: 5,
-    borderBottomColor: 'rgba(0,0,0,0.2)',
   },
   dotsRow: {
-    marginTop: 24,
+    marginTop: 0,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -419,15 +454,20 @@ const styles = StyleSheet.create({
     paddingBottom: 60,
   },
   slider: {
-    height: 72,
+    height: 69,
     backgroundColor: Colors.white,
     borderRadius: 36,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderBottomWidth: 8,
     alignSelf: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 4,
   },
   sliderFill: {
     position: 'absolute',
@@ -452,7 +492,5 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: 5,
-    borderBottomColor: 'rgba(0,0,0,0.2)',
   },
 });
