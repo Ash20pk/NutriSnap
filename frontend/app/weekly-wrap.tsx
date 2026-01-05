@@ -22,6 +22,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { captureRef } from 'react-native-view-shot';
 import * as MediaLibrary from 'expo-media-library';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AnimatedCard from '../components/AnimatedCard';
 import DuoButton from '../components/DuoButton';
 
@@ -31,11 +32,14 @@ const SLIDE_DURATION = 5000; // 5 seconds per slide
 
 export default function WeeklyWrapScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useUser();
   const [weeklyStats, setWeeklyStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [sharing, setSharing] = useState(false);
+  const [captureMode, setCaptureMode] = useState(false);
+  const screenCaptureRef = useRef<View>(null);
   const shareCardRef = useRef<View>(null);
   
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -111,7 +115,7 @@ export default function WeeklyWrapScreen() {
     },
     {
       id: 'summary',
-      title: 'The Full\nPicture',
+      title: '',
       gradient: [Colors.primary, Colors.black] as const,
       icon: 'trophy',
     }
@@ -197,8 +201,8 @@ export default function WeeklyWrapScreen() {
       let archetype = { name: 'The Balancer', icon: 'scale', desc: 'You keep your macros in perfect harmony.' };
       if (totalMacroKcal > 0) {
         const pPct = (pKcal / totalMacroKcal) * 100;
-        const cPct = (cPct / totalMacroKcal) * 100;
-        const fPct = (fPct / totalMacroKcal) * 100;
+        const cPct = (cKcal / totalMacroKcal) * 100;
+        const fPct = (fKcal / totalMacroKcal) * 100;
 
         if (pPct > 30) archetype = { name: 'Protein Pro', icon: 'fitness', desc: 'Muscle building is your middle name.' };
         else if (cPct > 55) archetype = { name: 'Carb Crusader', icon: 'leaf', desc: 'Fueling your energy with nature’s best.' };
@@ -268,16 +272,22 @@ export default function WeeklyWrapScreen() {
   const handleShare = useCallback(async () => {
     setSharing(true);
     try {
+      setCaptureMode(true);
+
+      // Wait a frame so UI hides before capture
+      await new Promise(resolve => requestAnimationFrame(() => resolve(null)));
+
       if (Platform.OS === 'ios') {
         const { status } = await MediaLibrary.requestPermissionsAsync();
         if (status !== 'granted') {
           Alert.alert('Permission needed', 'We need permission to save the image to your library');
           setSharing(false);
+          setCaptureMode(false);
           return;
         }
       }
 
-      const uri = await captureRef(shareCardRef, {
+      const uri = await captureRef(screenCaptureRef, {
         format: 'png',
         quality: 0.9,
       });
@@ -287,17 +297,18 @@ export default function WeeklyWrapScreen() {
       }
       
       await Share.share({
-        url: Platform.OS === 'ios' ? uri : `file://${uri}`,
+        url: Platform.OS === 'android' && !String(uri).startsWith('file://') ? `file://${uri}` : uri,
         title: 'My Weekly NutriSnap',
-        message: `My Weekly NutriSnap Wrapped! 📸\n\nConsistency: ${weeklyStats?.consistency || 0}%\n\n#NutriSnap #WeeklyWrap`,
+        message: `My Weekly NutriSnap Wrapped!\n\nConsistency: ${weeklyStats?.consistency || 0}%\n\n#NutriSnap #WeeklyWrap`,
       });
     } catch (error) {
       console.error('Error sharing:', error);
       Alert.alert('Sharing failed', 'Something went wrong while trying to share your wrap.');
     } finally {
       setSharing(false);
+      setCaptureMode(false);
     }
-  }, [weeklyStats, shareCardRef]);
+  }, [weeklyStats]);
 
   if (loading) {
     return (
@@ -314,8 +325,41 @@ export default function WeeklyWrapScreen() {
 
   const slide = slides[currentSlide];
 
+  const baseWidth = 390;
+  const baseHeight = 844;
+  const scale = Math.min(width / baseWidth, screenHeight / baseHeight);
+  const titleFontSize = Math.max(32, Math.min(48, Math.round(48 * scale)));
+  const valueFontSize = Math.max(54, Math.min(80, Math.round(80 * scale)));
+  const valueLineHeight = Math.round(valueFontSize * 1.02);
+  const iconLg = Math.max(70, Math.min(100, Math.round(100 * scale)));
+  const iconSm = Math.max(56, Math.min(80, Math.round(80 * scale)));
+  const slideHPad = Math.max(18, Math.min(40, Math.round(40 * scale)));
+  const slideVPad = Math.max(14, Math.min(22, Math.round(22 * scale)));
+  const iconMarginBottom = Math.max(18, Math.min(40, Math.round(40 * scale)));
+  const valueMarginBottom = Math.max(16, Math.min(30, Math.round(30 * scale)));
+  const descriptionFontSize = Math.max(16, Math.min(20, Math.round(20 * scale)));
+  const macroValFontSize = Math.max(16, Math.min(20, Math.round(20 * scale)));
+  const macroLabFontSize = Math.max(10, Math.min(12, Math.round(12 * scale)));
+  const macroPad = Math.max(10, Math.min(15, Math.round(15 * scale)));
+  const foodFontSize = Math.max(14, Math.min(18, Math.round(18 * scale)));
+  const foodRowPad = Math.max(10, Math.min(15, Math.round(15 * scale)));
+  const summaryCardWidth = Math.min(width * 0.86, 360);
+  const summaryCardMaxHeight = Math.min(screenHeight * 0.62, 520);
+  const topOffset = Platform.OS === 'ios' ? insets.top : insets.top + 10;
+  const bottomOffset = insets.bottom;
+
+  const isSummary = slide.id === 'summary';
+  const isConsistency = slide.id === 'consistency';
+  const titleFontSizeFinal = isConsistency ? Math.max(24, Math.round(titleFontSize * 0.82)) : titleFontSize;
+  const titleLineHeightFinal = Math.round(titleFontSizeFinal * 1.08);
+  const iconLgFinal = isConsistency ? Math.max(62, Math.round(iconLg * 0.9)) : iconLg;
+  const iconSmFinal = isConsistency ? Math.max(50, Math.round(iconSm * 0.9)) : iconSm;
+  const iconMarginBottomFinal = isSummary ? Math.max(6, Math.round(iconMarginBottom * 0.25)) : iconMarginBottom;
+  const valueMarginBottomFinal = isConsistency ? Math.max(10, Math.round(valueMarginBottom * 0.7)) : valueMarginBottom;
+  const slideVPadFinal = isSummary ? Math.max(8, Math.round(slideVPad * 0.7)) : slideVPad;
+
   return (
-    <View style={styles.container}>
+    <View ref={screenCaptureRef} collapsable={false} style={styles.container}>
       <StatusBar barStyle="light-content" />
       
       <LinearGradient colors={slide.gradient as any} style={StyleSheet.absoluteFill} />
@@ -390,7 +434,7 @@ export default function WeeklyWrapScreen() {
       />
 
       {/* Confetti Particles */}
-      {currentSlide === slides.length - 1 && [...Array(20)].map((_, i) => (
+      {currentSlide === slides.length - 1 && !isSummary && [...Array(20)].map((_, i) => (
         <Animated.View
           key={i}
           style={[
@@ -424,65 +468,111 @@ export default function WeeklyWrapScreen() {
         />
       ))}
 
-      {/* Progress Bars */}
-      <View style={styles.progressContainer}>
-        {slides.map((_, index) => (
-          <View key={index} style={styles.progressBarBg}>
-            <Animated.View 
-              style={[
-                styles.progressBarFill, 
-                { 
-                  width: index === currentSlide 
-                    ? progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
-                    : index < currentSlide ? '100%' : '0%' 
-                }
-              ]} 
-            />
+      {!captureMode && (
+        <>
+          {/* Progress Bars */}
+          <View style={[styles.progressContainer, { paddingTop: topOffset + 14 }]}>
+            {slides.map((_, index) => (
+              <View key={index} style={styles.progressBarBg}>
+                <Animated.View 
+                  style={[
+                    styles.progressBarFill, 
+                    { 
+                      width: index === currentSlide 
+                        ? progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
+                        : index < currentSlide ? '100%' : '0%' 
+                    }
+                  ]} 
+                />
+              </View>
+            ))}
           </View>
-        ))}
-      </View>
 
-      {/* Close Button */}
-      <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
-        <Ionicons name="close" size={28} color={Colors.white} />
-      </TouchableOpacity>
+          {/* Close Button */}
+          <TouchableOpacity style={[styles.closeButton, { top: topOffset + 34 }]} onPress={() => router.back()}>
+            <Ionicons name="close" size={28} color={Colors.white} />
+          </TouchableOpacity>
+        </>
+      )}
 
       {/* Slide Content */}
-      <AnimatedCard key={currentSlide} type="slide" style={styles.slideContent}>
-        <Animated.View 
-          style={[
-            styles.iconContainer,
-            {
-              transform: [
+      <AnimatedCard
+        key={currentSlide}
+        type="slide"
+        style={[
+          styles.slideContent,
+          {
+            paddingHorizontal: slideHPad,
+            paddingTop: slideVPadFinal,
+            paddingBottom: slideVPadFinal,
+            justifyContent: isSummary ? 'flex-start' : styles.slideContent.justifyContent,
+          },
+        ]}
+      >
+        {!isSummary && (
+          <>
+            <Animated.View 
+              style={[
+                styles.iconContainer,
+                { marginBottom: iconMarginBottomFinal },
                 {
-                  translateY: floatingAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, -15],
-                  }),
+                  transform: [
+                    {
+                      translateY: floatingAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, -15],
+                      }),
+                    },
+                  ],
                 },
-              ],
-            },
-          ]}
-        >
-          <Ionicons name={slide.icon as any} size={80} color="rgba(255,255,255,0.3)" style={styles.floatingIcon} />
-          <Ionicons name={slide.icon as any} size={100} color={Colors.white} />
-        </Animated.View>
+              ]}
+            >
+              <Ionicons name={slide.icon as any} size={iconSmFinal} color="rgba(255,255,255,0.3)" style={styles.floatingIcon} />
+              <Ionicons name={slide.icon as any} size={iconLgFinal} color={Colors.white} />
+            </Animated.View>
 
-        <Text style={styles.slideTitle}>{slide.title}</Text>
+            {!!slide.title && (
+              <Text
+                style={[styles.slideTitle, { fontSize: titleFontSizeFinal, lineHeight: titleLineHeightFinal }]}
+                adjustsFontSizeToFit
+                minimumFontScale={0.5}
+                numberOfLines={2}
+                ellipsizeMode="clip"
+              >
+                {slide.title}
+              </Text>
+            )}
+          </>
+        )}
         
         {slide.value !== undefined && (
-          <View style={styles.valueContainer}>
-            <Text style={styles.slideValue}>{slide.value}</Text>
-            <Text style={styles.slideLabel}>{slide.label}</Text>
+          <View style={[styles.valueContainer, { marginBottom: valueMarginBottomFinal }]}
+          >
+            <Text
+              style={[styles.slideValue, { fontSize: valueFontSize, lineHeight: valueLineHeight }]}
+              adjustsFontSizeToFit
+              minimumFontScale={0.75}
+              numberOfLines={1}
+            >
+              {slide.value}
+            </Text>
+            <Text
+              style={styles.slideLabel}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.75}
+            >
+              {slide.label}
+            </Text>
           </View>
         )}
 
         {slide.macros && (
           <View style={styles.macrosContainer}>
             {slide.macros.map((m, i) => (
-              <View key={i} style={styles.macroBox}>
-                <Text style={styles.macroVal}>{m.value}g</Text>
-                <Text style={styles.macroLab}>{m.label}</Text>
+              <View key={i} style={[styles.macroBox, { padding: macroPad, minWidth: Math.max(70, Math.round(80 * scale)) }]}>
+                <Text style={[styles.macroVal, { fontSize: macroValFontSize }]}>{m.value}g</Text>
+                <Text style={[styles.macroLab, { fontSize: macroLabFontSize }]}>{m.label}</Text>
               </View>
             ))}
           </View>
@@ -491,21 +581,48 @@ export default function WeeklyWrapScreen() {
         {slide.foods && (
           <View style={styles.foodsContainer}>
             {slide.foods.map((food: string, i: number) => (
-              <View key={i} style={styles.foodRow}>
+              <View key={i} style={[styles.foodRow, { padding: foodRowPad }]}>
                 <View style={styles.foodRank}><Text style={styles.foodRankText}>{i+1}</Text></View>
-                <Text style={styles.foodName}>{food}</Text>
+                <Text style={[styles.foodName, { fontSize: foodFontSize }]} numberOfLines={1}>
+                  {food}
+                </Text>
               </View>
             ))}
           </View>
         )}
 
         {slide.description && (
-          <Text style={styles.slideDescription}>{slide.description}</Text>
+          <Text
+            style={[styles.slideDescription, { fontSize: descriptionFontSize, lineHeight: Math.round(descriptionFontSize * 1.35) }]}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
+          >
+            {slide.description}
+          </Text>
         )}
 
         {slide.id === 'summary' && (
-          <View style={styles.summaryContainer}>
-            <View ref={shareCardRef} collapsable={false} style={styles.summaryCard}>
+          <View
+            style={[
+              styles.summarySlide,
+              {
+                paddingBottom: captureMode ? 0 : Math.max(16, bottomOffset + 16),
+              },
+            ]}
+          >
+            <View style={styles.summaryCenter}>
+              <View
+                ref={shareCardRef}
+                collapsable={false}
+                style={[
+                  styles.summaryCard,
+                  {
+                    width: summaryCardWidth,
+                    maxHeight: summaryCardMaxHeight,
+                    aspectRatio: undefined as any,
+                  },
+                ]}
+              >
               <LinearGradient 
                 colors={[Colors.primary, Colors.accent, Colors.secondary]} 
                 style={styles.summaryGradient}
@@ -525,7 +642,7 @@ export default function WeeklyWrapScreen() {
                   </View>
                   <View>
                     <Text style={styles.summaryUser}>{user?.name}</Text>
-                    <Text style={styles.summaryYear}>WRAPPED 2024</Text>
+                    <Text style={styles.summaryYear}>WEEKLY WRAPPED</Text>
                   </View>
                 </View>
                 <Ionicons name="nutrition" size={24} color={Colors.white} />
@@ -570,23 +687,28 @@ export default function WeeklyWrapScreen() {
                 <View style={styles.footerDivider} />
                 <Text style={styles.footerTagline}>AI NUTRITION TRACKER</Text>
               </View>
+              </View>
             </View>
 
-            <DuoButton 
-              title={sharing ? 'PREPARING...' : 'SHARE WRAPPED'}
-              onPress={handleShare}
-              color={Colors.white}
-              shadowColor="rgba(0,0,0,0.1)"
-              textStyle={{ color: Colors.primary }}
-              style={styles.shareButton}
-              disabled={sharing}
-            />
+            {!captureMode && (
+              <View style={styles.summaryBottom}>
+                <DuoButton 
+                  title={sharing ? 'PREPARING...' : 'SHARE WRAPPED'}
+                  onPress={handleShare}
+                  color={Colors.white}
+                  shadowColor="rgba(0,0,0,0.1)"
+                  textStyle={{ color: Colors.primary }}
+                  style={styles.shareButton}
+                  disabled={sharing}
+                />
+              </View>
+            )}
           </View>
         )}
       </AnimatedCard>
 
       {/* Navigation Areas */}
-      <View style={styles.navContainer}>
+      <View style={styles.navContainer} pointerEvents={isSummary || captureMode ? 'none' : 'auto'}>
         <Pressable style={styles.navSide} onPress={prevSlide} />
         <Pressable style={styles.navSide} onPress={nextSlide} />
       </View>
@@ -766,6 +888,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 20,
   },
+  summarySlide: {
+    flex: 1,
+    width: '100%',
+    alignSelf: 'stretch',
+  },
+  summaryCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryBottom: {
+    width: '100%',
+    alignSelf: 'stretch',
+    paddingTop: 12,
+  },
   summaryCard: {
     width: width * 0.8,
     aspectRatio: 0.7,
@@ -915,7 +1052,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   shareButton: {
-    marginTop: 30,
+    marginTop: 0,
     width: '100%',
   },
   decorativeCircle: {
