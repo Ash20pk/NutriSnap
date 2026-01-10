@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,17 +6,22 @@ import {
   ScrollView,
   TouchableOpacity,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
   TextInput,
   Alert,
+  ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useUser } from '../../context/UserContext';
-import { mealApi, foodApi } from '../../utils/api';
+import { mealApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import PageHeader from '../../components/PageHeader';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import { Audio } from 'expo-av';
 
 import DuoButton from '../../components/DuoButton';
 import AnimatedCard from '../../components/AnimatedCard';
@@ -25,15 +30,60 @@ import XpPopUp from '../../components/XpPopUp';
 export default function LogScreen() {
   const router = useRouter();
   const { user } = useUser();
+  const searchInputRef = useRef<TextInput>(null);
+  const ENABLE_CAMERA_LOGGING = false;
   const [mealType, setMealType] = useState('breakfast');
-  const [logMethod, setLogMethod] = useState<'photo' | 'manual' | 'voice' | null>(null);
+  const [logMethod, setLogMethod] = useState<'photo' | 'manual' | null>(null);
   const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [voiceLoading, setVoiceLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [lastTranscript, setLastTranscript] = useState<string>('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [selectedFoods, setSelectedFoods] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [configuringFood, setConfiguringFood] = useState<any | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [configQty, setConfigQty] = useState('');
+  const [configUnit, setConfigUnit] = useState<'g' | 'oz'>('g');
   const [showXp, setShowXp] = useState(false);
   const [earnedXp, setEarnedXp] = useState(0);
+
+  const voiceTranslateY = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (voiceLoading) {
+      Animated.timing(voiceTranslateY, {
+        toValue: -20,
+        duration: 400,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(voiceTranslateY, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [voiceLoading, voiceTranslateY]);
+
+  useEffect(() => {
+    if (showModal && !configuringFood) {
+      const t = setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 150);
+      return () => clearTimeout(t);
+    }
+  }, [showModal, configuringFood]);
+
+  useEffect(() => {
+    if (!showModal) {
+      setVoiceLoading(false);
+      setIsRecording(false);
+      setRecording(null);
+      setLastTranscript('');
+    }
+  }, [showModal]);
 
   const mealTypes = [
     { id: 'breakfast', label: 'Breakfast', icon: 'sunny' },
@@ -58,45 +108,143 @@ export default function LogScreen() {
     }
   };
 
-  const handleVoiceLog = () => {
-    setLogMethod('voice');
-    setShowModal(true);
-  };
-
   const handleManualLog = () => {
     setLogMethod('manual');
     setShowModal(true);
   };
 
-  const searchFoods = async (query: string) => {
-    if (query.length < 2) {
-      setSearchResults([]);
+  const startVoiceRecording = async () => {
+    if (voiceLoading || isRecording) return;
+    if (!user?.id) {
+      Alert.alert('Error', 'You must be logged in to use voice logging');
       return;
     }
-    
+
     try {
-      const response = await foodApi.searchFoods(query);
-      setSearchResults(response.foods || []);
-    } catch (error) {
-      console.error('Error searching foods:', error);
+      setVoiceLoading(true);
+
+      const perm = await Audio.requestPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission Required', 'Microphone permission is needed for voice logging');
+        setVoiceLoading(false);
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const rec = new Audio.Recording();
+      await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      await rec.startAsync();
+
+      setRecording(rec);
+      setIsRecording(true);
+      setLastTranscript('');
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    } catch (e) {
+      console.error('Failed to start recording:', e);
+      Alert.alert('Error', 'Failed to start recording');
+      setRecording(null);
+      setIsRecording(false);
+    } finally {
+      setVoiceLoading(false);
     }
   };
 
-  const addFood = (food: any) => {
-    const quantity = food.serving_size || 100;
-    const multiplier = quantity / 100;
+  const stopVoiceRecordingAndParse = async () => {
+    if (voiceLoading || !recording || !user?.id) return;
+
+    try {
+      setVoiceLoading(true);
+      setIsRecording(false);
+
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+
+      if (!uri) {
+        Alert.alert('Error', 'Could not access recorded audio');
+        return;
+      }
+
+      const result = await mealApi.voiceToMeal(uri, user.id);
+      const foods = result?.foods || [];
+      const transcript = result?.transcript || '';
+
+      setLastTranscript(transcript);
+      if (foods.length === 0) {
+        Alert.alert('No foods detected', transcript ? `Heard: ${transcript}` : 'Try speaking again');
+        return;
+      }
+
+      setSelectedFoods(foods);
+    } catch (e) {
+      console.error('Voice-to-meal failed:', e);
+      Alert.alert('Error', 'Failed to process voice meal');
+    } finally {
+      setVoiceLoading(false);
+    }
+  };
+
+  const handleFoodSelect = (food: any) => {
+    setConfiguringFood(food);
+    setConfigQty(food.serving_size ? String(food.serving_size) : '100');
+    setConfigUnit('g');
+    setEditingIndex(null);
+  };
+
+  const handleEditFood = (index: number) => {
+    const food = selectedFoods[index];
+    setEditingIndex(index);
+    setConfiguringFood(food);
+    // Use displayQuantity if available (string), otherwise quantity (number)
+    setConfigQty(food.displayQuantity ? String(food.displayQuantity) : String(food.quantity));
+    setConfigUnit(food.displayUnit || 'g');
+  };
+
+  const getCalculatedMacros = () => {
+    if (!configuringFood) return { calories: 0, protein: 0, carbs: 0, fat: 0 };
+    const qty = parseFloat(configQty) || 0;
+    const grams = configUnit === 'oz' ? qty * 28.3495 : qty;
+    const ratio = grams / 100;
     
+    return {
+      calories: Math.round(configuringFood.calories_per_100g * ratio),
+      protein: Math.round(configuringFood.protein_per_100g * ratio),
+      carbs: Math.round(configuringFood.carbs_per_100g * ratio),
+      fat: Math.round(configuringFood.fat_per_100g * ratio),
+      grams: Math.round(grams),
+    };
+  };
+
+  const confirmAddFood = () => {
+    if (!configuringFood) return;
+    
+    const macros = getCalculatedMacros();
     const newFood = {
-      name: food.name,
-      quantity,
-      calories: Math.round(food.calories_per_100g * multiplier),
-      protein: Math.round(food.protein_per_100g * multiplier),
-      carbs: Math.round(food.carbs_per_100g * multiplier),
-      fat: Math.round(food.fat_per_100g * multiplier),
+      ...configuringFood,
+      name: configuringFood.name,
+      quantity: macros.grams, // Backend expects grams typically
+      displayQuantity: configQty,
+      displayUnit: configUnit,
+      calories: macros.calories,
+      protein: macros.protein,
+      carbs: macros.carbs,
+      fat: macros.fat,
     };
     
-    setSelectedFoods([...selectedFoods, newFood]);
-    setSearchQuery('');
+    if (editingIndex !== null) {
+      const updated = [...selectedFoods];
+      updated[editingIndex] = newFood;
+      setSelectedFoods(updated);
+      setEditingIndex(null);
+    } else {
+      setSelectedFoods([...selectedFoods, newFood]);
+    }
+
+    setConfiguringFood(null);
     setSearchResults([]);
   };
 
@@ -128,6 +276,7 @@ export default function LogScreen() {
       setSelectedFoods([]);
       setShowModal(false);
       setLogMethod(null);
+      setEditingIndex(null);
     } catch (error) {
       console.error('Error logging meal:', error);
       Alert.alert('Error', 'Failed to log meal');
@@ -184,23 +333,48 @@ export default function LogScreen() {
         <View style={styles.methodsContainer}>
           <Text style={styles.sectionTitle}>How would you like to log?</Text>
 
-          {/* Photo Logging */}
+          {ENABLE_CAMERA_LOGGING && (
+            <AnimatedCard delay={150} type="slide" style={styles.methodCardWrapper}>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={styles.methodCard}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  handlePhotoLog();
+                }}
+              >
+                <View style={styles.methodIconContainer}>
+                  <Ionicons name="camera" size={32} color={Colors.primary} />
+                </View>
+                <View style={styles.methodContent}>
+                  <Text style={styles.methodTitle}>Take a Photo</Text>
+                  <Text style={styles.methodDescription}>
+                    Photo logging will return in a future update
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
+              </TouchableOpacity>
+            </AnimatedCard>
+          )}
+
+          {/* Voice Search (Launch MVP) */}
           <AnimatedCard delay={200} type="slide" style={styles.methodCardWrapper}>
-            <TouchableOpacity 
+            <TouchableOpacity
               activeOpacity={0.9}
-              style={styles.methodCard} 
+              style={styles.methodCard}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                handlePhotoLog();
+                setLogMethod('manual');
+                setShowModal(true);
               }}
             >
               <View style={styles.methodIconContainer}>
-                <Ionicons name="camera" size={32} color={Colors.primary} />
+                <Ionicons name="mic" size={32} color={Colors.primary} />
               </View>
               <View style={styles.methodContent}>
-                <Text style={styles.methodTitle}>Take a Photo</Text>
+                <Text style={styles.methodTitle}>Voice Search</Text>
                 <Text style={styles.methodDescription}>
-                  LiDAR + coin calibration for accurate portions
+                  Tap the mic on your keyboard and speak
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
@@ -224,29 +398,6 @@ export default function LogScreen() {
                 <Text style={styles.methodTitle}>Scan Barcode</Text>
                 <Text style={styles.methodDescription}>
                   Scan packaged food, then photo your portion
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
-            </TouchableOpacity>
-          </AnimatedCard>
-
-          {/* Voice Logging */}
-          <AnimatedCard delay={400} type="slide" style={styles.methodCardWrapper}>
-            <TouchableOpacity 
-              activeOpacity={0.9}
-              style={[styles.methodCard, { borderColor: Colors.accent }]} 
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                handleVoiceLog();
-              }}
-            >
-              <View style={[styles.methodIconContainer, { backgroundColor: Colors.accent + '15' }]}>
-                <Ionicons name="mic" size={32} color={Colors.accent} />
-              </View>
-              <View style={styles.methodContent}>
-                <Text style={styles.methodTitle}>Voice Input</Text>
-                <Text style={styles.methodDescription}>
-                  Tell us what you ate
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
@@ -280,86 +431,230 @@ export default function LogScreen() {
         {/* Manual/Voice Input Modal */}
         <Modal visible={showModal} animationType="slide" transparent={true}>
           <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>
-                  {logMethod === 'voice' ? 'Voice Input' : 'Add Foods'}
-                </Text>
-                <TouchableOpacity 
-                  onPress={() => setShowModal(false)}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Ionicons name="close" size={28} color={Colors.text} />
-                </TouchableOpacity>
-              </View>
-
-              {/* Search Input */}
-              <View style={styles.searchContainer}>
-                <Ionicons name="search" size={20} color={Colors.textLight} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search foods..."
-                  placeholderTextColor={Colors.textLight}
-                  value={searchQuery}
-                  onChangeText={(text) => {
-                    setSearchQuery(text);
-                    searchFoods(text);
-                  }}
-                />
-              </View>
-
-              {/* Search Results */}
-              {searchResults.length > 0 && (
-                <ScrollView style={styles.searchResults} showsVerticalScrollIndicator={false}>
-                  {searchResults.map((food, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.searchResultItem}
-                      onPress={() => addFood(food)}
-                    >
-                      <View>
-                        <Text style={styles.foodName}>{food.name}</Text>
-                        <Text style={styles.foodInfo}>
-                          {food.calories_per_100g} cal • {food.protein_per_100g}g protein
-                        </Text>
-                      </View>
-                      <Ionicons name="add-circle" size={24} color={Colors.primary} />
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              )}
-
-              {/* Selected Foods */}
-              {selectedFoods.length > 0 && (
-                <View style={styles.selectedFoodsContainer}>
-                  <Text style={styles.selectedTitle}>Selected Foods</Text>
-                  {selectedFoods.map((food, index) => (
-                    <View key={index} style={styles.selectedFoodItem}>
-                      <View style={styles.selectedFoodInfo}>
-                        <Text style={styles.selectedFoodName}>{food.name}</Text>
-                        <Text style={styles.selectedFoodDetails}>
-                          {food.quantity}g • {food.calories} cal
-                        </Text>
-                      </View>
-                      <TouchableOpacity onPress={() => removeFood(index)}>
-                        <Ionicons name="close-circle" size={24} color={Colors.error} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              style={{ width: '100%' }}
+            >
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>
+                    {configuringFood ? 'Configure Food' : 'Add Foods'}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (configuringFood) {
+                        setConfiguringFood(null);
+                      } else {
+                        setShowModal(false);
+                      }
+                    }}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name={configuringFood ? "arrow-back" : "close"} size={28} color={Colors.text} />
+                  </TouchableOpacity>
                 </View>
-              )}
 
-              {/* Save Button */}
-              <DuoButton
-                title="Save Meal"
-                onPress={saveMeal}
-                disabled={loading || selectedFoods.length === 0}
-                loading={loading}
-                color={Colors.primary}
-                size="large"
-                style={{ marginTop: 8 }}
-              />
-            </View>
+                <ScrollView
+                  style={styles.modalScrollView}
+                  contentContainerStyle={styles.modalScrollContent}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                {configuringFood ? (
+                  <View style={styles.configContainer}>
+                    <View style={styles.configHeader}>
+                      <Text style={styles.configTitle}>{configuringFood.name}</Text>
+                      <Text style={styles.configSubtitle}>
+                        {configuringFood.calories_per_100g} cal per 100g
+                      </Text>
+                    </View>
+
+                    <View style={styles.inputRow}>
+                      <View style={styles.qtyInputContainer}>
+                        <Text style={styles.qtyLabel}>Quantity</Text>
+                        <TextInput
+                          style={styles.qtyInput}
+                          value={configQty}
+                          onChangeText={setConfigQty}
+                          keyboardType="numeric"
+                          placeholder="0"
+                          placeholderTextColor={Colors.textLight}
+                          selectionColor={Colors.primary}
+                        />
+                      </View>
+                      <View style={styles.unitToggle}>
+                        <TouchableOpacity
+                          style={[styles.unitOption, configUnit === 'g' && styles.unitOptionActive]}
+                          onPress={() => {
+                            Haptics.selectionAsync();
+                            setConfigUnit('g');
+                          }}
+                        >
+                          <Text style={[styles.unitText, configUnit === 'g' && styles.unitTextActive]}>g</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.unitOption, configUnit === 'oz' && styles.unitOptionActive]}
+                          onPress={() => {
+                            Haptics.selectionAsync();
+                            setConfigUnit('oz');
+                          }}
+                        >
+                          <Text style={[styles.unitText, configUnit === 'oz' && styles.unitTextActive]}>oz</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    <View style={styles.macroPreview}>
+                      {[
+                        { label: 'Calories', value: getCalculatedMacros().calories, color: Colors.primary },
+                        { label: 'Protein', value: getCalculatedMacros().protein + 'g', color: Colors.protein },
+                        { label: 'Carbs', value: getCalculatedMacros().carbs + 'g', color: Colors.carbs },
+                        { label: 'Fat', value: getCalculatedMacros().fat + 'g', color: Colors.fat },
+                      ].map((macro, i) => (
+                        <View key={i} style={styles.macroCard}>
+                          <Text style={[styles.macroValue, { color: macro.color }]}>{macro.value}</Text>
+                          <Text style={styles.macroLabel}>{macro.label}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                ) : (
+                  <>
+                    {/* Voice Search Interaction */}
+                    <Animated.View style={[
+                      styles.voiceSearchCentered,
+                      { transform: [{ translateY: voiceTranslateY }] }
+                    ]}>
+                      {!voiceLoading ? (
+                        <>
+                          <View style={styles.voicePromptContainerCentered}>
+                            <Text style={styles.voicePromptTitle}>Tap to speak your meal</Text>
+                            <Text style={styles.voicePromptSub}>{"\"2 boiled eggs and a bowl of poha\""}</Text>
+                          </View>
+                          <TouchableOpacity
+                            style={[
+                              styles.micButtonLarge, 
+                              isRecording && styles.micButtonActive,
+                            ]}
+                            onPress={() => {
+                              if (isRecording) {
+                                stopVoiceRecordingAndParse();
+                              } else {
+                                startVoiceRecording();
+                              }
+                            }}
+                          >
+                            <Ionicons
+                              name={isRecording ? 'stop' : 'mic'}
+                              size={32}
+                              color={isRecording ? Colors.white : Colors.primary}
+                            />
+                          </TouchableOpacity>
+                        </>
+                      ) : (
+                        <View style={styles.processingContainer}>
+                          <ActivityIndicator size="large" color={Colors.primary} />
+                          <Text style={styles.processingText}>Analyzing your meal...</Text>
+                        </View>
+                      )}
+                    </Animated.View>
+
+                    {!voiceLoading && !!lastTranscript && (
+                      <View style={styles.transcriptContainer}>
+                        <Text style={styles.transcriptLabel}>Heard:</Text>
+                        <Text style={styles.transcriptText}>{"\""}{lastTranscript}{"\""}</Text>
+                      </View>
+                    )}
+
+                    {/* Search Results */}
+                    {searchResults.length > 0 && (
+                      <View style={styles.searchResults}>
+                        {searchResults.map((food, index) => (
+                          <TouchableOpacity
+                            key={index}
+                            style={styles.searchResultItem}
+                            onPress={() => handleFoodSelect(food)}
+                          >
+                            <View>
+                              <Text style={styles.foodName}>{food.name}</Text>
+                              <Text style={styles.foodInfo}>
+                                {food.calories_per_100g} cal • {food.protein_per_100g}g protein
+                              </Text>
+                            </View>
+                            <Ionicons name="add-circle" size={24} color={Colors.primary} />
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    {/* Selected Foods */}
+                    {selectedFoods.length > 0 && (
+                      <View style={styles.selectedFoodsContainer}>
+                        <Text style={styles.selectedTitle}>Selected Foods</Text>
+                        {selectedFoods.map((food, index) => (
+                          <View key={index} style={styles.selectedFoodItem}>
+                            <View style={styles.selectedFoodInfo}>
+                              <Text style={styles.selectedFoodName}>
+                                {food.name.split(' ').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                              </Text>
+                              <Text style={styles.selectedFoodDetails}>
+                                {food.displayQuantity || food.quantity} {food.displayUnit || 'g'} • {food.calories} CAL
+                              </Text>
+                            </View>
+                            <View style={styles.selectedFoodActions}>
+                              <TouchableOpacity 
+                                onPress={() => handleEditFood(index)}
+                                style={styles.actionButton}
+                              >
+                                <Ionicons name="pencil" size={20} color={Colors.primary} />
+                              </TouchableOpacity>
+                              <TouchableOpacity 
+                                onPress={() => removeFood(index)}
+                                style={styles.actionButton}
+                              >
+                                <Ionicons name="close-circle" size={24} color={Colors.error} />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </>
+                )}
+                </ScrollView>
+
+                {/* Sticky Footer */}
+                <View style={[styles.modalFooter, { marginTop: 'auto' }]}>
+                  {configuringFood ? (
+                    <View style={styles.actionRow}>
+                      <DuoButton
+                        title="Cancel"
+                        onPress={() => setConfiguringFood(null)}
+                        color={Colors.white}
+                        shadowColor={Colors.border}
+                        textStyle={{ color: Colors.text }}
+                        style={{ flex: 1 }}
+                      />
+                      <DuoButton
+                        title={editingIndex !== null ? "Update Food" : "Add Food"}
+                        onPress={confirmAddFood}
+                        color={Colors.primary}
+                        style={{ flex: 2 }}
+                      />
+                    </View>
+                  ) : (
+                    <DuoButton
+                      title="Save Meal"
+                      onPress={saveMeal}
+                      disabled={loading || selectedFoods.length === 0}
+                      loading={loading}
+                      color={Colors.primary}
+                      size="large"
+                    />
+                  )}
+                </View>
+              </View>
+            </KeyboardAvoidingView>
           </View>
         </Modal>
 
@@ -471,22 +766,46 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
   },
   modalContent: {
     backgroundColor: Colors.white,
-    borderTopLeftRadius: 36,
-    borderTopRightRadius: 36,
-    padding: 24,
-    paddingBottom: 40,
-    maxHeight: '90%',
-    borderTopWidth: 4,
-    borderTopColor: Colors.border,
+    borderRadius: 32,
+    paddingTop: 24,
+    paddingHorizontal: 0,
+    paddingBottom: 0,
+    maxHeight: '85%',
+    minHeight: 420,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 6,
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
+    paddingHorizontal: 24,
+  },
+  modalScrollView: {
+    flexGrow: 0, 
+    flexShrink: 1,
+  },
+  modalScrollContent: {
+    paddingHorizontal: 24,
+    paddingBottom: 12,
+  },
+  modalFooter: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 24,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+    backgroundColor: Colors.white,
   },
   modalTitle: {
     fontSize: 22,
@@ -513,8 +832,89 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontWeight: '700',
   },
+  voiceSearchCentered: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 32,
+    padding: 32,
+    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 8,
+    gap: 20,
+  },
+  voicePromptContainerCentered: {
+    alignItems: 'center',
+  },
+  voicePromptTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: Colors.text,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  voicePromptSub: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontWeight: '700',
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  micButtonLarge: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.white,
+    borderWidth: 3,
+    borderColor: Colors.border,
+    borderBottomWidth: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  transcriptContainer: {
+    backgroundColor: Colors.primary + '08',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: Colors.primary + '20',
+  },
+  transcriptLabel: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: Colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  transcriptText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text,
+    fontStyle: 'italic',
+  },
+  micButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.white,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  micButtonActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  micButtonDisabled: {
+    backgroundColor: Colors.backgroundSecondary,
+    borderColor: Colors.border,
+    opacity: 0.6,
+  },
   searchResults: {
-    maxHeight: 250,
     marginBottom: 20,
   },
   searchResultItem: {
@@ -578,5 +978,142 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontWeight: '700',
     textTransform: 'uppercase',
+  },
+  selectedFoodActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionButton: {
+    padding: 4,
+  },
+  processingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    gap: 16,
+  },
+  processingText: {
+    color: Colors.primary,
+    fontWeight: '900',
+    fontSize: 18,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  configContainer: {
+    gap: 20,
+    marginBottom: 20,
+  },
+  configHeader: {
+    marginBottom: 4,
+  },
+  configTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  configSubtitle: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontWeight: '700',
+  },
+  inputRow: {
+    flexDirection: 'row',
+    gap: 12,
+    height: 72,
+  },
+  qtyInputContainer: {
+    flex: 1,
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    justifyContent: 'center',
+  },
+  qtyLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  qtyInput: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: Colors.text,
+    height: 32,
+    padding: 0,
+  },
+  unitToggle: {
+    flexDirection: 'row',
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 20,
+    padding: 6,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    alignItems: 'center',
+  },
+  unitOption: {
+    paddingHorizontal: 20,
+    height: '100%',
+    justifyContent: 'center',
+    borderRadius: 14,
+  },
+  unitOptionActive: {
+    backgroundColor: Colors.white,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  unitText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.textLight,
+  },
+  unitTextActive: {
+    color: Colors.primary,
+  },
+  macroPreview: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  macroCard: {
+    flex: 1,
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.border,
+  },
+  macroValue: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  macroLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+  },
+  voiceHint: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
   },
 });

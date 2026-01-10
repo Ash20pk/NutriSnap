@@ -104,6 +104,16 @@ export default function CameraScreen() {
         return;
       }
 
+      const presence = await mealApi.hasFood(photo.base64, user.id);
+      if (presence && presence.has_food === false) {
+        Alert.alert(
+          'No Food Detected',
+          'We could not detect food in the frame. Please adjust the camera and try again.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
       const analysis = await mealApi.logPhoto(photo.base64, user.id);
 
       if (analysis.foods && analysis.foods.length > 0) {

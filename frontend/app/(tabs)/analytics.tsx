@@ -31,6 +31,7 @@ export default function AnalyticsScreen() {
   const [macroDistribution, setMacroDistribution] = useState<any[]>([]);
   const [mealTypeBreakdown, setMealTypeBreakdown] = useState<any>({});
   const [averages, setAverages] = useState<any>({});
+  const [microAverages, setMicroAverages] = useState<any>({});
   const [topFoods, setTopFoods] = useState<any[]>([]);
   const [ingredientInsights, setIngredientInsights] = useState<any[]>([]);
   const [bioImpact, setBioImpact] = useState<any>({
@@ -376,6 +377,16 @@ export default function AnalyticsScreen() {
   const calculateAverages = useCallback((meals: any[]) => {
     if (meals.length === 0) {
       setAverages({ calories: 0, protein: 0, carbs: 0, fat: 0, mealsPerDay: 0 });
+      setMicroAverages({
+        sodium_mg: 0,
+        sugar_g: 0,
+        fiber_g: 0,
+        saturated_fat_g: 0,
+        potassium_mg: 0,
+        calcium_mg: 0,
+        iron_mg: 0,
+        vitamin_c_mg: 0,
+      });
       return;
     }
 
@@ -400,6 +411,38 @@ export default function AnalyticsScreen() {
       consistencyScore,
       isHighProtein: (totalProtein / (totalProtein + totalCarbs + totalFat || 1)) > 0.3,
       isUnderTarget: Math.round(totalCalories / daysForAverage) < calorieTarget,
+    });
+
+    let sodiumMg = 0;
+    let sugarG = 0;
+    let fiberG = 0;
+    let saturatedFatG = 0;
+    let potassiumMg = 0;
+    let calciumMg = 0;
+    let ironMg = 0;
+    let vitaminCMg = 0;
+
+    meals.forEach((m: any) => {
+      const micros = m?.micros || {};
+      sodiumMg += Number(micros.sodium_mg || 0);
+      sugarG += Number(micros.sugar_g || 0);
+      fiberG += Number(micros.fiber_g || 0);
+      saturatedFatG += Number(micros.saturated_fat_g || 0);
+      potassiumMg += Number(micros.potassium_mg || 0);
+      calciumMg += Number(micros.calcium_mg || 0);
+      ironMg += Number(micros.iron_mg || 0);
+      vitaminCMg += Number(micros.vitamin_c_mg || 0);
+    });
+
+    setMicroAverages({
+      sodium_mg: Math.round(sodiumMg / daysForAverage),
+      sugar_g: Math.round(sugarG / daysForAverage),
+      fiber_g: Math.round(fiberG / daysForAverage),
+      saturated_fat_g: Math.round(saturatedFatG / daysForAverage),
+      potassium_mg: Math.round(potassiumMg / daysForAverage),
+      calcium_mg: Math.round(calciumMg / daysForAverage),
+      iron_mg: Math.round(ironMg / daysForAverage),
+      vitamin_c_mg: Math.round(vitaminCMg / daysForAverage),
     });
   }, [timeRange, user?.daily_calorie_target]);
 
@@ -537,6 +580,54 @@ export default function AnalyticsScreen() {
               <Ionicons name="water" size={28} color={Colors.fat} />
               <Text style={styles.statValue}>{averages.fat || 0}g</Text>
               <Text style={styles.statLabel}>Fat</Text>
+            </View>
+          </View>
+        </AnimatedCard>
+
+        <AnimatedCard delay={150} type="slide" style={styles.section}>
+          <Text style={styles.sectionTitle}>Micronutrients (Daily Avg)</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Ionicons name="water-outline" size={28} color={Colors.text} />
+              <Text style={styles.statValue}>{microAverages.sodium_mg || 0}</Text>
+              <Text style={styles.statLabel}>Sodium (mg)</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="cafe-outline" size={28} color={Colors.text} />
+              <Text style={styles.statValue}>{microAverages.sugar_g || 0}</Text>
+              <Text style={styles.statLabel}>Sugar (g)</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="leaf-outline" size={28} color={Colors.text} />
+              <Text style={styles.statValue}>{microAverages.fiber_g || 0}</Text>
+              <Text style={styles.statLabel}>Fiber (g)</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="flame-outline" size={28} color={Colors.text} />
+              <Text style={styles.statValue}>{microAverages.saturated_fat_g || 0}</Text>
+              <Text style={styles.statLabel}>Sat Fat (g)</Text>
+            </View>
+          </View>
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Ionicons name="battery-charging-outline" size={28} color={Colors.text} />
+              <Text style={styles.statValue}>{microAverages.potassium_mg || 0}</Text>
+              <Text style={styles.statLabel}>Potassium (mg)</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="nutrition-outline" size={28} color={Colors.text} />
+              <Text style={styles.statValue}>{microAverages.calcium_mg || 0}</Text>
+              <Text style={styles.statLabel}>Calcium (mg)</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="pulse-outline" size={28} color={Colors.text} />
+              <Text style={styles.statValue}>{microAverages.iron_mg || 0}</Text>
+              <Text style={styles.statLabel}>Iron (mg)</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="sunny-outline" size={28} color={Colors.text} />
+              <Text style={styles.statValue}>{microAverages.vitamin_c_mg || 0}</Text>
+              <Text style={styles.statLabel}>Vitamin C (mg)</Text>
             </View>
           </View>
         </AnimatedCard>
