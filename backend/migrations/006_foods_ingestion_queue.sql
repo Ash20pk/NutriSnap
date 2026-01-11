@@ -27,5 +27,5 @@ CREATE INDEX IF NOT EXISTS idx_queue_query_lower
 
 COMMENT ON TABLE foods_ingestion_queue IS 'Queue for async enrichment of user-requested foods via USDA/external APIs';
 COMMENT ON COLUMN foods_ingestion_queue.query IS 'Normalized food name used for external API search';
-COMMENT ON COLUMN foods_ingestion_queue.status IS 'pending|processing|done|error';
+COMMENT ON COLUMN foods_ingestion_queue.status IS 'pending|ready|processing|error (successful items are deleted)';
 COMMENT ON COLUMN foods_ingestion_queue.next_attempt_at IS 'For exponential backoff on errors';

@@ -1020,11 +1020,11 @@ async def detect_food_presence(image_base64: str) -> FoodPresenceResponse:
 def _normalize_food_name(name: str) -> str:
     """Normalize food name by removing serving size indicators and common prefixes.
     Examples:
-    - 'bowl of rice' -> 'rice'
-    - 'plate of pasta' -> 'pasta'
-    - 'cup of coffee' -> 'coffee'
-    - 'glass of milk' -> 'milk'
-    - 'piece of chicken' -> 'chicken'
+    - 'bowl of rice' -> 'Rice'
+    - 'plate of pasta' -> 'Pasta'
+    - 'cup of coffee' -> 'Coffee'
+    - 'glass of milk' -> 'Milk'
+    - 'piece of chicken' -> 'Chicken'
     """
     normalized = name.lower().strip()
     
@@ -1042,7 +1042,10 @@ def _normalize_food_name(name: str) -> str:
     # Remove leading/trailing articles
     normalized = re.sub(r'^\b(a|an|the)\s+', '', normalized, flags=re.IGNORECASE)
     
-    return normalized.strip()
+    # Apply title case for consistent capitalization
+    normalized = normalized.strip().title()
+    
+    return normalized
 
 
 async def _validate_and_estimate_food(query: str) -> Dict[str, Any]:
@@ -1702,6 +1705,20 @@ async def log_meal(meal_data: MealLogCreate, uid: str = Depends(get_current_uid)
                     "UPDATE foods SET last_used_at = now() WHERE id = ANY($1::uuid[])",
                     food_ids,
                 )
+                
+                # Mark pending foods as approved and queue items as ready when meal is saved
+                # This allows immediate enrichment without waiting for finalize endpoint
+                approved_count = await conn.execute(
+                    "UPDATE foods SET review_status = 'approved' WHERE id = ANY($1::uuid[]) AND review_status = 'pending_review'",
+                    food_ids,
+                )
+                
+                ready_count = await conn.execute(
+                    "UPDATE foods_ingestion_queue SET status = 'ready', updated_at = now() WHERE food_id = ANY($1::uuid[]) AND status = 'pending'",
+                    food_ids,
+                )
+                
+                logger.info(f"[LOG_MEAL] Auto-approved {approved_count} pending foods, marked {ready_count} queue items as ready")
 
         if not row:
             logger.error(f"[LOG_MEAL] Failed to insert meal - no row returned")
@@ -1768,18 +1785,18 @@ async def finalize_pending_meal(request: FinalizeMealRequest, uid: str = Depends
                     update.name.strip(),
                 )
                 
-                # Update queue query if name changed
+                # Mark queue item as ready for processing (user has confirmed)
                 await conn.execute(
                     """
                     UPDATE foods_ingestion_queue
-                    SET query = $2, updated_at = now()
-                    WHERE food_id = $1
+                    SET query = $2, status = 'ready', updated_at = now()
+                    WHERE food_id = $1 AND status = 'pending'
                     """,
                     food_id,
                     update.name.strip(),
                 )
                 
-                logger.info(f"User confirmed food: {update.name} (food_id={update.food_id})")
+                logger.info(f"User confirmed food: {update.name} (food_id={update.food_id}), queue marked as ready")
         
         # Update meal foods with new quantities if changed
         foods_json = json.loads(meal["foods"]) if isinstance(meal["foods"], str) else meal["foods"]
@@ -2036,7 +2053,7 @@ async def admin_foods_sync(
                    q.id as queue_id, q.query, q.attempt_count
             FROM foods f
             JOIN foods_ingestion_queue q ON q.food_id = f.id
-            WHERE q.status = 'pending'
+            WHERE q.status = 'ready'
                OR (q.status = 'error' AND (q.next_attempt_at IS NULL OR q.next_attempt_at <= now()))
             ORDER BY q.created_at ASC
             LIMIT $1
@@ -2421,6 +2438,8 @@ async def admin_foods_sync(
                         data_type = COALESCE($20, data_type),
                         publication_date = COALESCE($21, publication_date),
                         is_generic = COALESCE($22, is_generic),
+                        review_status = 'approved',
+                        verified = true,
                         sync_status = 'ok',
                         sync_error = NULL,
                         retry_count = 0,
@@ -2490,13 +2509,14 @@ async def admin_foods_sync(
 
                 ok += 1
                 
-                # Mark queue item as done if this was a queued food
+                # Delete queue item after successful enrichment (move from queue to foods table)
                 queue_id = r.get("queue_id")
                 if queue_id:
                     await conn.execute(
-                        "UPDATE foods_ingestion_queue SET status='done', updated_at=now() WHERE id=$1",
+                        "DELETE FROM foods_ingestion_queue WHERE id=$1",
                         queue_id,
                     )
+                    logger.info(f"Deleted queue item {queue_id} after successful enrichment")
                     
             except httpx.HTTPStatusError as e:
                 failed += 1

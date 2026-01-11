@@ -38,7 +38,6 @@ export default function LogScreen() {
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const [lastTranscript, setLastTranscript] = useState<string>('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [selectedFoods, setSelectedFoods] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -81,7 +80,6 @@ export default function LogScreen() {
       setVoiceLoading(false);
       setIsRecording(false);
       setRecording(null);
-      setLastTranscript('');
     }
   }, [showModal]);
 
@@ -141,7 +139,6 @@ export default function LogScreen() {
 
       setRecording(rec);
       setIsRecording(true);
-      setLastTranscript('');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     } catch (e) {
       console.error('Failed to start recording:', e);
@@ -171,11 +168,9 @@ export default function LogScreen() {
 
       const result = await mealApi.voiceToMeal(uri, user.id);
       const foods = result?.foods || [];
-      const transcript = result?.transcript || '';
 
-      setLastTranscript(transcript);
       if (foods.length === 0) {
-        Alert.alert('No foods detected', transcript ? `Heard: ${transcript}` : 'Try speaking again');
+        Alert.alert('No foods detected', 'Try speaking again');
         return;
       }
 
@@ -559,13 +554,6 @@ export default function LogScreen() {
                       )}
                     </Animated.View>
 
-                    {!voiceLoading && !!lastTranscript && (
-                      <View style={styles.transcriptContainer}>
-                        <Text style={styles.transcriptLabel}>Heard:</Text>
-                        <Text style={styles.transcriptText}>{"\""}{lastTranscript}{"\""}</Text>
-                      </View>
-                    )}
-
                     {/* Search Results */}
                     {searchResults.length > 0 && (
                       <View style={styles.searchResults}>
@@ -871,28 +859,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 6,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  transcriptContainer: {
-    backgroundColor: Colors.primary + '08',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: Colors.primary + '20',
-  },
-  transcriptLabel: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: Colors.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  transcriptText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.text,
-    fontStyle: 'italic',
   },
   micButton: {
     width: 36,
