@@ -1844,25 +1844,33 @@ async def finalize_pending_meal(request: FinalizeMealRequest, uid: str = Depends
 
 
 @api_router.get("/meals/history/{user_id}")
-async def get_meal_history(user_id: str, days: int = 7, uid: str = Depends(get_current_uid)):
-    """Get meal history for user"""
+async def get_meal_history(
+    user_id: str, 
+    days: int = 7, 
+    timezone_offset: int = 0,  # Offset in minutes from UTC (e.g., IST = 330)
+    uid: str = Depends(get_current_uid)
+):
+    """Get meal history for user in their local timezone"""
     _require_user_match(uid, user_id)
     if days < 1 or days > 3650:
         raise HTTPException(status_code=400, detail="Invalid days")
 
     pool = _require_pool()
     async with pool.acquire() as conn:
+        # Calculate cutoff time in user's timezone
+        # Convert user's "now" to UTC for comparison
         rows = await conn.fetch(
             """
             SELECT *
             FROM meals
             WHERE user_id = $1
-              AND timestamp >= (now() - make_interval(days => $2::int))
+              AND timestamp >= (now() AT TIME ZONE 'UTC' + make_interval(mins => $3::int) - make_interval(days => $2::int))
             ORDER BY timestamp DESC
             LIMIT 1000
             """,
             _uuid(user_id),
             int(days),
+            int(timezone_offset),
         )
 
         meals = [_meal_from_record(r) for r in rows]
@@ -1955,10 +1963,20 @@ async def get_meal_history(user_id: str, days: int = 7, uid: str = Depends(get_c
 
 
 @api_router.get("/meals/stats/{user_id}")
-async def get_daily_stats(user_id: str, date: str = None, uid: str = Depends(get_current_uid)):
-    """Get nutrition stats for a specific day"""
+async def get_daily_stats(
+    user_id: str, 
+    date: str = None, 
+    timezone_offset: int = 0,  # Offset in minutes from UTC (e.g., IST = 330)
+    uid: str = Depends(get_current_uid)
+):
+    """Get nutrition stats for a specific day in user's local timezone"""
     _require_user_match(uid, user_id)
-    target_date = datetime.now(timezone.utc)
+    
+    # Get current time in user's timezone
+    utc_now = datetime.now(timezone.utc)
+    user_now = utc_now + timedelta(minutes=timezone_offset)
+    
+    target_date = user_now
     try:
         if date:
             date_str = date.strip()
@@ -1966,14 +1984,20 @@ async def get_daily_stats(user_id: str, date: str = None, uid: str = Depends(get
                 date_str = date_str[:-1] + "+00:00"
             target_date = datetime.fromisoformat(date_str)
             if target_date.tzinfo is None:
-                target_date = target_date.replace(tzinfo=timezone.utc)
+                # Assume date is in user's timezone
+                target_date = target_date.replace(tzinfo=timezone.utc) + timedelta(minutes=timezone_offset)
             else:
                 target_date = target_date.astimezone(timezone.utc)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid date")
 
-    start_of_day = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_of_day = target_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+    # Calculate day boundaries in user's timezone, then convert to UTC for query
+    start_of_day_user = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_day_user = target_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+    
+    # Convert back to UTC for database query
+    start_of_day = start_of_day_user - timedelta(minutes=timezone_offset)
+    end_of_day = end_of_day_user - timedelta(minutes=timezone_offset)
 
     pool = _require_pool()
     async with pool.acquire() as conn:

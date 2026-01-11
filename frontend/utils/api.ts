@@ -180,12 +180,16 @@ export const mealApi = {
     return response.data;
   },
   getHistory: async (userId: string, days: number = 7) => {
-    const response = await api.get(`/meals/history/${userId}?days=${days}`);
+    // Get timezone offset in minutes (e.g., IST = 330, EST = -300)
+    const timezoneOffset = -new Date().getTimezoneOffset();
+    const response = await api.get(`/meals/history/${userId}?days=${days}&timezone_offset=${timezoneOffset}`);
     return response.data;
   },
   getStats: async (userId: string, date?: string) => {
-    const dateParam = date ? `?date=${date}` : '';
-    const response = await api.get(`/meals/stats/${userId}${dateParam}`);
+    // Get timezone offset in minutes
+    const timezoneOffset = -new Date().getTimezoneOffset();
+    const dateParam = date ? `date=${date}&` : '';
+    const response = await api.get(`/meals/stats/${userId}?${dateParam}timezone_offset=${timezoneOffset}`);
     return response.data;
   },
 };
