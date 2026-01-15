@@ -3559,16 +3559,141 @@ async def get_active_users(x_admin_key: Optional[str] = Header(None)):
         return {"active_users": user_ids}
 
 
-@api_router.post("/chef/generate")
-async def generate_recipe(request: dict, uid: str = Depends(get_current_uid)):
-    """Generate personalized recipe using AI"""
+# =====================
+# CHEF API MODELS
+# =====================
+
+class ChefGenerateRequest(BaseModel):
+    user_id: str
+    ingredients: List[str] = Field(default_factory=list)
+    goals: List[str] = Field(default_factory=list)
+    cuisine: Optional[str] = None
+    dietary_preference: Optional[str] = None
+    target_meal: Optional[str] = None
+
+
+class RecipeResponse(BaseModel):
+    name: str
+    description: str
+    prepTime: int = 0
+    servings: int = 1
+    calories: float = 0
+    protein: float = 0
+    carbs: float = 0
+    fat: float = 0
+    fiber: Optional[float] = None
+    ingredients: List[str] = Field(default_factory=list)
+    instructions: List[str] = Field(default_factory=list)
+    tips: Optional[str] = None
+
+
+async def _get_nutritional_gaps(conn: asyncpg.Connection, user_id: str, timezone_offset: int = 0) -> str:
+    """Calculate nutritional gaps from today's meals for the given user."""
     try:
-        _ = uid
+        rows = await conn.fetch(
+            """
+            SELECT total_calories, total_protein, total_carbs, total_fat
+            FROM meals
+            WHERE user_id = $1
+              AND timestamp >= (now() AT TIME ZONE 'UTC' + make_interval(mins => $2::int) - INTERVAL '1 day')
+            """,
+            _uuid(user_id),
+            int(timezone_offset),
+        )
+        
+        totals = {"protein": 0, "carbs": 0, "fat": 0, "calories": 0}
+        for r in rows:
+            totals["protein"] += float(r["total_protein"] or 0)
+            totals["carbs"] += float(r["total_carbs"] or 0)
+            totals["fat"] += float(r["total_fat"] or 0)
+            totals["calories"] += float(r["total_calories"] or 0)
+        
+        gaps = []
+        if totals["protein"] < 50:
+            gaps.append("protein")
+        if totals["carbs"] < 100:
+            gaps.append("carbs")
+        if totals["fat"] < 20:
+            gaps.append("healthy fats")
+        if totals["calories"] < 1200:
+            gaps.append("calories")
+        
+        return ", ".join(gaps) if gaps else "None identified"
+    except Exception as e:
+        logger.warning(f"Error calculating nutritional gaps: {e}")
+        return "None identified"
+
+
+def _build_chef_prompt(request: ChefGenerateRequest, user_profile: Optional[dict], nutritional_gaps: str) -> str:
+    """Build the AI prompt for recipe generation."""
+    profile_context = ""
+    if user_profile:
+        goal = user_profile.get("goal", "")
+        dietary = user_profile.get("dietary_preference", "")
+        if goal:
+            profile_context += f"\nUser's Health Goal: {goal}"
+        if dietary:
+            profile_context += f"\nUser's Dietary Preference: {dietary}"
+    
+    return f"""As a professional chef and nutritionist, create a personalized recipe based on:
+
+Available Ingredients: {', '.join(request.ingredients) if request.ingredients else 'Any common ingredients'}
+Health Goals: {', '.join(request.goals) if request.goals else 'General health'}
+Preferred Cuisine: {request.cuisine or 'Any'}
+Dietary Preference: {request.dietary_preference or 'No restriction'}
+Target Meal Type: {request.target_meal or 'Any meal'}
+Nutritional Gaps to Address: {nutritional_gaps}
+{profile_context}
+
+Requirements:
+- Use only the listed ingredients or suggest minimal additions
+- Focus on Indian cuisine when possible
+- Provide clear, step-by-step instructions
+- Include prep time and servings
+- Calculate approximate nutritional values per serving
+- Add cooking tips for beginners
+
+Format response as JSON with these exact keys:
+{{
+  "name": "Recipe Name",
+  "description": "Brief description",
+  "prepTime": 30,
+  "servings": 2,
+  "calories": 350,
+  "protein": 25,
+  "carbs": 40,
+  "fat": 12,
+  "fiber": 5,
+  "ingredients": ["ingredient 1", "ingredient 2"],
+  "instructions": ["Step 1", "Step 2"],
+  "tips": "Cooking tips"
+}}"""
+
+
+@api_router.post("/chef/generate")
+async def generate_recipe(request: ChefGenerateRequest, uid: str = Depends(get_current_uid)):
+    """Generate personalized recipe using AI with structured input."""
+    try:
+        _require_user_match(uid, request.user_id)
+        
         if openai_client is None:
             raise RuntimeError("OPENAI_API_KEY is not set")
-
-        prompt = request.get("prompt", "")
-
+        
+        pool = _require_pool()
+        async with pool.acquire() as conn:
+            # Fetch user profile for context
+            profile_row = await conn.fetchrow(
+                "SELECT goal, dietary_preference FROM profiles WHERE id = $1",
+                _uuid(request.user_id)
+            )
+            user_profile = dict(profile_row) if profile_row else None
+            
+            # Calculate nutritional gaps server-side
+            nutritional_gaps = await _get_nutritional_gaps(conn, request.user_id)
+        
+        # Build the prompt
+        prompt = _build_chef_prompt(request, user_profile, nutritional_gaps)
+        
         response = await openai_client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=[
@@ -3585,10 +3710,148 @@ async def generate_recipe(request: dict, uid: str = Depends(get_current_uid)):
         content = response.choices[0].message.content if response.choices else ""
         extracted = _extract_json_from_text(content)
         recipe = json.loads(extracted)
-        return {"recipe": recipe}
+        
+        return {
+            "recipe": recipe,
+            "nutritional_gaps_addressed": nutritional_gaps
+        }
     except Exception as e:
         logger.error(f"Error generating recipe: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =====================
+# SAVED RECIPES API
+# =====================
+
+class SaveRecipeRequest(BaseModel):
+    user_id: str
+    recipe_data: Dict[str, Any]
+    source: str = "chef"
+
+
+@api_router.post("/recipes/save")
+async def save_recipe(request: SaveRecipeRequest, uid: str = Depends(get_current_uid)):
+    """Save a recipe for later use."""
+    _require_user_match(uid, request.user_id)
+    
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO saved_recipes (user_id, recipe_data, source)
+            VALUES ($1, $2, $3)
+            RETURNING id, created_at
+            """,
+            _uuid(request.user_id),
+            json.dumps(request.recipe_data),
+            request.source,
+        )
+        return {
+            "id": str(row["id"]),
+            "created_at": row["created_at"].isoformat(),
+            "message": "Recipe saved successfully"
+        }
+
+
+@api_router.get("/recipes/saved/{user_id}")
+async def get_saved_recipes(user_id: str, uid: str = Depends(get_current_uid)):
+    """Get all saved recipes for a user."""
+    _require_user_match(uid, user_id)
+    
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, recipe_data, source, is_favorite, times_cooked, created_at, updated_at
+            FROM saved_recipes
+            WHERE user_id = $1
+            ORDER BY created_at DESC
+            """,
+            _uuid(user_id),
+        )
+        
+        recipes = []
+        for r in rows:
+            recipe_data = r["recipe_data"]
+            if isinstance(recipe_data, str):
+                try:
+                    recipe_data = json.loads(recipe_data)
+                except Exception:
+                    recipe_data = {}
+            
+            recipes.append({
+                "id": str(r["id"]),
+                "recipe": recipe_data,
+                "source": r["source"],
+                "is_favorite": r["is_favorite"],
+                "times_cooked": r["times_cooked"],
+                "created_at": r["created_at"].isoformat(),
+                "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None,
+            })
+        
+        return {"recipes": recipes, "count": len(recipes)}
+
+
+@api_router.delete("/recipes/{recipe_id}")
+async def delete_saved_recipe(recipe_id: str, uid: str = Depends(get_current_uid)):
+    """Delete a saved recipe."""
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        # Verify ownership
+        owner = await conn.fetchval(
+            "SELECT user_id FROM saved_recipes WHERE id = $1",
+            _uuid(recipe_id)
+        )
+        if not owner:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+        _require_user_match(uid, str(owner))
+        
+        await conn.execute("DELETE FROM saved_recipes WHERE id = $1", _uuid(recipe_id))
+        return {"message": "Recipe deleted"}
+
+
+@api_router.put("/recipes/{recipe_id}/favorite")
+async def toggle_recipe_favorite(recipe_id: str, uid: str = Depends(get_current_uid)):
+    """Toggle favorite status of a saved recipe."""
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        # Verify ownership and toggle
+        row = await conn.fetchrow(
+            """
+            UPDATE saved_recipes
+            SET is_favorite = NOT is_favorite, updated_at = now()
+            WHERE id = $1
+            RETURNING user_id, is_favorite
+            """,
+            _uuid(recipe_id)
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+        _require_user_match(uid, str(row["user_id"]))
+        
+        return {"is_favorite": row["is_favorite"]}
+
+
+@api_router.put("/recipes/{recipe_id}/cooked")
+async def increment_times_cooked(recipe_id: str, uid: str = Depends(get_current_uid)):
+    """Increment the times_cooked counter for a recipe."""
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE saved_recipes
+            SET times_cooked = times_cooked + 1, updated_at = now()
+            WHERE id = $1
+            RETURNING user_id, times_cooked
+            """,
+            _uuid(recipe_id)
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+        _require_user_match(uid, str(row["user_id"]))
+        
+        return {"times_cooked": row["times_cooked"]}
 
 
 # Include router

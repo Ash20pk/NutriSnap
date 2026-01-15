@@ -218,9 +218,42 @@ export const analyticsApi = {
 };
 
 // Chef API
+export interface ChefGenerateRequest {
+  user_id: string;
+  ingredients: string[];
+  goals: string[];
+  cuisine?: string;
+  dietary_preference?: string;
+  target_meal?: string;
+}
+
 export const chefApi = {
-  generate: async (prompt: string) => {
-    const response = await api.post('/chef/generate', { prompt });
+  generate: async (request: ChefGenerateRequest) => {
+    const response = await api.post('/chef/generate', request);
+    return response.data;
+  },
+};
+
+// Recipe API (Saved Recipes)
+export const recipeApi = {
+  save: async (userId: string, recipeData: any, source: string = 'chef') => {
+    const response = await api.post('/recipes/save', { user_id: userId, recipe_data: recipeData, source });
+    return response.data;
+  },
+  getSaved: async (userId: string) => {
+    const response = await api.get(`/recipes/saved/${userId}`);
+    return response.data;
+  },
+  delete: async (recipeId: string) => {
+    const response = await api.delete(`/recipes/${recipeId}`);
+    return response.data;
+  },
+  toggleFavorite: async (recipeId: string) => {
+    const response = await api.put(`/recipes/${recipeId}/favorite`);
+    return response.data;
+  },
+  markCooked: async (recipeId: string) => {
+    const response = await api.put(`/recipes/${recipeId}/cooked`);
     return response.data;
   },
 };

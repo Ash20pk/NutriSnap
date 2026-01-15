@@ -1,5 +1,6 @@
-import React from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -7,23 +8,35 @@ interface PageHeaderProps {
   title: string;
   subtitle?: string;
   rightComponent?: React.ReactNode;
+  showBack?: boolean;
 }
 
-export default function PageHeader({ title, subtitle, rightComponent }: PageHeaderProps) {
+export default function PageHeader({ title, subtitle, rightComponent, showBack }: PageHeaderProps) {
   const insets = useSafeAreaInsets();
-  
+
   return (
     <View style={[
       styles.container,
-      { 
+      {
         paddingTop: Platform.OS === 'ios' ? insets.top + 12 : insets.top + 20,
         paddingBottom: 16
       }
     ]}>
       <View style={styles.content}>
-        <View style={styles.leftContent}>
-          <Text style={styles.title}>{title}</Text>
-          {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+        <View style={styles.leftRow}>
+          {showBack && (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-back" size={24} color={Colors.text} />
+            </TouchableOpacity>
+          )}
+          <View style={styles.textContainer}>
+            <Text style={styles.title}>{title}</Text>
+            {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+          </View>
         </View>
         {rightComponent && <View style={styles.rightContent}>{rightComponent}</View>}
       </View>
@@ -42,7 +55,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 12,
   },
-  leftContent: {
+  leftRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textContainer: {
     flex: 1,
   },
   rightContent: {

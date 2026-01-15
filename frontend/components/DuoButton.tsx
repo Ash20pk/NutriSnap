@@ -7,13 +7,13 @@ import {
   ViewStyle,
   TextStyle,
   Animated,
-  // Platform,
 } from 'react-native';
 import { Colors } from '../constants/Colors';
 import * as Haptics from 'expo-haptics';
 
 interface DuoButtonProps {
   title: string;
+  subtitle?: string;
   onPress: () => void;
   color?: string;
   shadowColor?: string;
@@ -27,6 +27,7 @@ interface DuoButtonProps {
 
 export default function DuoButton({
   title,
+  subtitle,
   onPress,
   color = Colors.primary,
   shadowColor,
@@ -68,11 +69,11 @@ export default function DuoButton({
 
   const handlePress = () => {
     if (disabled || loading) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
     onPress();
   };
 
-  const paddingVertical = size === 'small' ? 8 : size === 'medium' ? 14 : 18;
+  const paddingVertical = size === 'small' ? 8 : (subtitle ? 10 : (size === 'medium' ? 14 : 18));
   const fontSize = size === 'small' ? 14 : size === 'medium' ? 16 : 18;
 
   return (
@@ -104,9 +105,14 @@ export default function DuoButton({
         >
           <View style={styles.contentRow}>
             <View style={styles.leftIconSlot}>{loading ? null : leftIcon}</View>
-            <Text style={[styles.text, { fontSize }, textStyle]}>
-              {loading ? '...' : title}
-            </Text>
+            <View style={styles.textColumn}>
+              <Text style={[styles.text, { fontSize }, textStyle]}>
+                {loading ? '...' : title}
+              </Text>
+              {subtitle && !loading && (
+                <Text style={styles.subtitle}>{subtitle}</Text>
+              )}
+            </View>
             <View style={styles.rightIconSlot} />
           </View>
         </TouchableOpacity>
@@ -130,6 +136,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
   },
+  textColumn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   leftIconSlot: {
     width: 22,
     alignItems: 'center',
@@ -151,6 +161,14 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     textTransform: 'uppercase',
     letterSpacing: 1,
+  },
+  subtitle: {
+    color: Colors.white,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    opacity: 0.9,
+    marginTop: 2,
   },
   disabled: {
     opacity: 0.5,
