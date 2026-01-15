@@ -194,6 +194,29 @@ export const mealApi = {
   },
 };
 
+// Analytics API
+export const analyticsApi = {
+  getAnalytics: async (userId: string, timeRange: 'week' | 'month' | 'year' = 'week') => {
+    const response = await api.get(`/analytics/${userId}?time_range=${timeRange}`);
+    return response.data;
+  },
+  getAnalyticsBundle: async (
+    userId: string,
+    timeRange: 'week' | 'month' | 'year' = 'week',
+    timezoneOffset?: number
+  ) => {
+    const tz = typeof timezoneOffset === 'number' ? timezoneOffset : -new Date().getTimezoneOffset();
+    const response = await api.get(
+      `/analytics/${userId}/bundle?time_range=${timeRange}&timezone_offset=${tz}`
+    );
+    return response.data;
+  },
+  refreshAnalytics: async (userId: string, timeRange: 'week' | 'month' | 'year' = 'week') => {
+    const response = await api.post(`/analytics/${userId}/refresh?time_range=${timeRange}`);
+    return response.data;
+  },
+};
+
 // Chef API
 export const chefApi = {
   generate: async (prompt: string) => {

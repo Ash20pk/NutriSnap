@@ -2,7 +2,7 @@
 
 ## Overview
 
-NutriSnap is a mobile nutrition tracking application built with Expo (React Native) that uses AI-powered food recognition with coin calibration for accurate portion sizes. The app specializes in Indian cuisine and provides comprehensive nutrition tracking with an intuitive, modern UI.
+NutriSnap is a mobile nutrition tracking application built with Expo (React Native) and a FastAPI backend. It supports AI-assisted meal logging, nutrition tracking (macros + micronutrients), and an Analytics dashboard powered by cost-effective AI analysis with caching.
 
 ## Features
 
@@ -66,40 +66,39 @@ NutriSnap is a mobile nutrition tracking application built with Expo (React Nati
 
 ### Backend
 - **Framework**: FastAPI (Python)
-- **Database**: MongoDB (with Motor async driver)
-- **AI**: OpenAI GPT-4 Vision API
+- **Database**: Supabase Postgres (asyncpg)
+- **AI**: OpenAI (chat + vision), with a cheaper model for analytics (configurable)
 - **Image Processing**: Pillow
+- **External Data**: USDA FoodData Central (optional enrichment)
 
 ## Project Structure
 
 ```
-/app
+NutriSnap/
 ├── backend/
-│   ├── server.py              # Main FastAPI application
-│   ├── requirements.txt       # Python dependencies
-│   └── .env                   # Environment variables
+│   ├── server.py                      # FastAPI app (API + analytics)
+│   ├── analytics_ai.py                # AI analytics prompt + schema
+│   ├── migrations/                    # SQL migrations (Supabase Postgres)
+│   └── requirements.txt               # Python dependencies
 ├── frontend/
 │   ├── app/
 │   │   ├── (tabs)/
-│   │   │   ├── _layout.tsx   # Tab navigation layout
-│   │   │   ├── home.tsx      # Dashboard screen
-│   │   │   ├── log.tsx       # Meal logging screen
-│   │   │   ├── history.tsx   # Meal history screen
-│   │   │   └── profile.tsx   # Profile screen
-│   │   ├── _layout.tsx       # Root layout
-│   │   ├── index.tsx         # Entry point
-│   │   ├── onboarding.tsx    # Onboarding flow
-│   │   └── camera.tsx        # Camera screen
-│   ├── components/           # Reusable components
-│   ├── constants/
-│   │   └── Colors.ts         # Color palette
-│   ├── context/
-│   │   └── UserContext.tsx   # User state management
-│   ├── utils/
-│   │   └── api.ts            # API client
-│   ├── app.json              # Expo configuration
-│   └── package.json          # Dependencies
-└── test_result.md            # Testing documentation
+│   │   │   ├── _layout.tsx           # Tab layout
+│   │   │   ├── home.tsx              # Dashboard
+│   │   │   ├── analytics.tsx         # Analytics (AI insights + charts)
+│   │   │   ├── history.tsx           # Meal history
+│   │   │   ├── profile.tsx           # Profile
+│   │   │   ├── chef.tsx              # Chef
+│   │   │   └── quest.tsx             # Quest
+│   │   ├── onboarding.tsx            # Onboarding
+│   │   └── camera.tsx                # Camera logging
+│   ├── components/
+│   ├── constants/Colors.ts
+│   ├── context/UserContext.tsx
+│   └── utils/api.ts                  # API client
+├── supabase/
+│   └── functions/analytics-cache-warmup/  # Edge function (optional warmup)
+└── DEPLOYMENT_GUIDE.md
 ```
 
 ## API Endpoints
@@ -120,46 +119,61 @@ NutriSnap is a mobile nutrition tracking application built with Expo (React Nati
 - `GET /api/meals/history/{user_id}` - Get meal history
 - `GET /api/meals/stats/{user_id}` - Get daily nutrition stats
 
+### Analytics (AI + Cache)
+- `GET /api/analytics/{user_id}?time_range=week|month|year` - Get cached analytics (instant when warm)
+- `POST /api/analytics/{user_id}/refresh?time_range=week|month|year` - Force refresh (rate-limited)
+
+### Admin / Data Sync (optional)
+- `POST /api/admin/usda/sync` - Enrich foods using USDA (requires `ADMIN_SYNC_KEY`)
+
 ## Setup Instructions
 
 ### Prerequisites
 - Node.js 18+
 - Python 3.11+
-- MongoDB
+- Supabase Postgres (or any Postgres compatible with the schema)
 - Expo CLI
-- OpenAI API Key (or use Emergent LLM Key)
+- OpenAI API Key
 
 ### Backend Setup
 
 1. Install dependencies:
    ```bash
-   cd /app/backend
+   cd backend
    pip install -r requirements.txt
    ```
 
 2. Configure environment variables in `.env`:
    ```
-   MONGO_URL=mongodb://localhost:27017
-   DB_NAME=nutrisnap_db
+   DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DBNAME
    OPENAI_API_KEY=your_api_key_here
+   OPENAI_MODEL=gpt-4o
+   OPENAI_CHEAP_MODEL=gpt-4.1-mini
+   ADMIN_SYNC_KEY=your-admin-sync-key
+   USDA_API_KEY=optional
    ```
 
-3. Start the server:
+3. Run migrations (example):
    ```bash
-   uvicorn server:app --host 0.0.0.0 --port 8001 --reload
+   psql $DATABASE_URL -f backend/migrations/008_analytics_cache.sql
+   ```
+
+4. Start the server:
+   ```bash
+   uvicorn server:app --host 0.0.0.0 --port 8000 --reload
    ```
 
 ### Frontend Setup
 
 1. Install dependencies:
    ```bash
-   cd /app/frontend
+   cd frontend
    yarn install
    ```
 
 2. Configure environment variables in `.env`:
    ```
-   EXPO_PUBLIC_BACKEND_URL=https://your-backend-url.com
+   EXPO_PUBLIC_BACKEND_URL=http://localhost:8000
    ```
 
 3. Start the development server:
@@ -176,12 +190,7 @@ NutriSnap is a mobile nutrition tracking application built with Expo (React Nati
 ## Design System
 
 ### Color Palette
-- **Primary**: #5B7350 (Earthy Green)
-- **Background**: #FAF8F3 (Soft Cream)
-- **Accent**: #E8956F (Warm Orange)
-- **Text**: #1A1A1A (Dark Gray)
-- **Success**: #6D8660
-- **Error**: #D66853
+- Colors live in `frontend/constants/Colors.ts` and are used consistently across the app (cards, charts, and accents).
 
 ### Design Principles
 - Clean, modern aesthetic with biophilic elements
@@ -277,6 +286,15 @@ The app uses OpenAI's GPT-4 Vision API with custom prompts:
 }
 ```
 
+### Analytics Cache
+AI analytics are cached in Postgres to reduce cost and improve UX:
+
+```sql
+analytics_cache(user_id, time_range, insights, bio_impact, recommendations, expires_at, ...)
+```
+
+See `backend/migrations/008_analytics_cache.sql` and `DEPLOYMENT_GUIDE.md` for warmup + cron configuration.
+
 ## Testing
 
 The app includes comprehensive backend testing. See `test_result.md` for testing protocol.
@@ -355,7 +373,7 @@ For issues or questions:
 
 - UI Design: Inspired by modern health app aesthetics
 - Icons: Ionicons by Expo
-- AI: OpenAI GPT-4 Vision
+- AI: OpenAI (vision + chat)
 - Framework: Expo & FastAPI
 
 ---

@@ -84,7 +84,14 @@ export default function HomeScreen() {
       const chartData = days.map(day => ({
         label: day,
         value: dayTotals[day]?.calories || 0,
-        frontColor: (dayTotals[day]?.calories || 0) > 0 ? Colors.primary : 'transparent',
+        frontColor: Colors.primary,
+        gradientColor: Colors.primaryLight,
+        showGradient: true,
+        labelTextStyle: {
+          color: Colors.textSecondary,
+          fontSize: 10,
+          fontWeight: '900',
+        },
       }));
       setWeeklyData(chartData);
     } catch (error) {
@@ -190,24 +197,29 @@ export default function HomeScreen() {
 
   const hasAnyMacros = (stats?.total_protein || 0) > 0 || (stats?.total_carbs || 0) > 0 || (stats?.total_fat || 0) > 0;
 
+  const weeklyChartWidth = width - (24 * 2) - (20 * 2) - (10 * 2);
+
   const macroData = hasAnyMacros ? [
     {
       value: stats?.total_protein || 0,
       color: Colors.protein,
       text: `${Math.round(stats?.total_protein || 0)}g`,
+      gradientCenterColor: Colors.protein,
     },
     {
       value: stats?.total_carbs || 0,
       color: Colors.carbs,
       text: `${Math.round(stats?.total_carbs || 0)}g`,
+      gradientCenterColor: Colors.carbs,
     },
     {
       value: stats?.total_fat || 0,
       color: Colors.fat,
       text: `${Math.round(stats?.total_fat || 0)}g`,
+      gradientCenterColor: Colors.fat,
     },
   ] : [
-    { value: 1, color: 'transparent' }
+    { value: 1, color: Colors.border }
   ];
 
   return (
@@ -375,8 +387,12 @@ export default function HomeScreen() {
                     innerRadius={50}
                     backgroundColor="transparent"
                     centerLabelComponent={() => (
-                      <Text style={styles.pieChartCenter}>Macros</Text>
+                      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="nutrition" size={20} color="white" />
+                      </View>
                     )}
+                    isAnimated
+                    animationDuration={1000}
                   />
                 </View>
               </View>
@@ -420,29 +436,42 @@ export default function HomeScreen() {
             <Text style={styles.sectionTitle}>This Week&apos;s Trend</Text>
             <View style={styles.standardCard}>
               <View style={styles.chartContent}>
-                <BarChart
-                  data={weeklyData}
-                  width={width - 100}
-                  height={180}
-                  barWidth={24}
-                  spacing={16}
-                  roundedTop
-                  roundedBottom
-                  hideRules
-                  xAxisThickness={0}
-                  yAxisThickness={0}
-                  yAxisTextStyle={{ color: Colors.textLight, fontSize: 10 }}
-                  noOfSections={4}
-                  maxValue={Math.max(...weeklyData.map(d => d.value), 2000)}
-                  showGradient={false}
-                  cappedBars={false}
-                  initialSpacing={10}
-                  barInnerComponent={(item: any) => (
-                    item.value === 0 ? (
-                      <View style={styles.hollowBar} />
-                    ) : null
-                  )}
-                />
+                  <BarChart
+                    data={weeklyData}
+                    width={weeklyChartWidth}
+                    height={180}
+                    barWidth={22}
+                    spacing={22}
+                    labelWidth={44}
+                    roundedTop
+                    roundedBottom
+                    hideRules
+                    xAxisThickness={1}
+                    yAxisThickness={1}
+                    yAxisTextStyle={{ 
+                      color: Colors.textLight, 
+                      fontSize: 10,
+                      fontWeight: '800',
+                    }}
+                    noOfSections={4}
+                    maxValue={Math.max(...weeklyData.map(d => d.value), 2000)}
+                    cappedBars={false}
+                    initialSpacing={16}
+                    endSpacing={16}
+                    xAxisLabelTextStyle={{
+                      color: Colors.textSecondary,
+                      fontSize: 10,
+                      fontWeight: '900',
+                      textAlign: 'center',
+                    }}
+                    barInnerComponent={(item: any) => (
+                      item.value === 0 ? (
+                        <View style={styles.hollowBar} />
+                      ) : null
+                    )}
+                    isAnimated
+                    animationDuration={1000}
+                  />
               </View>
             </View>
           </AnimatedCard>

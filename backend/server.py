@@ -19,6 +19,8 @@ import httpx
 import time
 import asyncio
 from asyncpg.exceptions import UniqueViolationError
+from analytics_ai import _generate_analytics_ai
+import re
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -30,7 +32,7 @@ pg_pool: asyncpg.Pool | None = None
 # OpenAI Key for AI features
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 OPENAI_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-4o')
-OPENAI_CHEAP_MODEL = os.environ.get('OPENAI_CHEAP_MODEL', 'gpt-4o-mini')
+OPENAI_CHEAP_MODEL = os.environ.get('OPENAI_CHEAP_MODEL', 'gpt-4.1-mini')
 openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 ADMIN_SYNC_KEY = os.environ.get("ADMIN_SYNC_KEY", "").strip()
@@ -636,11 +638,20 @@ def _meal_from_record(record: asyncpg.Record) -> dict:
         except Exception:
             # If parsing fails, keep original value and let validation raise a clear error
             pass
+    
+    micros = record.get("micros", {})
+    if isinstance(micros, str):
+        try:
+            micros = json.loads(micros)
+        except Exception:
+            micros = {}
+    
     return {
         "id": str(record["id"]),
         "user_id": str(record["user_id"]),
         "meal_type": record["meal_type"],
         "foods": foods,
+        "micros": micros,
         "total_calories": record["total_calories"],
         "total_protein": record["total_protein"],
         "total_carbs": record["total_carbs"],
@@ -729,6 +740,18 @@ async def get_current_uid(authorization: str | None = Header(default=None)) -> s
     token = _get_bearer_token(authorization)
     decoded = _verify_supabase_token(token)
     return str(decoded.get("sub"))
+
+
+async def get_current_uid_optional(authorization: str | None = Header(default=None)) -> Optional[str]:
+    """Optional auth - returns None if no valid token, used for endpoints with alternative auth"""
+    try:
+        if not authorization:
+            return None
+        token = _get_bearer_token(authorization)
+        decoded = _verify_supabase_token(token)
+        return str(decoded.get("sub"))
+    except:
+        return None
 
 
 def _require_user_match(uid: str, user_id: str):
@@ -1234,6 +1257,16 @@ async def match_food_to_database_db(conn: asyncpg.Connection, name: str, quantit
             "protein": round(ai_result["protein_per_100g"] * multiplier, 2),
             "carbs": round(ai_result["carbs_per_100g"] * multiplier, 2),
             "fat": round(ai_result["fat_per_100g"] * multiplier, 2),
+            "sugar": round(ai_result.get("sugar_g_per_100g", 0) * multiplier, 2),
+            "sodium": round(ai_result.get("sodium_mg_per_100g", 0) * multiplier, 2),
+            "fiber": round(ai_result.get("fiber_g_per_100g", 0) * multiplier, 2),
+            "saturated_fat": round(ai_result.get("saturated_fat_g_per_100g", 0) * multiplier, 2),
+            "trans_fat": round(ai_result.get("trans_fat_g_per_100g", 0) * multiplier, 2),
+            "cholesterol": round(ai_result.get("cholesterol_mg_per_100g", 0) * multiplier, 2),
+            "potassium": round(ai_result.get("potassium_mg_per_100g", 0) * multiplier, 2),
+            "calcium": round(ai_result.get("calcium_mg_per_100g", 0) * multiplier, 2),
+            "iron": round(ai_result.get("iron_mg_per_100g", 0) * multiplier, 2),
+            "vitamin_c": round(ai_result.get("vitamin_c_mg_per_100g", 0) * multiplier, 2),
             "calories_per_100g": ai_result["calories_per_100g"],
             "protein_per_100g": ai_result["protein_per_100g"],
             "carbs_per_100g": ai_result["carbs_per_100g"],
@@ -1254,6 +1287,16 @@ async def match_food_to_database_db(conn: asyncpg.Connection, name: str, quantit
         "protein": round(float(row["protein_per_100g"]) * multiplier, 2),
         "carbs": round(float(row["carbs_per_100g"]) * multiplier, 2),
         "fat": round(float(row["fat_per_100g"]) * multiplier, 2),
+        "sugar": round(float(row.get("sugar_g_per_100g", 0) or 0) * multiplier, 2),
+        "sodium": round(float(row.get("sodium_mg_per_100g", 0) or 0) * multiplier, 2),
+        "fiber": round(float(row.get("fiber_g_per_100g", 0) or 0) * multiplier, 2),
+        "saturated_fat": round(float(row.get("saturated_fat_g_per_100g", 0) or 0) * multiplier, 2),
+        "trans_fat": round(float(row.get("trans_fat_g_per_100g", 0) or 0) * multiplier, 2),
+        "cholesterol": round(float(row.get("cholesterol_mg_per_100g", 0) or 0) * multiplier, 2),
+        "potassium": round(float(row.get("potassium_mg_per_100g", 0) or 0) * multiplier, 2),
+        "calcium": round(float(row.get("calcium_mg_per_100g", 0) or 0) * multiplier, 2),
+        "iron": round(float(row.get("iron_mg_per_100g", 0) or 0) * multiplier, 2),
+        "vitamin_c": round(float(row.get("vitamin_c_mg_per_100g", 0) or 0) * multiplier, 2),
         "calories_per_100g": float(row["calories_per_100g"]),
         "protein_per_100g": float(row["protein_per_100g"]),
         "carbs_per_100g": float(row["carbs_per_100g"]),
@@ -1605,12 +1648,51 @@ async def log_meal(meal_data: MealLogCreate, uid: str = Depends(get_current_uid)
         logger.info(f"[LOG_MEAL] Starting meal log for user={meal_data.user_id}, meal_type={meal_data.meal_type}, foods_count={len(meal_data.foods)}")
         _require_user_match(uid, meal_data.user_id)
 
+        # Calculate macro totals
         total_calories = sum([f["calories"] for f in meal_data.foods])
         total_protein = sum([f["protein"] for f in meal_data.foods])
         total_carbs = sum([f["carbs"] for f in meal_data.foods])
         total_fat = sum([f["fat"] for f in meal_data.foods])
         
         logger.info(f"[LOG_MEAL] Calculated totals: cal={total_calories}, protein={total_protein}, carbs={total_carbs}, fat={total_fat}")
+
+        # Prepare foods JSON with hidden metrics for analytics
+        foods_for_db = []
+        micros = {
+            "sodium_mg": 0,
+            "sugar_g": 0,
+            "fiber_g": 0,
+            "saturated_fat_g": 0,
+            "potassium_mg": 0,
+            "calcium_mg": 0,
+            "iron_mg": 0,
+            "vitamin_c_mg": 0,
+        }
+        
+        for f in meal_data.foods:
+            food_item = {
+                "name": f.get("name", "Unknown"),
+                "calories": f.get("calories", 0),
+                "protein": f.get("protein", 0),
+                "carbs": f.get("carbs", 0),
+                "fat": f.get("fat", 0),
+                "sugar": f.get("sugar", 0),  # Hidden metric
+                "sodium": f.get("sodium", 0),  # Hidden metric
+                "trans_fat": f.get("trans_fat", 0),  # Hidden metric
+                "saturated_fat": f.get("saturated_fat", 0),  # Hidden metric
+                "ingredients": f.get("ingredients", []),  # For frequent ingredients
+            }
+            foods_for_db.append(food_item)
+            
+            # Aggregate micros from each food
+            micros["sodium_mg"] += f.get("sodium", 0)
+            micros["sugar_g"] += f.get("sugar", 0)
+            micros["fiber_g"] += f.get("fiber", 0)
+            micros["saturated_fat_g"] += f.get("saturated_fat", 0)
+            micros["potassium_mg"] += f.get("potassium", 0)
+            micros["calcium_mg"] += f.get("calcium", 0)
+            micros["iron_mg"] += f.get("iron", 0)
+            micros["vitamin_c_mg"] += f.get("vitamin_c", 0)
 
         meal_dict = meal_data.dict()
         meal_dict.update(
@@ -1619,6 +1701,8 @@ async def log_meal(meal_data: MealLogCreate, uid: str = Depends(get_current_uid)
                 "total_protein": total_protein,
                 "total_carbs": total_carbs,
                 "total_fat": total_fat,
+                "foods": foods_for_db,  # Override with enriched foods
+                "micros": micros,  # Add micros for analytics
             }
         )
 
@@ -1662,13 +1746,13 @@ async def log_meal(meal_data: MealLogCreate, uid: str = Depends(get_current_uid)
             row = await conn.fetchrow(
                 """
                 INSERT INTO meals (
-                    id, user_id, meal_type, foods,
+                    id, user_id, meal_type, foods, micros,
                     total_calories, total_protein, total_carbs, total_fat,
                     image_base64, logging_method, notes, timestamp, review_status
                 ) VALUES (
-                    $1,$2,$3,$4::jsonb,
-                    $5,$6,$7,$8,
-                    $9,$10,$11,$12,$13
+                    $1,$2,$3,$4::jsonb,$5::jsonb,
+                    $6,$7,$8,$9,
+                    $10,$11,$12,$13,$14
                 )
                 RETURNING *
                 """,
@@ -1676,6 +1760,7 @@ async def log_meal(meal_data: MealLogCreate, uid: str = Depends(get_current_uid)
                 _uuid(meal_log.user_id),
                 meal_log.meal_type,
                 json.dumps(meal_log.foods),
+                json.dumps(meal_log.micros),
                 float(meal_log.total_calories),
                 float(meal_log.total_protein),
                 float(meal_log.total_carbs),
@@ -1900,11 +1985,31 @@ async def get_meal_history(
                     fiber_g_per_100g,
                     sugar_g_per_100g,
                     saturated_fat_g_per_100g,
+                    trans_fat_g_per_100g,
+                    cholesterol_mg_per_100g,
                     sodium_mg_per_100g,
                     potassium_mg_per_100g,
+                    vitamin_a_ug_per_100g,
                     calcium_mg_per_100g,
                     iron_mg_per_100g,
-                    vitamin_c_mg_per_100g
+                    magnesium_mg_per_100g,
+                    phosphorus_mg_per_100g,
+                    zinc_mg_per_100g,
+                    copper_mg_per_100g,
+                    manganese_mg_per_100g,
+                    selenium_ug_per_100g,
+                    vitamin_c_mg_per_100g,
+                    vitamin_d_ug_per_100g,
+                    vitamin_e_mg_per_100g,
+                    vitamin_k_ug_per_100g,
+                    thiamin_b1_mg_per_100g,
+                    riboflavin_b2_mg_per_100g,
+                    niacin_b3_mg_per_100g,
+                    vitamin_b6_mg_per_100g,
+                    folate_ug_per_100g,
+                    vitamin_b12_ug_per_100g,
+                    caffeine_mg_per_100g,
+                    alcohol_g_per_100g
                 FROM foods
                 WHERE id = ANY($1::uuid[])
                 """,
@@ -1918,11 +2023,31 @@ async def get_meal_history(
                 "fiber_g": 0.0,
                 "sugar_g": 0.0,
                 "saturated_fat_g": 0.0,
+                "trans_fat_g": 0.0,
+                "cholesterol_mg": 0.0,
                 "sodium_mg": 0.0,
                 "potassium_mg": 0.0,
+                "vitamin_a_ug": 0.0,
                 "calcium_mg": 0.0,
                 "iron_mg": 0.0,
+                "magnesium_mg": 0.0,
+                "phosphorus_mg": 0.0,
+                "zinc_mg": 0.0,
+                "copper_mg": 0.0,
+                "manganese_mg": 0.0,
+                "selenium_ug": 0.0,
                 "vitamin_c_mg": 0.0,
+                "vitamin_d_ug": 0.0,
+                "vitamin_e_mg": 0.0,
+                "vitamin_k_ug": 0.0,
+                "thiamin_b1_mg": 0.0,
+                "riboflavin_b2_mg": 0.0,
+                "niacin_b3_mg": 0.0,
+                "vitamin_b6_mg": 0.0,
+                "folate_ug": 0.0,
+                "vitamin_b12_ug": 0.0,
+                "caffeine_mg": 0.0,
+                "alcohol_g": 0.0,
             }
 
             foods = m.get("foods") or []
@@ -1951,11 +2076,31 @@ async def get_meal_history(
                     micros["fiber_g"] += float(row.get("fiber_g_per_100g") or 0) * ratio
                     micros["sugar_g"] += float(row.get("sugar_g_per_100g") or 0) * ratio
                     micros["saturated_fat_g"] += float(row.get("saturated_fat_g_per_100g") or 0) * ratio
+                    micros["trans_fat_g"] += float(row.get("trans_fat_g_per_100g") or 0) * ratio
+                    micros["cholesterol_mg"] += float(row.get("cholesterol_mg_per_100g") or 0) * ratio
                     micros["sodium_mg"] += float(row.get("sodium_mg_per_100g") or 0) * ratio
                     micros["potassium_mg"] += float(row.get("potassium_mg_per_100g") or 0) * ratio
+                    micros["vitamin_a_ug"] += float(row.get("vitamin_a_ug_per_100g") or 0) * ratio
                     micros["calcium_mg"] += float(row.get("calcium_mg_per_100g") or 0) * ratio
                     micros["iron_mg"] += float(row.get("iron_mg_per_100g") or 0) * ratio
+                    micros["magnesium_mg"] += float(row.get("magnesium_mg_per_100g") or 0) * ratio
+                    micros["phosphorus_mg"] += float(row.get("phosphorus_mg_per_100g") or 0) * ratio
+                    micros["zinc_mg"] += float(row.get("zinc_mg_per_100g") or 0) * ratio
+                    micros["copper_mg"] += float(row.get("copper_mg_per_100g") or 0) * ratio
+                    micros["manganese_mg"] += float(row.get("manganese_mg_per_100g") or 0) * ratio
+                    micros["selenium_ug"] += float(row.get("selenium_ug_per_100g") or 0) * ratio
                     micros["vitamin_c_mg"] += float(row.get("vitamin_c_mg_per_100g") or 0) * ratio
+                    micros["vitamin_d_ug"] += float(row.get("vitamin_d_ug_per_100g") or 0) * ratio
+                    micros["vitamin_e_mg"] += float(row.get("vitamin_e_mg_per_100g") or 0) * ratio
+                    micros["vitamin_k_ug"] += float(row.get("vitamin_k_ug_per_100g") or 0) * ratio
+                    micros["thiamin_b1_mg"] += float(row.get("thiamin_b1_mg_per_100g") or 0) * ratio
+                    micros["riboflavin_b2_mg"] += float(row.get("riboflavin_b2_mg_per_100g") or 0) * ratio
+                    micros["niacin_b3_mg"] += float(row.get("niacin_b3_mg_per_100g") or 0) * ratio
+                    micros["vitamin_b6_mg"] += float(row.get("vitamin_b6_mg_per_100g") or 0) * ratio
+                    micros["folate_ug"] += float(row.get("folate_ug_per_100g") or 0) * ratio
+                    micros["vitamin_b12_ug"] += float(row.get("vitamin_b12_ug_per_100g") or 0) * ratio
+                    micros["caffeine_mg"] += float(row.get("caffeine_mg_per_100g") or 0) * ratio
+                    micros["alcohol_g"] += float(row.get("alcohol_g_per_100g") or 0) * ratio
 
             m["micros"] = micros
 
@@ -2334,6 +2479,8 @@ async def admin_foods_sync(
                             v = _convert_unit(float(n["amount"]), n.get("unit", ""), "g")
                             if v is not None:
                                 update["trans_fat_g_per_100g"] = v
+                        
+                        # Comprehensive micronutrient extraction
                         if (n := pick("Cholesterol")):
                             v = _convert_unit(float(n["amount"]), n.get("unit", ""), "mg")
                             if v is not None:
@@ -2358,7 +2505,21 @@ async def admin_foods_sync(
                             v = _convert_unit(float(n["amount"]), n.get("unit", ""), "mg")
                             if v is not None:
                                 update["zinc_mg_per_100g"] = v
-                        if (n := pick("Vitamin A, RAE")) or (n := pick("Vitamin A, IU")):
+                        if (n := pick("Copper, Cu")):
+                            v = _convert_unit(float(n["amount"]), n.get("unit", ""), "mg")
+                            if v is not None:
+                                update["copper_mg_per_100g"] = v
+                        if (n := pick("Manganese, Mn")):
+                            v = _convert_unit(float(n["amount"]), n.get("unit", ""), "mg")
+                            if v is not None:
+                                update["manganese_mg_per_100g"] = v
+                        if (n := pick("Selenium, Se")):
+                            v = _convert_unit(float(n["amount"]), n.get("unit", ""), "ug")
+                            if v is not None:
+                                update["selenium_ug_per_100g"] = v
+                        
+                        # Vitamins
+                        if (n := pick("Vitamin A, RAE")):
                             v = _convert_unit(float(n["amount"]), n.get("unit", ""), "ug")
                             if v is not None:
                                 update["vitamin_a_ug_per_100g"] = v
@@ -2374,6 +2535,8 @@ async def admin_foods_sync(
                             v = _convert_unit(float(n["amount"]), n.get("unit", ""), "ug")
                             if v is not None:
                                 update["vitamin_k_ug_per_100g"] = v
+                        
+                        # B-complex vitamins
                         if (n := pick("Thiamin")):
                             v = _convert_unit(float(n["amount"]), n.get("unit", ""), "mg")
                             if v is not None:
@@ -2390,7 +2553,7 @@ async def admin_foods_sync(
                             v = _convert_unit(float(n["amount"]), n.get("unit", ""), "mg")
                             if v is not None:
                                 update["vitamin_b6_mg_per_100g"] = v
-                        if (n := pick("Folate, total")) or (n := pick("Folate, DFE")):
+                        if (n := pick("Folate, total")):
                             v = _convert_unit(float(n["amount"]), n.get("unit", ""), "ug")
                             if v is not None:
                                 update["folate_ug_per_100g"] = v
@@ -2398,6 +2561,17 @@ async def admin_foods_sync(
                             v = _convert_unit(float(n["amount"]), n.get("unit", ""), "ug")
                             if v is not None:
                                 update["vitamin_b12_ug_per_100g"] = v
+                        
+                        # Extras
+                        if (n := pick("Caffeine")):
+                            v = _convert_unit(float(n["amount"]), n.get("unit", ""), "mg")
+                            if v is not None:
+                                update["caffeine_mg_per_100g"] = v
+                        if (n := pick("Alcohol, ethyl")):
+                            v = _convert_unit(float(n["amount"]), n.get("unit", ""), "g")
+                            if v is not None:
+                                update["alcohol_g_per_100g"] = v
+                        
                         # Extract metadata fields from USDA response
                         if "brandName" in payload:
                             update["brand"] = payload["brandName"]
@@ -2449,19 +2623,40 @@ async def admin_foods_sync(
                         sugar_g_per_100g = COALESCE($7, sugar_g_per_100g),
                         saturated_fat_g_per_100g = COALESCE($8, saturated_fat_g_per_100g),
                         trans_fat_g_per_100g = COALESCE($9, trans_fat_g_per_100g),
-                        sodium_mg_per_100g = COALESCE($10, sodium_mg_per_100g),
-                        vitamin_c_mg_per_100g = COALESCE($11, vitamin_c_mg_per_100g),
-                        iron_mg_per_100g = COALESCE($12, iron_mg_per_100g),
-                        raw_payload = COALESCE($13::jsonb, raw_payload),
-                        brand = COALESCE($14, brand),
-                        image_url = COALESCE($15, image_url),
-                        ingredients = COALESCE($16, ingredients),
-                        source = COALESCE($17, source),
-                        external_id = COALESCE($18, external_id),
-                        barcode = COALESCE($19, barcode),
-                        data_type = COALESCE($20, data_type),
-                        publication_date = COALESCE($21, publication_date),
-                        is_generic = COALESCE($22, is_generic),
+                        cholesterol_mg_per_100g = COALESCE($10, cholesterol_mg_per_100g),
+                        sodium_mg_per_100g = COALESCE($11, sodium_mg_per_100g),
+                        potassium_mg_per_100g = COALESCE($12, potassium_mg_per_100g),
+                        calcium_mg_per_100g = COALESCE($13, calcium_mg_per_100g),
+                        iron_mg_per_100g = COALESCE($14, iron_mg_per_100g),
+                        magnesium_mg_per_100g = COALESCE($15, magnesium_mg_per_100g),
+                        phosphorus_mg_per_100g = COALESCE($16, phosphorus_mg_per_100g),
+                        zinc_mg_per_100g = COALESCE($17, zinc_mg_per_100g),
+                        copper_mg_per_100g = COALESCE($18, copper_mg_per_100g),
+                        manganese_mg_per_100g = COALESCE($19, manganese_mg_per_100g),
+                        selenium_ug_per_100g = COALESCE($20, selenium_ug_per_100g),
+                        vitamin_a_ug_per_100g = COALESCE($21, vitamin_a_ug_per_100g),
+                        vitamin_c_mg_per_100g = COALESCE($22, vitamin_c_mg_per_100g),
+                        vitamin_d_ug_per_100g = COALESCE($23, vitamin_d_ug_per_100g),
+                        vitamin_e_mg_per_100g = COALESCE($24, vitamin_e_mg_per_100g),
+                        vitamin_k_ug_per_100g = COALESCE($25, vitamin_k_ug_per_100g),
+                        thiamin_b1_mg_per_100g = COALESCE($26, thiamin_b1_mg_per_100g),
+                        riboflavin_b2_mg_per_100g = COALESCE($27, riboflavin_b2_mg_per_100g),
+                        niacin_b3_mg_per_100g = COALESCE($28, niacin_b3_mg_per_100g),
+                        vitamin_b6_mg_per_100g = COALESCE($29, vitamin_b6_mg_per_100g),
+                        folate_ug_per_100g = COALESCE($30, folate_ug_per_100g),
+                        vitamin_b12_ug_per_100g = COALESCE($31, vitamin_b12_ug_per_100g),
+                        caffeine_mg_per_100g = COALESCE($32, caffeine_mg_per_100g),
+                        alcohol_g_per_100g = COALESCE($33, alcohol_g_per_100g),
+                        raw_payload = COALESCE($34::jsonb, raw_payload),
+                        brand = COALESCE($35, brand),
+                        image_url = COALESCE($36, image_url),
+                        ingredients = COALESCE($37, ingredients),
+                        source = COALESCE($38, source),
+                        external_id = COALESCE($39, external_id),
+                        barcode = COALESCE($40, barcode),
+                        data_type = COALESCE($41, data_type),
+                        publication_date = COALESCE($42, publication_date),
+                        is_generic = COALESCE($43, is_generic),
                         review_status = 'approved',
                         verified = true,
                         sync_status = 'ok',
@@ -2482,9 +2677,30 @@ async def admin_foods_sync(
                     update.get("sugar_g_per_100g"),
                     update.get("saturated_fat_g_per_100g"),
                     update.get("trans_fat_g_per_100g"),
+                    update.get("cholesterol_mg_per_100g"),
                     update.get("sodium_mg_per_100g"),
-                    update.get("vitamin_c_mg_per_100g"),
+                    update.get("potassium_mg_per_100g"),
+                    update.get("calcium_mg_per_100g"),
                     update.get("iron_mg_per_100g"),
+                    update.get("magnesium_mg_per_100g"),
+                    update.get("phosphorus_mg_per_100g"),
+                    update.get("zinc_mg_per_100g"),
+                    update.get("copper_mg_per_100g"),
+                    update.get("manganese_mg_per_100g"),
+                    update.get("selenium_ug_per_100g"),
+                    update.get("vitamin_a_ug_per_100g"),
+                    update.get("vitamin_c_mg_per_100g"),
+                    update.get("vitamin_d_ug_per_100g"),
+                    update.get("vitamin_e_mg_per_100g"),
+                    update.get("vitamin_k_ug_per_100g"),
+                    update.get("thiamin_b1_mg_per_100g"),
+                    update.get("riboflavin_b2_mg_per_100g"),
+                    update.get("niacin_b3_mg_per_100g"),
+                    update.get("vitamin_b6_mg_per_100g"),
+                    update.get("folate_ug_per_100g"),
+                    update.get("vitamin_b12_ug_per_100g"),
+                    update.get("caffeine_mg_per_100g"),
+                    update.get("alcohol_g_per_100g"),
                     json.dumps(payload) if payload is not None else None,
                     update.get("brand"),
                     update.get("image_url"),
@@ -2604,6 +2820,745 @@ async def admin_foods_sync(
     return {"selected": len(rows), "ok": ok, "failed": failed, "skipped": skipped}
  
  
+@api_router.get("/analytics/{user_id}")
+async def get_analytics(
+    user_id: str,
+    time_range: str = "week",
+    force_refresh: bool = False,
+    uid: str = Depends(get_current_uid)
+):
+    """Get cached analytics or trigger background refresh if needed"""
+    _require_user_match(uid, user_id)
+    
+    if time_range not in ["week", "month", "year"]:
+        raise HTTPException(status_code=400, detail="Invalid time_range")
+    
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        # Check for cached analytics
+        cache = await conn.fetchrow(
+            """
+            SELECT insights, bio_impact, health_insights, bio_alerts, red_flags, meals_analyzed,
+                   date_range_start, date_range_end, expires_at, last_refreshed_at,
+                   tokens_used, refresh_count
+            FROM analytics_cache
+            WHERE user_id = $1 AND time_range = $2
+            """,
+            _uuid(user_id),
+            time_range,
+        )
+        
+        # Return cached data if valid and not force refresh
+        if cache and not force_refresh:
+            expires_at = cache["expires_at"]
+            if expires_at and expires_at > datetime.now(timezone.utc):
+                logger.info(f"Returning cached analytics for user {user_id}, time_range={time_range}")
+                
+                # Parse JSONB fields if they're strings
+                insights = cache["insights"]
+                if isinstance(insights, str):
+                    try:
+                        insights = json.loads(insights)
+                    except Exception:
+                        insights = {}
+                
+                bio_impact = cache["bio_impact"]
+                if isinstance(bio_impact, str):
+                    try:
+                        bio_impact = json.loads(bio_impact)
+                    except Exception:
+                        bio_impact = {}
+                
+                health_insights = cache.get("health_insights", {})
+                if isinstance(health_insights, str):
+                    try:
+                        health_insights = json.loads(health_insights)
+                    except Exception:
+                        health_insights = {}
+                
+                bio_alerts = cache.get("bio_alerts", [])
+                if isinstance(bio_alerts, str):
+                    try:
+                        bio_alerts = json.loads(bio_alerts)
+                    except Exception:
+                        bio_alerts = []
+                
+                red_flags = cache.get("red_flags", [])
+                if isinstance(red_flags, str):
+                    try:
+                        red_flags = json.loads(red_flags)
+                    except Exception:
+                        red_flags = []
+                
+                return {
+                    "insights": insights,
+                    "bio_impact": bio_impact,
+                    "health_insights": health_insights,
+                    "bio_alerts": bio_alerts,
+                    "red_flags": red_flags,
+                    "cached": True,
+                    "last_refreshed_at": cache["last_refreshed_at"].isoformat(),
+                    "expires_at": expires_at.isoformat(),
+                    "meals_analyzed": cache["meals_analyzed"],
+                }
+        
+        # Cache miss or expired - return stale data and trigger background refresh
+        if cache:
+            logger.info(f"Cache expired for user {user_id}, returning stale data and triggering refresh")
+            
+            # Parse JSONB fields if they're strings
+            insights = cache["insights"]
+            if isinstance(insights, str):
+                try:
+                    insights = json.loads(insights)
+                except Exception:
+                    insights = {}
+            
+            bio_impact = cache["bio_impact"]
+            if isinstance(bio_impact, str):
+                try:
+                    bio_impact = json.loads(bio_impact)
+                except Exception:
+                    bio_impact = {}
+            
+            health_insights = cache.get("health_insights", {})
+            if isinstance(health_insights, str):
+                try:
+                    health_insights = json.loads(health_insights)
+                except Exception:
+                    health_insights = {}
+            
+            bio_alerts = cache.get("bio_alerts", [])
+            if isinstance(bio_alerts, str):
+                try:
+                    bio_alerts = json.loads(bio_alerts)
+                except Exception:
+                    bio_alerts = []
+            
+            red_flags = cache.get("red_flags", [])
+            if isinstance(red_flags, str):
+                try:
+                    red_flags = json.loads(red_flags)
+                except Exception:
+                    red_flags = []
+            
+            # TODO: Trigger background refresh job here
+            return {
+                "insights": insights,
+                "bio_impact": bio_impact,
+                "health_insights": health_insights,
+                "bio_alerts": bio_alerts,
+                "red_flags": red_flags,
+                "cached": True,
+                "stale": True,
+                "last_refreshed_at": cache["last_refreshed_at"].isoformat(),
+                "refreshing": True,
+            }
+        
+        # No cache at all - return empty state and trigger refresh
+        logger.info(f"No cache for user {user_id}, returning empty state")
+        return {
+            "insights": {},
+            "bio_impact": {},
+            "health_insights": {},
+            "bio_alerts": [],
+            "red_flags": [],
+            "cached": False,
+            "refreshing": True,
+            "message": "Analytics are being generated. Please refresh in a few seconds."
+        }
+
+
+@api_router.get("/analytics/{user_id}/bundle")
+async def get_analytics_bundle(
+    user_id: str,
+    time_range: str = "week",
+    timezone_offset: int = 0,
+    uid: str = Depends(get_current_uid),
+):
+    """Return frontend-ready analytics bundle in a single request.
+
+    Includes:
+    - Meal history for the requested range (same shape as /meals/history) with computed per-meal micros
+    - Cached AI analytics for the same time_range (same shape as /analytics)
+    """
+    _require_user_match(uid, user_id)
+
+    if time_range not in ["week", "month", "year"]:
+        raise HTTPException(status_code=400, detail="Invalid time_range")
+
+    days = 7 if time_range == "week" else (30 if time_range == "month" else 365)
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT *
+            FROM meals
+            WHERE user_id = $1
+              AND timestamp >= (now() AT TIME ZONE 'UTC' + make_interval(mins => $3::int) - make_interval(days => $2::int))
+            ORDER BY timestamp DESC
+            LIMIT 1000
+            """,
+            _uuid(user_id),
+            int(days),
+            int(timezone_offset),
+        )
+
+        meals = [_meal_from_record(r) for r in rows]
+
+        food_ids: list[uuid.UUID] = []
+        for m in meals:
+            foods = m.get("foods") or []
+            if not isinstance(foods, list):
+                continue
+            for f in foods:
+                if not isinstance(f, dict):
+                    continue
+                fid = f.get("food_id")
+                if not fid:
+                    continue
+                try:
+                    food_ids.append(uuid.UUID(str(fid)))
+                except Exception:
+                    continue
+
+        foods_by_id: dict[str, dict] = {}
+        if food_ids:
+            food_rows = await conn.fetch(
+                """
+                SELECT
+                    id,
+                    fiber_g_per_100g,
+                    sugar_g_per_100g,
+                    saturated_fat_g_per_100g,
+                    trans_fat_g_per_100g,
+                    cholesterol_mg_per_100g,
+                    sodium_mg_per_100g,
+                    potassium_mg_per_100g,
+                    vitamin_a_ug_per_100g,
+                    calcium_mg_per_100g,
+                    iron_mg_per_100g,
+                    magnesium_mg_per_100g,
+                    phosphorus_mg_per_100g,
+                    zinc_mg_per_100g,
+                    copper_mg_per_100g,
+                    manganese_mg_per_100g,
+                    selenium_ug_per_100g,
+                    vitamin_c_mg_per_100g,
+                    vitamin_d_ug_per_100g,
+                    vitamin_e_mg_per_100g,
+                    vitamin_k_ug_per_100g,
+                    thiamin_b1_mg_per_100g,
+                    riboflavin_b2_mg_per_100g,
+                    niacin_b3_mg_per_100g,
+                    vitamin_b6_mg_per_100g,
+                    folate_ug_per_100g,
+                    vitamin_b12_ug_per_100g,
+                    caffeine_mg_per_100g,
+                    alcohol_g_per_100g
+                FROM foods
+                WHERE id = ANY($1::uuid[])
+                """,
+                list({*food_ids}),
+            )
+            for fr in food_rows:
+                foods_by_id[str(fr["id"])] = dict(fr)
+
+        for m in meals:
+            micros = {
+                "fiber_g": 0.0,
+                "sugar_g": 0.0,
+                "saturated_fat_g": 0.0,
+                "trans_fat_g": 0.0,
+                "cholesterol_mg": 0.0,
+                "sodium_mg": 0.0,
+                "potassium_mg": 0.0,
+                "vitamin_a_ug": 0.0,
+                "calcium_mg": 0.0,
+                "iron_mg": 0.0,
+                "magnesium_mg": 0.0,
+                "phosphorus_mg": 0.0,
+                "zinc_mg": 0.0,
+                "copper_mg": 0.0,
+                "manganese_mg": 0.0,
+                "selenium_ug": 0.0,
+                "vitamin_c_mg": 0.0,
+                "vitamin_d_ug": 0.0,
+                "vitamin_e_mg": 0.0,
+                "vitamin_k_ug": 0.0,
+                "thiamin_b1_mg": 0.0,
+                "riboflavin_b2_mg": 0.0,
+                "niacin_b3_mg": 0.0,
+                "vitamin_b6_mg": 0.0,
+                "folate_ug": 0.0,
+                "vitamin_b12_ug": 0.0,
+                "caffeine_mg": 0.0,
+                "alcohol_g": 0.0,
+            }
+
+            foods = m.get("foods") or []
+            if isinstance(foods, list):
+                for f in foods:
+                    if not isinstance(f, dict):
+                        continue
+                    fid = f.get("food_id")
+                    if not fid:
+                        continue
+                    row = foods_by_id.get(str(fid))
+                    if not row:
+                        continue
+
+                    grams = f.get("quantity")
+                    if grams is None:
+                        grams = f.get("displayQuantity")
+                    try:
+                        grams_f = float(grams or 0)
+                    except Exception:
+                        grams_f = 0.0
+                    if grams_f <= 0:
+                        continue
+                    ratio = grams_f / 100.0
+
+                    micros["fiber_g"] += float(row.get("fiber_g_per_100g") or 0) * ratio
+                    micros["sugar_g"] += float(row.get("sugar_g_per_100g") or 0) * ratio
+                    micros["saturated_fat_g"] += float(row.get("saturated_fat_g_per_100g") or 0) * ratio
+                    micros["trans_fat_g"] += float(row.get("trans_fat_g_per_100g") or 0) * ratio
+                    micros["cholesterol_mg"] += float(row.get("cholesterol_mg_per_100g") or 0) * ratio
+                    micros["sodium_mg"] += float(row.get("sodium_mg_per_100g") or 0) * ratio
+                    micros["potassium_mg"] += float(row.get("potassium_mg_per_100g") or 0) * ratio
+                    micros["vitamin_a_ug"] += float(row.get("vitamin_a_ug_per_100g") or 0) * ratio
+                    micros["calcium_mg"] += float(row.get("calcium_mg_per_100g") or 0) * ratio
+                    micros["iron_mg"] += float(row.get("iron_mg_per_100g") or 0) * ratio
+                    micros["magnesium_mg"] += float(row.get("magnesium_mg_per_100g") or 0) * ratio
+                    micros["phosphorus_mg"] += float(row.get("phosphorus_mg_per_100g") or 0) * ratio
+                    micros["zinc_mg"] += float(row.get("zinc_mg_per_100g") or 0) * ratio
+                    micros["copper_mg"] += float(row.get("copper_mg_per_100g") or 0) * ratio
+                    micros["manganese_mg"] += float(row.get("manganese_mg_per_100g") or 0) * ratio
+                    micros["selenium_ug"] += float(row.get("selenium_ug_per_100g") or 0) * ratio
+                    micros["vitamin_c_mg"] += float(row.get("vitamin_c_mg_per_100g") or 0) * ratio
+                    micros["vitamin_d_ug"] += float(row.get("vitamin_d_ug_per_100g") or 0) * ratio
+                    micros["vitamin_e_mg"] += float(row.get("vitamin_e_mg_per_100g") or 0) * ratio
+                    micros["vitamin_k_ug"] += float(row.get("vitamin_k_ug_per_100g") or 0) * ratio
+                    micros["thiamin_b1_mg"] += float(row.get("thiamin_b1_mg_per_100g") or 0) * ratio
+                    micros["riboflavin_b2_mg"] += float(row.get("riboflavin_b2_mg_per_100g") or 0) * ratio
+                    micros["niacin_b3_mg"] += float(row.get("niacin_b3_mg_per_100g") or 0) * ratio
+                    micros["vitamin_b6_mg"] += float(row.get("vitamin_b6_mg_per_100g") or 0) * ratio
+                    micros["folate_ug"] += float(row.get("folate_ug_per_100g") or 0) * ratio
+                    micros["vitamin_b12_ug"] += float(row.get("vitamin_b12_ug_per_100g") or 0) * ratio
+                    micros["caffeine_mg"] += float(row.get("caffeine_mg_per_100g") or 0) * ratio
+                    micros["alcohol_g"] += float(row.get("alcohol_g_per_100g") or 0) * ratio
+
+            m["micros"] = micros
+
+        cache = await conn.fetchrow(
+            """
+            SELECT insights, bio_impact, health_insights, bio_alerts, red_flags, meals_analyzed,
+                   date_range_start, date_range_end, expires_at, last_refreshed_at,
+                   tokens_used, refresh_count
+            FROM analytics_cache
+            WHERE user_id = $1 AND time_range = $2
+            """,
+            _uuid(user_id),
+            time_range,
+        )
+
+        ai: dict = {
+            "insights": {},
+            "bio_impact": {},
+            "health_insights": {},
+            "bio_alerts": [],
+            "red_flags": [],
+            "cached": False,
+            "refreshing": True,
+        }
+
+        if cache:
+            expires_at = cache["expires_at"]
+            is_valid = bool(expires_at and expires_at > datetime.now(timezone.utc))
+            
+            # Parse JSONB fields if they're strings
+            insights = cache["insights"]
+            if isinstance(insights, str):
+                try:
+                    insights = json.loads(insights)
+                except Exception:
+                    insights = {}
+            
+            bio_impact = cache["bio_impact"]
+            if isinstance(bio_impact, str):
+                try:
+                    bio_impact = json.loads(bio_impact)
+                except Exception:
+                    bio_impact = {}
+            
+            health_insights = cache.get("health_insights", {})
+            if isinstance(health_insights, str):
+                try:
+                    health_insights = json.loads(health_insights)
+                except Exception:
+                    health_insights = {}
+            
+            bio_alerts = cache.get("bio_alerts", [])
+            if isinstance(bio_alerts, str):
+                try:
+                    bio_alerts = json.loads(bio_alerts)
+                except Exception:
+                    bio_alerts = []
+            
+            red_flags = cache.get("red_flags", [])
+            if isinstance(red_flags, str):
+                try:
+                    red_flags = json.loads(red_flags)
+                except Exception:
+                    red_flags = []
+            
+            ai = {
+                "insights": insights,
+                "bio_impact": bio_impact,
+                "health_insights": health_insights,
+                "bio_alerts": bio_alerts,
+                "red_flags": red_flags,
+                "cached": True,
+                "stale": not is_valid,
+                "last_refreshed_at": cache["last_refreshed_at"].isoformat() if cache["last_refreshed_at"] else None,
+                "expires_at": expires_at.isoformat() if expires_at else None,
+                "meals_analyzed": cache["meals_analyzed"],
+            }
+
+        return {
+            "time_range": time_range,
+            "days": days,
+            "history": {"meals": meals, "count": len(meals)},
+            "ai": ai,
+        }
+
+
+@api_router.post("/analytics/{user_id}/refresh")
+async def refresh_analytics(
+    user_id: str,
+    time_range: str = "week",
+    x_admin_key: Optional[str] = Header(None),
+    uid: Optional[str] = Depends(get_current_uid_optional)
+):
+    """Manually refresh analytics with rate limiting"""
+    # Allow admin key for background cron jobs
+    if x_admin_key:
+        _require_admin_key(x_admin_key)
+    else:
+        if not uid:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        _require_user_match(uid, user_id)
+    
+    if time_range not in ["week", "month", "year"]:
+        raise HTTPException(status_code=400, detail="Invalid time_range")
+    
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        # Check rate limiting - max 1 refresh per 5 minutes
+        cache = await conn.fetchrow(
+            """
+            SELECT last_refreshed_at, refresh_count
+            FROM analytics_cache
+            WHERE user_id = $1 AND time_range = $2
+            """,
+            _uuid(user_id),
+            time_range,
+        )
+        
+        if cache:
+            last_refresh = cache["last_refreshed_at"]
+            if last_refresh and (datetime.now(timezone.utc) - last_refresh).total_seconds() < 300:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Please wait 5 minutes between manual refreshes"
+                )
+        
+        # Fetch meals for analysis
+        days = 7 if time_range == "week" else (30 if time_range == "month" else 365)
+        meals = await conn.fetch(
+            """
+            SELECT id, user_id, meal_type, timestamp, foods,
+                   total_calories, total_protein, total_carbs, total_fat
+            FROM meals
+            WHERE user_id = $1
+              AND timestamp >= (now() - make_interval(days => $2::int))
+            ORDER BY timestamp DESC
+            """,
+            _uuid(user_id),
+            days,
+        )
+        
+        if len(meals) == 0:
+            return {
+                "insights": {},
+                "bio_impact": {},
+                "health_insights": {},
+                "bio_alerts": [],
+                "red_flags": [],
+                "message": "No meals found for analysis"
+            }
+
+        # Ensure each meal includes computed micronutrients from foods table (USDA columns).
+        # Without this, AI analysis will see micros as 0 and falsely report deficiencies.
+        logger.info(f"[ANALYTICS_REFRESH] Processing {len(meals)} meals for micronutrient computation")
+        meals_for_ai = [dict(m) for m in meals]
+        food_ids: list[uuid.UUID] = []
+        total_foods_in_meals = 0
+        for m in meals_for_ai:
+            foods = m.get("foods") or []
+            if isinstance(foods, str):
+                try:
+                    foods = json.loads(foods)
+                except Exception:
+                    foods = []
+                m["foods"] = foods
+            if not isinstance(foods, list):
+                continue
+            for f in foods:
+                if not isinstance(f, dict):
+                    continue
+                fid = f.get("food_id")
+                if not fid:
+                    continue
+                try:
+                    food_ids.append(uuid.UUID(str(fid)))
+                except Exception:
+                    continue
+
+        foods_by_id: dict[str, dict] = {}
+        if food_ids:
+            food_rows = await conn.fetch(
+                """
+                SELECT
+                    id,
+                    fiber_g_per_100g,
+                    sugar_g_per_100g,
+                    saturated_fat_g_per_100g,
+                    trans_fat_g_per_100g,
+                    cholesterol_mg_per_100g,
+                    sodium_mg_per_100g,
+                    potassium_mg_per_100g,
+                    vitamin_a_ug_per_100g,
+                    calcium_mg_per_100g,
+                    iron_mg_per_100g,
+                    magnesium_mg_per_100g,
+                    phosphorus_mg_per_100g,
+                    zinc_mg_per_100g,
+                    copper_mg_per_100g,
+                    manganese_mg_per_100g,
+                    selenium_ug_per_100g,
+                    vitamin_c_mg_per_100g,
+                    vitamin_d_ug_per_100g,
+                    vitamin_e_mg_per_100g,
+                    vitamin_k_ug_per_100g,
+                    thiamin_b1_mg_per_100g,
+                    riboflavin_b2_mg_per_100g,
+                    niacin_b3_mg_per_100g,
+                    vitamin_b6_mg_per_100g,
+                    folate_ug_per_100g,
+                    vitamin_b12_ug_per_100g,
+                    caffeine_mg_per_100g,
+                    alcohol_g_per_100g
+                FROM foods
+                WHERE id = ANY($1::uuid[])
+                """,
+                list({*food_ids}),
+            )
+            logger.info(f"[ANALYTICS_REFRESH] Got {len(food_rows)} food rows from database")
+            foods_with_micros = 0
+            for fr in food_rows:
+                foods_by_id[str(fr["id"])] = dict(fr)
+                if fr.get('sugar_g_per_100g') or fr.get('calcium_mg_per_100g'):
+                    foods_with_micros += 1
+            logger.info(f"[ANALYTICS_REFRESH] {foods_with_micros}/{len(food_rows)} foods have micronutrient data")
+            if food_rows and not foods_with_micros:
+                logger.error(f"[ANALYTICS_REFRESH] CRITICAL: Foods table has NO micronutrient data!")
+        else:
+            logger.error(f"[ANALYTICS_REFRESH] CRITICAL: No food_ids found in meals! Meals may not have food_id references.")
+
+        for m in meals_for_ai:
+            micros = {
+                "fiber_g": 0.0,
+                "sugar_g": 0.0,
+                "saturated_fat_g": 0.0,
+                "trans_fat_g": 0.0,
+                "cholesterol_mg": 0.0,
+                "sodium_mg": 0.0,
+                "potassium_mg": 0.0,
+                "vitamin_a_ug": 0.0,
+                "calcium_mg": 0.0,
+                "iron_mg": 0.0,
+                "magnesium_mg": 0.0,
+                "phosphorus_mg": 0.0,
+                "zinc_mg": 0.0,
+                "copper_mg": 0.0,
+                "manganese_mg": 0.0,
+                "selenium_ug": 0.0,
+                "vitamin_c_mg": 0.0,
+                "vitamin_d_ug": 0.0,
+                "vitamin_e_mg": 0.0,
+                "vitamin_k_ug": 0.0,
+                "thiamin_b1_mg": 0.0,
+                "riboflavin_b2_mg": 0.0,
+                "niacin_b3_mg": 0.0,
+                "vitamin_b6_mg": 0.0,
+                "folate_ug": 0.0,
+                "vitamin_b12_ug": 0.0,
+                "caffeine_mg": 0.0,
+                "alcohol_g": 0.0,
+            }
+
+            foods = m.get("foods") or []
+            if not isinstance(foods, list):
+                m["micros"] = micros
+                continue
+            for f in foods:
+                if not isinstance(f, dict):
+                    continue
+                fid = f.get("food_id")
+                if not fid:
+                    logger.warning(f"[ANALYTICS_REFRESH] Food item missing food_id: {f.get('name')}")
+                    continue
+                row = foods_by_id.get(str(fid))
+                if not row:
+                    logger.warning(f"[ANALYTICS_REFRESH] No food data found for food_id: {fid}")
+                    continue
+
+                grams = f.get("quantity")
+                if grams is None:
+                    grams = f.get("displayQuantity")
+                try:
+                    grams_f = float(grams or 0)
+                except Exception as e:
+                    logger.warning(f"[ANALYTICS_REFRESH] Invalid quantity for {f.get('name')}: {grams}, error: {e}")
+                    grams_f = 0.0
+                if grams_f <= 0:
+                    logger.warning(f"[ANALYTICS_REFRESH] Zero/negative quantity for {f.get('name')}: {grams_f}g - SKIPPING micro computation")
+                    continue
+                ratio = grams_f / 100.0
+                logger.debug(f"[ANALYTICS_REFRESH] Computing micros for {f.get('name')}: {grams_f}g (ratio={ratio:.2f}), sugar_per_100g={row.get('sugar_g_per_100g')}")
+
+                micros["fiber_g"] += float(row.get("fiber_g_per_100g") or 0) * ratio
+                micros["sugar_g"] += float(row.get("sugar_g_per_100g") or 0) * ratio
+                micros["saturated_fat_g"] += float(row.get("saturated_fat_g_per_100g") or 0) * ratio
+                micros["trans_fat_g"] += float(row.get("trans_fat_g_per_100g") or 0) * ratio
+                micros["cholesterol_mg"] += float(row.get("cholesterol_mg_per_100g") or 0) * ratio
+                micros["sodium_mg"] += float(row.get("sodium_mg_per_100g") or 0) * ratio
+                micros["potassium_mg"] += float(row.get("potassium_mg_per_100g") or 0) * ratio
+                micros["vitamin_a_ug"] += float(row.get("vitamin_a_ug_per_100g") or 0) * ratio
+                micros["calcium_mg"] += float(row.get("calcium_mg_per_100g") or 0) * ratio
+                micros["iron_mg"] += float(row.get("iron_mg_per_100g") or 0) * ratio
+                micros["magnesium_mg"] += float(row.get("magnesium_mg_per_100g") or 0) * ratio
+                micros["phosphorus_mg"] += float(row.get("phosphorus_mg_per_100g") or 0) * ratio
+                micros["zinc_mg"] += float(row.get("zinc_mg_per_100g") or 0) * ratio
+                micros["copper_mg"] += float(row.get("copper_mg_per_100g") or 0) * ratio
+                micros["manganese_mg"] += float(row.get("manganese_mg_per_100g") or 0) * ratio
+                micros["selenium_ug"] += float(row.get("selenium_ug_per_100g") or 0) * ratio
+                micros["vitamin_c_mg"] += float(row.get("vitamin_c_mg_per_100g") or 0) * ratio
+                micros["vitamin_d_ug"] += float(row.get("vitamin_d_ug_per_100g") or 0) * ratio
+                micros["vitamin_e_mg"] += float(row.get("vitamin_e_mg_per_100g") or 0) * ratio
+                micros["vitamin_k_ug"] += float(row.get("vitamin_k_ug_per_100g") or 0) * ratio
+                micros["thiamin_b1_mg"] += float(row.get("thiamin_b1_mg_per_100g") or 0) * ratio
+                micros["riboflavin_b2_mg"] += float(row.get("riboflavin_b2_mg_per_100g") or 0) * ratio
+                micros["niacin_b3_mg"] += float(row.get("niacin_b3_mg_per_100g") or 0) * ratio
+                micros["vitamin_b6_mg"] += float(row.get("vitamin_b6_mg_per_100g") or 0) * ratio
+                micros["folate_ug"] += float(row.get("folate_ug_per_100g") or 0) * ratio
+                micros["vitamin_b12_ug"] += float(row.get("vitamin_b12_ug_per_100g") or 0) * ratio
+                micros["caffeine_mg"] += float(row.get("caffeine_mg_per_100g") or 0) * ratio
+                micros["alcohol_g"] += float(row.get("alcohol_g_per_100g") or 0) * ratio
+
+            m["micros"] = micros
+        
+        # Log sample meal micros for debugging
+        total_micros_computed = sum(1 for m in meals_for_ai if m.get("micros", {}).get("sugar_g", 0) > 0 or m.get("micros", {}).get("calcium_mg", 0) > 0)
+        logger.info(f"[ANALYTICS_REFRESH] {total_micros_computed}/{len(meals_for_ai)} meals have non-zero computed micronutrients")
+        if meals_for_ai and meals_for_ai[0].get("micros"):
+            sample_micros = meals_for_ai[0]["micros"]
+            logger.info(f"[ANALYTICS_REFRESH] Sample meal micros: sugar={sample_micros.get('sugar_g'):.1f}g, calcium={sample_micros.get('calcium_mg'):.1f}mg, vitC={sample_micros.get('vitamin_c_mg'):.1f}mg, vitA={sample_micros.get('vitamin_a_ug'):.1f}ug, zinc={sample_micros.get('zinc_mg'):.2f}mg")
+        else:
+            logger.error(f"[ANALYTICS_REFRESH] CRITICAL: First meal has no micros computed!")
+        
+        # Generate AI analysis
+        start_time = datetime.now(timezone.utc)
+        analysis = await _generate_analytics_ai(meals_for_ai, time_range, openai_client)
+        duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+        
+        # Cache the results
+        ttl_hours = 6 if time_range in ["week", "month"] else 24
+        await conn.execute(
+            """
+            INSERT INTO analytics_cache (
+                user_id, time_range, insights, bio_impact, health_insights, bio_alerts, red_flags,
+                meals_analyzed, date_range_start, date_range_end,
+                expires_at, tokens_used, analysis_duration_ms, refresh_count
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 1)
+            ON CONFLICT (user_id, time_range)
+            DO UPDATE SET
+                insights = EXCLUDED.insights,
+                bio_impact = EXCLUDED.bio_impact,
+                health_insights = EXCLUDED.health_insights,
+                bio_alerts = EXCLUDED.bio_alerts,
+                red_flags = EXCLUDED.red_flags,
+                meals_analyzed = EXCLUDED.meals_analyzed,
+                date_range_start = EXCLUDED.date_range_start,
+                date_range_end = EXCLUDED.date_range_end,
+                expires_at = EXCLUDED.expires_at,
+                last_refreshed_at = now(),
+                tokens_used = EXCLUDED.tokens_used,
+                analysis_duration_ms = EXCLUDED.analysis_duration_ms,
+                refresh_count = analytics_cache.refresh_count + 1
+            """,
+            _uuid(user_id),
+            time_range,
+            json.dumps(analysis["insights"]),
+            json.dumps(analysis["bio_impact"]),
+            json.dumps(analysis.get("health_insights", {})),
+            json.dumps(analysis.get("bio_alerts", [])),
+            json.dumps(analysis.get("red_flags", [])),
+            len(meals),
+            meals[-1]["timestamp"] if meals else datetime.now(timezone.utc),
+            meals[0]["timestamp"] if meals else datetime.now(timezone.utc),
+            datetime.now(timezone.utc) + timedelta(hours=ttl_hours),
+            analysis.get("tokens_used", 0),
+            duration_ms,
+        )
+        
+        logger.info(f"Analytics refreshed for user {user_id}, time_range={time_range}, tokens={analysis.get('tokens_used', 0)}, duration={duration_ms}ms")
+        
+        return {
+            "insights": analysis["insights"],
+            "bio_impact": analysis["bio_impact"],
+            "health_insights": analysis.get("health_insights", {}),
+            "bio_alerts": analysis.get("bio_alerts", []),
+            "red_flags": analysis.get("red_flags", []),
+            "cached": True,
+            "last_refreshed_at": datetime.now(timezone.utc).isoformat(),
+            "meals_analyzed": len(meals),
+            "tokens_used": analysis.get("tokens_used", 0),
+            "duration_ms": duration_ms,
+        }
+
+
+@api_router.get("/admin/active-users")
+async def get_active_users(x_admin_key: Optional[str] = Header(None)):
+    """Get list of users who logged meals in last 24 hours"""
+    _require_admin_key(x_admin_key)
+    
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        # Get users who logged meals in last 24 hours
+        active_users = await conn.fetch(
+            """
+            SELECT DISTINCT user_id::text
+            FROM meals
+            WHERE timestamp >= NOW() - INTERVAL '24 hours'
+            """
+        )
+        
+        user_ids = [row[0] for row in active_users]
+        return {"active_users": user_ids}
+
+
 @api_router.post("/chef/generate")
 async def generate_recipe(request: dict, uid: str = Depends(get_current_uid)):
     """Generate personalized recipe using AI"""

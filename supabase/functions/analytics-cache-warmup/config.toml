@@ -1,0 +1,5 @@
+# Edge Function Configuration
+# Disable JWT verification since this function is called by cron jobs
+# Cron jobs don't have user JWT tokens
+
+verify_jwt = false

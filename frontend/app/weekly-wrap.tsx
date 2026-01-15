@@ -79,9 +79,9 @@ export default function WeeklyWrapScreen() {
       id: 'macros',
       title: 'Macro\nMastery',
       macros: [
-        { label: 'PRO', value: weeklyStats?.totalProtein, color: Colors.protein },
-        { label: 'CHO', value: weeklyStats?.totalCarbs, color: Colors.carbs },
-        { label: 'FAT', value: weeklyStats?.totalFat, color: Colors.fat },
+        { label: 'PRO', value: weeklyStats?.totalProtein, color: Colors.protein, gradientCenterColor: Colors.protein },
+        { label: 'CHO', value: weeklyStats?.totalCarbs, color: Colors.carbs, gradientCenterColor: Colors.carbs },
+        { label: 'FAT', value: weeklyStats?.totalFat, color: Colors.fat, gradientCenterColor: Colors.fat },
       ],
       description: "Balance is your superpower.",
       gradient: [Colors.accent, Colors.accentLight] as const,

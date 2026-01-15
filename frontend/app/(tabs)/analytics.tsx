@@ -7,33 +7,240 @@ import {
   TouchableOpacity,
   RefreshControl,
   Dimensions,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useUser } from '../../context/UserContext';
-import { mealApi } from '../../utils/api';
+import { mealApi, analyticsApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { BarChart, PieChart } from 'react-native-gifted-charts';
 import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
 import PageHeader from '../../components/PageHeader';
 import AnimatedCard from '../../components/AnimatedCard';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 48;
 
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const InsightHeader = ({ title, insight }: { title: string; insight?: string }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  const toggle = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded((prev) => !prev);
+  }, []);
+
+  return (
+    <View>
+      <TouchableOpacity
+        activeOpacity={insight ? 0.7 : 1}
+        onPress={insight ? toggle : undefined}
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: expanded ? 12 : 16
+        }}
+      >
+        <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{title}</Text>
+        {insight && (
+          <Ionicons
+            name={expanded ? "chevron-up" : "sparkles"}
+            size={18}
+            color={Colors.primary}
+          />
+        )}
+      </TouchableOpacity>
+      {expanded && insight && (
+        <View style={{ marginBottom: 16 }}>
+          <Text style={[styles.insightText, { marginBottom: 0 }]}>{insight}</Text>
+        </View>
+      )}
+    </View>
+  );
+};
+
+const CollapsibleBioAlert = ({ alert }: { alert: any }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  const toggle = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded((prev) => !prev);
+  }, []);
+
+  const getStatusColor = () => {
+    if (alert.status === 'critical') return Colors.error;
+    if (alert.status === 'warning') return Colors.warning;
+    return Colors.success;
+  };
+
+  const statusColor = getStatusColor();
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={toggle}
+      style={styles.alertCard}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={[styles.alertIconBox, { backgroundColor: statusColor + '15', borderColor: statusColor + '30' }]}>
+          <Ionicons
+            name={alert.status === 'critical' ? 'warning' : (alert.status === 'warning' ? 'alert-circle' : 'checkmark-circle')}
+            size={20}
+            color={statusColor}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.alertTitle} numberOfLines={expanded ? 0 : 1}>
+            {alert.metric}
+          </Text>
+        </View>
+        <Ionicons
+          name={expanded ? "chevron-up" : "chevron-down"}
+          size={16}
+          color={Colors.textSecondary}
+        />
+      </View>
+
+      {expanded && (
+        <View style={{ marginTop: 12, paddingLeft: 48 }}>
+          <Text style={styles.alertBody}>
+            {alert.message}
+          </Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};
+
+const CollapsibleRedFlag = ({ flag }: { flag: any }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  const toggle = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded((prev) => !prev);
+  }, []);
+
+  const getStatusColor = () => {
+    if (flag.severity === 'critical') return Colors.error;
+    return Colors.warning;
+  };
+
+  const statusColor = getStatusColor();
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={toggle}
+      style={styles.alertCard}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={[styles.alertIconBox, { backgroundColor: statusColor + '15', borderColor: statusColor + '30' }]}>
+          <Ionicons
+            name={flag.severity === 'critical' ? 'alert-circle' : 'warning'}
+            size={20}
+            color={statusColor}
+          />
+        </View>
+        <Text style={[styles.alertTitle, { flex: 1 }]} numberOfLines={expanded ? 0 : 1}>
+          {flag.title}
+        </Text>
+        <Ionicons
+          name={expanded ? "chevron-up" : "chevron-down"}
+          size={16}
+          color={Colors.textSecondary}
+        />
+      </View>
+
+      {expanded && (
+        <View style={{ marginTop: 12, paddingLeft: 48 }}>
+          <Text style={styles.alertBody}>
+            {flag.description}
+          </Text>
+          {flag.culprit_foods && flag.culprit_foods.length > 0 && (
+            <View style={styles.redFlagCulprits}>
+              <Text style={styles.redFlagCulpritsLabel}>Culprit Foods:</Text>
+              <View style={styles.redFlagCulpritsList}>
+                {flag.culprit_foods.map((food: string, idx: number) => (
+                  <View key={idx} style={[styles.redFlagCulpritBadge, { borderColor: statusColor + '30', backgroundColor: statusColor + '10' }]}>
+                    <Text style={[styles.redFlagCulpritText, { color: statusColor }]}>{food}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+          {flag.frequency && (
+            <Text
+              style={styles.redFlagFrequency}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              Frequency: {truncateWords(flag.frequency, 6)}
+            </Text>
+          )}
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};
+
+const truncateWords = (text: any, maxWords: number) => {
+  if (typeof text !== 'string') return '';
+  const words = text.trim().split(/\s+/);
+  if (words.length <= maxWords) return text;
+  return words.slice(0, maxWords).join(' ') + '…';
+};
+
 export default function AnalyticsScreen() {
   const { user } = useUser();
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('week');
   const [weeklyData, setWeeklyData] = useState<any[]>([]);
   const [macroDistribution, setMacroDistribution] = useState<any[]>([]);
   const [mealTypeBreakdown, setMealTypeBreakdown] = useState<any>({});
   const [averages, setAverages] = useState<any>({});
-  const [microAverages, setMicroAverages] = useState<any>({});
+  const [microAverages, setMicroAverages] = useState<any>({
+    sodium_mg: 0,
+    sugar_g: 0,
+    fiber_g: 0,
+    saturated_fat_g: 0,
+    trans_fat_g: 0,
+    cholesterol_mg: 0,
+    potassium_mg: 0,
+    calcium_mg: 0,
+    iron_mg: 0,
+    magnesium_mg: 0,
+    phosphorus_mg: 0,
+    zinc_mg: 0,
+    copper_mg: 0,
+    manganese_mg: 0,
+    selenium_ug: 0,
+    vitamin_a_ug: 0,
+    vitamin_c_mg: 0,
+    vitamin_d_ug: 0,
+    vitamin_e_mg: 0,
+    vitamin_k_ug: 0,
+    thiamin_b1_mg: 0,
+    riboflavin_b2_mg: 0,
+    niacin_b3_mg: 0,
+    vitamin_b6_mg: 0,
+    folate_ug: 0,
+    vitamin_b12_ug: 0,
+    caffeine_mg: 0,
+    alcohol_g: 0,
+  });
   const [topFoods, setTopFoods] = useState<any[]>([]);
   const [ingredientInsights, setIngredientInsights] = useState<any[]>([]);
+  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
   const [bioImpact, setBioImpact] = useState<any>({
     energy: 0,
     recovery: 0,
@@ -48,154 +255,7 @@ export default function AnalyticsScreen() {
       brain: 0,
       skin: 0,
     },
-    negativeDrivers: [],
-    driverFoods: {},
-    totals: { sugar: 0, sodium: 0, transFat: 0, saturatedFat: 0, additives: 0, dyes: 0, emulsifiers: 0 }
   });
-
-  const processBioImpact = useCallback((meals: any[]) => {
-    let totalProtein = 0;
-    let totalCarbs = 0;
-    let totalFat = 0;
-    let greenCount = 0;
-    let fruitCount = 0;
-    let lateMealCount = 0;
-    let totalSugar = 0;
-    let totalSodium = 0;
-    let totalTransFat = 0;
-    let totalSaturatedFat = 0;
-    let additivesCount = 0;
-    let dyeCount = 0;
-    let emulsifierCount = 0;
-    const negativeDrivers: string[] = [];
-    const driverFoods: { [key: string]: any[] } = {};
-
-    const addDriver = (driver: string, food: any) => {
-      if (!negativeDrivers.includes(driver)) negativeDrivers.push(driver);
-      if (!driverFoods[driver]) driverFoods[driver] = [];
-      
-      const flags = [];
-      const sugarVal = food.sugar || 0;
-      const sodiumVal = food.sodium || 0;
-      const transFatVal = food.trans_fat || 0;
-      const nameLower = (food.name || "").toLowerCase();
-
-      if (sugarVal > 15) flags.push({ label: 'High Sugar', value: `${sugarVal}g`, status: 'Critical', desc: 'Hidden sugars cause insulin resistance and energy crashes.' });
-      if (sodiumVal > 800) flags.push({ label: 'High Sodium', value: `${sodiumVal}mg`, status: 'Critical', desc: 'Excessive salt causes water retention and high BP.' });
-      if (transFatVal > 0) flags.push({ label: 'Trans Fat', value: `${transFatVal}g`, status: 'Critical', desc: 'Highly inflammatory and heart-damaging industrial oil.' });
-      if (food.saturated_fat > 10) flags.push({ label: 'Sat. Fat', value: `${food.saturated_fat}g`, status: 'Warning', desc: 'Excessive saturated fat triggers systemic inflammation and slows recovery.' });
-      
-      if (nameLower.includes('red 40') || nameLower.includes('yellow 5') || nameLower.includes('blue 1') || nameLower.includes('color')) {
-        flags.push({ label: 'Artificial Dyes', value: 'Detected', status: 'Warning', desc: 'Synthetic petroleum-based colors linked to hyperactivity.' });
-      }
-      if (nameLower.includes('gum') || nameLower.includes('lecithin') || nameLower.includes('carrageenan')) {
-        flags.push({ label: 'Emulsifiers', value: 'Detected', status: 'Warning', desc: 'Industrial thickeners that can irritate the gut lining.' });
-      }
-      if (nameLower.includes('diet') || nameLower.includes('zero') || nameLower.includes('aspartame') || nameLower.includes('sucralose')) {
-        flags.push({ label: 'Fake Sugars', value: 'Present', status: 'Warning', desc: 'Artificial sweeteners that can confuse metabolic signals.' });
-      }
-      
-      const foodName = food.name || "Unknown Item";
-      if (!driverFoods[driver].find(f => f.name === foodName)) {
-        driverFoods[driver].push({
-          name: foodName,
-          flags,
-          timestamp: food.timestamp,
-          driver
-        });
-      }
-    };
-
-    meals.forEach(meal => {
-      totalProtein += meal.total_protein || 0;
-      totalCarbs += meal.total_carbs || 0;
-      totalFat += meal.total_fat || 0;
-      
-      const hour = new Date(meal.timestamp).getHours();
-      if (hour >= 21) {
-        lateMealCount++;
-        addDriver('Late Night Eating', { name: format(new Date(meal.timestamp), 'h:mm a') + ' Meal', timestamp: meal.timestamp });
-      }
-
-      meal.foods?.forEach((f: any) => {
-        const foodWithTime = { ...f, timestamp: meal.timestamp };
-        const name = f.name.toLowerCase();
-        
-        // Accumulate specific "hidden" metrics if available in data
-        totalSugar += f.sugar || 0;
-        totalSodium += f.sodium || 0;
-        totalTransFat += f.trans_fat || 0;
-        totalSaturatedFat += f.saturated_fat || 0;
-
-        if (name.includes('salad') || name.includes('spinach') || name.includes('broccoli') || name.includes('kale')) greenCount++;
-        if (name.includes('berry') || name.includes('apple') || name.includes('orange') || name.includes('fruit')) fruitCount++;
-        
-        // Track negative drivers
-        if (name.includes('soda') || name.includes('sugar') || name.includes('cookie') || name.includes('cake') || name.includes('candy') || (f.sugar > 15)) {
-          addDriver('High Sugar Foods', foodWithTime);
-        }
-        if (name.includes('fried') || name.includes('burger') || name.includes('pizza') || name.includes('fast food') || (f.sodium > 800)) {
-          addDriver('Processed Sodium', foodWithTime);
-        }
-        if (name.includes('fried') || name.includes('donut') || name.includes('margarine')) {
-          addDriver('Processed Fats', foodWithTime);
-        }
-        if (name.includes('white bread') || name.includes('pasta') || name.includes('pastry') || name.includes('white rice')) {
-          addDriver('Refined Carbs', foodWithTime);
-        }
-        if (name.includes('diet') || name.includes('light') || name.includes('zero') || name.includes('sweetener')) {
-          additivesCount++;
-          addDriver('Artificial Sweeteners', foodWithTime);
-        }
-        if (name.includes('color') || name.includes('red 40') || name.includes('yellow 5') || name.includes('blue 1')) {
-          dyeCount++;
-          addDriver('Artificial Dyes', foodWithTime);
-        }
-        if (name.includes('gum') || name.includes('lecithin') || name.includes('carrageenan')) {
-          emulsifierCount++;
-          addDriver('Hidden Emulsifiers', foodWithTime);
-        }
-      });
-    });
-
-    const total = totalProtein + totalCarbs + totalFat || 1;
-    const proteinRatio = totalProtein / total;
-    const carbRatio = totalCarbs / total;
-
-    // Calculate Organ Effects (0-100 score)
-    const heartScore = Math.max(0, 100 - (totalSodium / 100) - (totalTransFat * 10) - (totalSaturatedFat / 2));
-    const liverScore = Math.max(0, 100 - (totalSugar / 2) - (additivesCount * 5) - (totalTransFat * 15));
-    const kidneyScore = Math.max(0, 100 - (totalSodium / 150) - (totalProtein > 200 ? (totalProtein - 200) / 2 : 0));
-    const brainScore = Math.max(0, 100 - (totalSugar / 3) - (dyeCount * 15) + (greenCount * 2));
-    const skinScore = Math.max(0, 100 - (totalSugar / 2) - (totalSaturatedFat / 3) + (fruitCount * 3));
-
-    setBioImpact({
-      energy: Math.min(100, Math.round(carbRatio * 150 + (greenCount * 5))),
-      recovery: Math.min(100, Math.round(proteinRatio * 250)),
-      focus: Math.min(100, Math.round((proteinRatio + (totalFat / total)) * 100 + 20 - (dyeCount * 10))),
-      stability: Math.min(100, Math.round(100 - (carbRatio * 50) + (greenCount * 3))),
-      antioxidants: Math.min(100, (greenCount + fruitCount) * 10),
-      digestion: Math.max(0, 100 - (lateMealCount * 20) - (emulsifierCount * 5)),
-      organEffects: {
-        heart: Math.round(heartScore),
-        liver: Math.round(liverScore),
-        kidney: Math.round(kidneyScore),
-        brain: Math.round(brainScore),
-        skin: Math.round(skinScore),
-      },
-      negativeDrivers,
-      driverFoods,
-      totals: {
-        sugar: Math.round(totalSugar),
-        sodium: Math.round(totalSodium),
-        transFat: totalTransFat.toFixed(1),
-        saturatedFat: Math.round(totalSaturatedFat),
-        additives: additivesCount,
-        dyes: dyeCount,
-        emulsifiers: emulsifierCount
-      }
-    });
-  }, []);
 
   const processTopFoods = useCallback((meals: any[]) => {
     const foodCounts: any = {};
@@ -235,7 +295,7 @@ export default function AnalyticsScreen() {
   const processWeeklyData = useCallback((meals: any[]) => {
     const dayTotals: any = {};
     const monthsInYear = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
+
     let chartData: any[] = [];
 
     if (timeRange === 'week') {
@@ -254,7 +314,9 @@ export default function AnalyticsScreen() {
       chartData = last7Days.map((day) => ({
         label: day,
         value: dayTotals[day] || 0,
-        frontColor: (day === 'Sat' || day === 'Sun') ? Colors.primary + '80' : Colors.primary,
+        frontColor: Colors.primary,
+        gradientColor: Colors.primaryLight,
+        showGradient: true,
         labelTextStyle: {
           color: Colors.textSecondary,
           fontSize: 10,
@@ -267,11 +329,11 @@ export default function AnalyticsScreen() {
       // 30 days grouped by week (Week on Week)
       const weekTotals: number[] = [0, 0, 0, 0];
       const now = new Date();
-      
+
       meals.forEach((meal: any) => {
         const mealDate = new Date(meal.timestamp);
         const diffDays = Math.floor((now.getTime() - mealDate.getTime()) / (1000 * 60 * 60 * 24));
-        
+
         if (diffDays < 7) weekTotals[3] += meal.total_calories;
         else if (diffDays < 14) weekTotals[2] += meal.total_calories;
         else if (diffDays < 21) weekTotals[1] += meal.total_calories;
@@ -282,6 +344,8 @@ export default function AnalyticsScreen() {
         label: `Week ${i + 1}`,
         value: total,
         frontColor: Colors.primary,
+        gradientColor: Colors.primaryLight,
+        showGradient: true,
         labelTextStyle: {
           color: Colors.textSecondary,
           fontSize: 10,
@@ -300,6 +364,8 @@ export default function AnalyticsScreen() {
         label: month,
         value: dayTotals[month] || 0,
         frontColor: Colors.primary,
+        gradientColor: Colors.primaryLight,
+        showGradient: true,
         labelTextStyle: {
           color: Colors.textSecondary,
           fontSize: 10,
@@ -336,6 +402,7 @@ export default function AnalyticsScreen() {
         text: `${Math.round(proteinRatio * 100)}%`,
         label: 'Protein',
         amountText: `${Math.round(totalProtein)}g`,
+        gradientCenterColor: Colors.protein,
       },
       {
         value: totalCarbs || 1,
@@ -343,6 +410,7 @@ export default function AnalyticsScreen() {
         text: `${Math.round(carbRatio * 100)}%`,
         label: 'Carbs',
         amountText: `${Math.round(totalCarbs)}g`,
+        gradientCenterColor: Colors.carbs,
       },
       {
         value: totalFat || 1,
@@ -350,6 +418,7 @@ export default function AnalyticsScreen() {
         text: `${Math.round(fatRatio * 100)}%`,
         label: 'Fat',
         amountText: `${Math.round(totalFat)}g`,
+        gradientCenterColor: Colors.fat,
       },
     ];
     setMacroDistribution(pieData);
@@ -382,22 +451,50 @@ export default function AnalyticsScreen() {
         sugar_g: 0,
         fiber_g: 0,
         saturated_fat_g: 0,
+        trans_fat_g: 0,
+        cholesterol_mg: 0,
         potassium_mg: 0,
         calcium_mg: 0,
         iron_mg: 0,
+        magnesium_mg: 0,
+        phosphorus_mg: 0,
+        zinc_mg: 0,
+        copper_mg: 0,
+        manganese_mg: 0,
+        selenium_ug: 0,
+        vitamin_a_ug: 0,
         vitamin_c_mg: 0,
+        vitamin_d_ug: 0,
+        vitamin_e_mg: 0,
+        vitamin_k_ug: 0,
+        thiamin_b1_mg: 0,
+        riboflavin_b2_mg: 0,
+        niacin_b3_mg: 0,
+        vitamin_b6_mg: 0,
+        folate_ug: 0,
+        vitamin_b12_ug: 0,
+        caffeine_mg: 0,
+        alcohol_g: 0,
       });
       return;
     }
 
     const daysForFetch = timeRange === 'week' ? 7 : (timeRange === 'month' ? 30 : 365);
-    const totalCalories = meals.reduce((sum, m) => sum + m.total_calories, 0);
-    const totalProtein = meals.reduce((sum, m) => sum + m.total_protein, 0);
-    const totalCarbs = meals.reduce((sum, m) => sum + m.total_carbs, 0);
-    const totalFat = meals.reduce((sum, m) => sum + m.total_fat, 0);
+    const validMeals = meals.filter((m: any) => {
+      const cals = Number(m?.total_calories || 0);
+      const p = Number(m?.total_protein || 0);
+      const cb = Number(m?.total_carbs || 0);
+      const f = Number(m?.total_fat || 0);
+      return cals > 0 || p > 0 || cb > 0 || f > 0;
+    });
 
-    const loggedDays = new Set(meals.map(m => format(new Date(m.timestamp), 'yyyy-MM-dd'))).size;
-    const daysForAverage = loggedDays || 1;
+    const totalCalories = validMeals.reduce((sum: number, m: any) => sum + Number(m.total_calories || 0), 0);
+    const totalProtein = validMeals.reduce((sum: number, m: any) => sum + Number(m.total_protein || 0), 0);
+    const totalCarbs = validMeals.reduce((sum: number, m: any) => sum + Number(m.total_carbs || 0), 0);
+    const totalFat = validMeals.reduce((sum: number, m: any) => sum + Number(m.total_fat || 0), 0);
+
+    const loggedDays = new Set(validMeals.map((m: any) => format(new Date(m.timestamp), 'yyyy-MM-dd'))).size;
+    const daysForAverage = Math.max(1, loggedDays); // Use actual logged days, not full time range
 
     const calorieTarget = user?.daily_calorie_target || 2000;
     const consistencyScore = Math.min(100, Math.round((loggedDays / daysForFetch) * 100));
@@ -407,31 +504,49 @@ export default function AnalyticsScreen() {
       protein: Math.round(totalProtein / daysForAverage),
       carbs: Math.round(totalCarbs / daysForAverage),
       fat: Math.round(totalFat / daysForAverage),
-      mealsPerDay: (meals.length / daysForAverage).toFixed(1),
+      mealsPerDay: (validMeals.length / Math.max(1, loggedDays)).toFixed(1),
       consistencyScore,
       isHighProtein: (totalProtein / (totalProtein + totalCarbs + totalFat || 1)) > 0.3,
       isUnderTarget: Math.round(totalCalories / daysForAverage) < calorieTarget,
     });
 
-    let sodiumMg = 0;
-    let sugarG = 0;
-    let fiberG = 0;
-    let saturatedFatG = 0;
-    let potassiumMg = 0;
-    let calciumMg = 0;
-    let ironMg = 0;
-    let vitaminCMg = 0;
+    let sodiumMg = 0, sugarG = 0, fiberG = 0, saturatedFatG = 0, transFatG = 0, cholesterolMg = 0;
+    let potassiumMg = 0, calciumMg = 0, ironMg = 0, magnesiumMg = 0, phosphorusMg = 0;
+    let zincMg = 0, copperMg = 0, manganeseMg = 0, seleniumUg = 0;
+    let vitaminAUg = 0, vitaminCMg = 0, vitaminDUg = 0, vitaminEMg = 0, vitaminKUg = 0;
+    let thiaminB1Mg = 0, riboflavinB2Mg = 0, niacinB3Mg = 0, vitaminB6Mg = 0;
+    let folateUg = 0, vitaminB12Ug = 0, caffeineMg = 0, alcoholG = 0;
 
-    meals.forEach((m: any) => {
+    validMeals.forEach((m: any) => {
       const micros = m?.micros || {};
       sodiumMg += Number(micros.sodium_mg || 0);
       sugarG += Number(micros.sugar_g || 0);
       fiberG += Number(micros.fiber_g || 0);
       saturatedFatG += Number(micros.saturated_fat_g || 0);
+      transFatG += Number(micros.trans_fat_g || 0);
+      cholesterolMg += Number(micros.cholesterol_mg || 0);
       potassiumMg += Number(micros.potassium_mg || 0);
       calciumMg += Number(micros.calcium_mg || 0);
       ironMg += Number(micros.iron_mg || 0);
+      magnesiumMg += Number(micros.magnesium_mg || 0);
+      phosphorusMg += Number(micros.phosphorus_mg || 0);
+      zincMg += Number(micros.zinc_mg || 0);
+      copperMg += Number(micros.copper_mg || 0);
+      manganeseMg += Number(micros.manganese_mg || 0);
+      seleniumUg += Number(micros.selenium_ug || 0);
+      vitaminAUg += Number(micros.vitamin_a_ug || 0);
       vitaminCMg += Number(micros.vitamin_c_mg || 0);
+      vitaminDUg += Number(micros.vitamin_d_ug || 0);
+      vitaminEMg += Number(micros.vitamin_e_mg || 0);
+      vitaminKUg += Number(micros.vitamin_k_ug || 0);
+      thiaminB1Mg += Number(micros.thiamin_b1_mg || 0);
+      riboflavinB2Mg += Number(micros.riboflavin_b2_mg || 0);
+      niacinB3Mg += Number(micros.niacin_b3_mg || 0);
+      vitaminB6Mg += Number(micros.vitamin_b6_mg || 0);
+      folateUg += Number(micros.folate_ug || 0);
+      vitaminB12Ug += Number(micros.vitamin_b12_ug || 0);
+      caffeineMg += Number(micros.caffeine_mg || 0);
+      alcoholG += Number(micros.alcohol_g || 0);
     });
 
     setMicroAverages({
@@ -439,10 +554,30 @@ export default function AnalyticsScreen() {
       sugar_g: Math.round(sugarG / daysForAverage),
       fiber_g: Math.round(fiberG / daysForAverage),
       saturated_fat_g: Math.round(saturatedFatG / daysForAverage),
+      trans_fat_g: Math.round(transFatG / daysForAverage),
+      cholesterol_mg: Math.round(cholesterolMg / daysForAverage),
       potassium_mg: Math.round(potassiumMg / daysForAverage),
       calcium_mg: Math.round(calciumMg / daysForAverage),
       iron_mg: Math.round(ironMg / daysForAverage),
+      magnesium_mg: Math.round(magnesiumMg / daysForAverage),
+      phosphorus_mg: Math.round(phosphorusMg / daysForAverage),
+      zinc_mg: Math.round(zincMg / daysForAverage),
+      copper_mg: Math.round(copperMg / daysForAverage),
+      manganese_mg: Math.round(manganeseMg / daysForAverage),
+      selenium_ug: Math.round(seleniumUg / daysForAverage),
+      vitamin_a_ug: Math.round(vitaminAUg / daysForAverage),
       vitamin_c_mg: Math.round(vitaminCMg / daysForAverage),
+      vitamin_d_ug: Math.round(vitaminDUg / daysForAverage),
+      vitamin_e_mg: Math.round(vitaminEMg / daysForAverage),
+      vitamin_k_ug: Math.round(vitaminKUg / daysForAverage),
+      thiamin_b1_mg: Math.round(thiaminB1Mg / daysForAverage),
+      riboflavin_b2_mg: Math.round(riboflavinB2Mg / daysForAverage),
+      niacin_b3_mg: Math.round(niacinB3Mg / daysForAverage),
+      vitamin_b6_mg: Math.round(vitaminB6Mg / daysForAverage),
+      folate_ug: Math.round(folateUg / daysForAverage),
+      vitamin_b12_ug: Math.round(vitaminB12Ug / daysForAverage),
+      caffeine_mg: Math.round(caffeineMg / daysForAverage),
+      alcohol_g: Math.round(alcoholG / daysForAverage),
     });
   }, [timeRange, user?.daily_calorie_target]);
 
@@ -450,40 +585,108 @@ export default function AnalyticsScreen() {
     if (!user) return;
     setLoading(true);
     try {
-      // 7 days for week, 30 for month, 365 days for annual (Jan, Feb...)
-      let days = 7;
-      if (timeRange === 'month') days = 30;
-      else if (timeRange === 'year') days = 365;
-      
-      const history = await mealApi.getHistory(user.id, days);
-      
-      processWeeklyData(history.meals);
-      processMacroDistribution(history.meals);
-      processMealTypeBreakdown(history.meals);
-      processTopFoods(history.meals);
-      processBioImpact(history.meals);
-      calculateAverages(history.meals);
+      try {
+        const bundle = await analyticsApi.getAnalyticsBundle(user.id, timeRange);
+        const meals = (bundle?.history?.meals || []).map((m: any) => ({
+          ...m,
+          total_calories: m?.total_calories ?? m?.totalCalories ?? 0,
+          total_protein: m?.total_protein ?? m?.totalProtein ?? 0,
+          total_carbs: m?.total_carbs ?? m?.totalCarbs ?? 0,
+          total_fat: m?.total_fat ?? m?.totalFat ?? 0,
+          meal_type: m?.meal_type ?? m?.mealType,
+          timestamp: m?.timestamp ?? m?.created_at ?? m?.createdAt,
+        }));
+
+        processWeeklyData(meals);
+        processMacroDistribution(meals);
+        processMealTypeBreakdown(meals);
+        processTopFoods(meals);
+        calculateAverages(meals);
+
+        const aiData = bundle?.ai || {};
+        setAiAnalysis(aiData);
+
+        if (aiData.bio_impact && typeof aiData.bio_impact === 'object') {
+          setBioImpact({
+            energy: aiData.bio_impact.energy ?? 0,
+            recovery: aiData.bio_impact.recovery ?? 0,
+            focus: aiData.bio_impact.focus ?? 0,
+            stability: aiData.bio_impact.stability ?? 0,
+            antioxidants: aiData.bio_impact.antioxidants ?? 0,
+            digestion: aiData.bio_impact.digestion ?? 0,
+            organEffects: {
+              heart: aiData.bio_impact.organ_effects?.heart ?? 0,
+              liver: aiData.bio_impact.organ_effects?.liver ?? 0,
+              kidney: aiData.bio_impact.organ_effects?.kidney ?? 0,
+              brain: aiData.bio_impact.organ_effects?.brain ?? 0,
+              skin: aiData.bio_impact.organ_effects?.skin ?? 0,
+            },
+          });
+        }
+      } catch (err) {
+        console.warn('[Analytics] Bundle fetch failed, falling back to legacy flow:', err);
+        // Fallback to the previous 2-request flow if bundle is not available
+        let days = 7;
+        if (timeRange === 'month') days = 30;
+        else if (timeRange === 'year') days = 365;
+
+        const history = await mealApi.getHistory(user.id, days);
+        const meals = (history?.meals || []).map((m: any) => ({
+          ...m,
+          total_calories: m?.total_calories ?? m?.totalCalories ?? 0,
+          total_protein: m?.total_protein ?? m?.totalProtein ?? 0,
+          total_carbs: m?.total_carbs ?? m?.totalCarbs ?? 0,
+          total_fat: m?.total_fat ?? m?.totalFat ?? 0,
+          meal_type: m?.meal_type ?? m?.mealType,
+          timestamp: m?.timestamp ?? m?.created_at ?? m?.createdAt,
+        }));
+
+        processWeeklyData(meals);
+        processMacroDistribution(meals);
+        processMealTypeBreakdown(meals);
+        processTopFoods(meals);
+        calculateAverages(meals);
+
+        const aiData = await analyticsApi.getAnalytics(user.id, timeRange);
+        setAiAnalysis(aiData);
+
+        if (aiData.bio_impact && typeof aiData.bio_impact === 'object') {
+          setBioImpact({
+            energy: aiData.bio_impact.energy ?? 0,
+            recovery: aiData.bio_impact.recovery ?? 0,
+            focus: aiData.bio_impact.focus ?? 0,
+            stability: aiData.bio_impact.stability ?? 0,
+            antioxidants: aiData.bio_impact.antioxidants ?? 0,
+            digestion: aiData.bio_impact.digestion ?? 0,
+            organEffects: {
+              heart: aiData.bio_impact.organ_effects?.heart ?? 0,
+              liver: aiData.bio_impact.organ_effects?.liver ?? 0,
+              kidney: aiData.bio_impact.organ_effects?.kidney ?? 0,
+              brain: aiData.bio_impact.organ_effects?.brain ?? 0,
+              skin: aiData.bio_impact.organ_effects?.skin ?? 0,
+            },
+          });
+        }
+      }
     } catch (error) {
       console.error('Error fetching analytics:', error);
     } finally {
       setLoading(false);
     }
-  }, [user, timeRange, processWeeklyData, processMacroDistribution, processMealTypeBreakdown, calculateAverages, processTopFoods, processBioImpact]);
+  }, [user, timeRange, processWeeklyData, processMacroDistribution, processMealTypeBreakdown, calculateAverages, processTopFoods]);
 
   useEffect(() => {
     if (user) {
       fetchAnalytics();
     }
-  }, [user, fetchAnalytics]);
+  }, [user, timeRange, fetchAnalytics]);
 
-  const hasAnyMacros = macroDistribution.some(d => d.value > 1); // 1 is the fallback value in processMacroDistribution
-
-  const isBioImpactOptimized = bioImpact.stability >= 70 && bioImpact.recovery >= 70 && bioImpact.digestion >= 70 && bioImpact.antioxidants >= 50;
+  const hasAnyMacros = macroDistribution.some(item => item.value > 1);
 
   return (
     <View style={styles.container}>
-      <PageHeader 
-        title="Analytics" 
+      <PageHeader
+        title="Analytics"
         subtitle="Your nutrition insights"
       />
       <ScrollView
@@ -491,9 +694,9 @@ export default function AnalyticsScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl 
-            refreshing={loading} 
-            onRefresh={fetchAnalytics} 
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={fetchAnalytics}
             tintColor={Colors.primary}
           />
         }
@@ -505,7 +708,7 @@ export default function AnalyticsScreen() {
               timeRange === 'week' && styles.timeRangeButtonActive,
             ]}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
               setTimeRange('week');
             }}
           >
@@ -524,7 +727,7 @@ export default function AnalyticsScreen() {
               timeRange === 'month' && styles.timeRangeButtonActive,
             ]}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
               setTimeRange('month');
             }}
           >
@@ -543,7 +746,7 @@ export default function AnalyticsScreen() {
               timeRange === 'year' && styles.timeRangeButtonActive,
             ]}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
               setTimeRange('year');
             }}
           >
@@ -559,7 +762,10 @@ export default function AnalyticsScreen() {
         </View>
 
         <AnimatedCard delay={100} type="slide" style={styles.section}>
-          <Text style={styles.sectionTitle}>Daily Averages</Text>
+          <InsightHeader
+            title="Daily Averages"
+            insight={aiAnalysis?.insights?.macro_balance}
+          />
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <Ionicons name="flame" size={28} color={Colors.primary} />
@@ -585,49 +791,126 @@ export default function AnalyticsScreen() {
         </AnimatedCard>
 
         <AnimatedCard delay={150} type="slide" style={styles.section}>
-          <Text style={styles.sectionTitle}>Micronutrients (Daily Avg)</Text>
+          <InsightHeader
+            title="Micronutrients (Daily Avg)"
+            insight={aiAnalysis?.insights?.micronutrient_status}
+          />
+
+          <Text style={styles.subSectionTitle}>Key Minerals & Fiber</Text>
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
-              <Ionicons name="water-outline" size={28} color={Colors.text} />
+              <Ionicons name="water-outline" size={24} color={Colors.text} />
               <Text style={styles.statValue}>{microAverages.sodium_mg || 0}</Text>
               <Text style={styles.statLabel}>Sodium (mg)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="cafe-outline" size={28} color={Colors.text} />
-              <Text style={styles.statValue}>{microAverages.sugar_g || 0}</Text>
-              <Text style={styles.statLabel}>Sugar (g)</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Ionicons name="leaf-outline" size={28} color={Colors.text} />
+              <Ionicons name="leaf-outline" size={24} color={Colors.text} />
               <Text style={styles.statValue}>{microAverages.fiber_g || 0}</Text>
               <Text style={styles.statLabel}>Fiber (g)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="flame-outline" size={28} color={Colors.text} />
-              <Text style={styles.statValue}>{microAverages.saturated_fat_g || 0}</Text>
-              <Text style={styles.statLabel}>Sat Fat (g)</Text>
-            </View>
-          </View>
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Ionicons name="battery-charging-outline" size={28} color={Colors.text} />
+              <Ionicons name="battery-charging-outline" size={24} color={Colors.text} />
               <Text style={styles.statValue}>{microAverages.potassium_mg || 0}</Text>
               <Text style={styles.statLabel}>Potassium (mg)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="nutrition-outline" size={28} color={Colors.text} />
+              <Ionicons name="nutrition-outline" size={24} color={Colors.text} />
               <Text style={styles.statValue}>{microAverages.calcium_mg || 0}</Text>
               <Text style={styles.statLabel}>Calcium (mg)</Text>
             </View>
+          </View>
+
+          <View style={[styles.statsGrid, { marginTop: 12 }]}>
             <View style={styles.statCard}>
-              <Ionicons name="pulse-outline" size={28} color={Colors.text} />
+              <Ionicons name="pulse-outline" size={24} color={Colors.text} />
               <Text style={styles.statValue}>{microAverages.iron_mg || 0}</Text>
               <Text style={styles.statLabel}>Iron (mg)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="sunny-outline" size={28} color={Colors.text} />
+              <Ionicons name="flash-outline" size={24} color={Colors.text} />
+              <Text style={styles.statValue}>{microAverages.magnesium_mg || 0}</Text>
+              <Text style={styles.statLabel}>Magnesium (mg)</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="cog-outline" size={24} color={Colors.text} />
+              <Text style={styles.statValue}>{(microAverages.zinc_mg || 0).toFixed(1)}</Text>
+              <Text style={styles.statLabel}>Zinc (mg)</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="construct-outline" size={24} color={Colors.text} />
+              <Text style={styles.statValue}>{microAverages.phosphorus_mg || 0}</Text>
+              <Text style={styles.statLabel}>Phosphorus (mg)</Text>
+            </View>
+          </View>
+
+          <Text style={[styles.subSectionTitle, { marginTop: 20 }]}>Vitamins</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Ionicons name="sunny-outline" size={24} color={Colors.text} />
               <Text style={styles.statValue}>{microAverages.vitamin_c_mg || 0}</Text>
-              <Text style={styles.statLabel}>Vitamin C (mg)</Text>
+              <Text style={styles.statLabel}>Vit C (mg)</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="eye-outline" size={24} color={Colors.text} />
+              <Text style={styles.statValue}>{microAverages.vitamin_a_ug || 0}</Text>
+              <Text style={styles.statLabel}>Vit A (µg)</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="rainy-outline" size={24} color={Colors.text} />
+              <Text style={styles.statValue}>{(microAverages.vitamin_d_ug || 0).toFixed(1)}</Text>
+              <Text style={styles.statLabel}>Vit D (µg)</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="shield-outline" size={24} color={Colors.text} />
+              <Text style={styles.statValue}>{(microAverages.vitamin_e_mg || 0).toFixed(1)}</Text>
+              <Text style={styles.statLabel}>Vit E (mg)</Text>
+            </View>
+          </View>
+
+          <View style={[styles.statsGrid, { marginTop: 12 }]}>
+            <View style={styles.statCard}>
+              <Ionicons name="leaf-outline" size={24} color={Colors.text} />
+              <Text style={styles.statValue}>{microAverages.vitamin_k_ug || 0}</Text>
+              <Text style={styles.statLabel}>Vit K (µg)</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="medical-outline" size={24} color={Colors.text} />
+              <Text style={styles.statValue}>{(microAverages.vitamin_b12_ug || 0).toFixed(1)}</Text>
+              <Text style={styles.statLabel}>B12 (µg)</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="ellipse-outline" size={24} color={Colors.text} />
+              <Text style={styles.statValue}>{microAverages.folate_ug || 0}</Text>
+              <Text style={styles.statLabel}>Folate (µg)</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="flask-outline" size={24} color={Colors.text} />
+              <Text style={styles.statValue}>{(microAverages.vitamin_b6_mg || 0).toFixed(1)}</Text>
+              <Text style={styles.statLabel}>B6 (mg)</Text>
+            </View>
+          </View>
+
+          <Text style={[styles.subSectionTitle, { marginTop: 20 }]}>Fats & Others</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Ionicons name="cafe-outline" size={24} color={Colors.text} />
+              <Text style={styles.statValue}>{microAverages.sugar_g || 0}</Text>
+              <Text style={styles.statLabel}>Sugar (g)</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="flame-outline" size={24} color={Colors.text} />
+              <Text style={styles.statValue}>{microAverages.saturated_fat_g || 0}</Text>
+              <Text style={styles.statLabel}>Sat Fat (g)</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="contrast-outline" size={24} color={Colors.text} />
+              <Text style={styles.statValue}>{microAverages.cholesterol_mg || 0}</Text>
+              <Text style={styles.statLabel}>Chol (mg)</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="remove-circle-outline" size={24} color={Colors.text} />
+              <Text style={styles.statValue}>{microAverages.trans_fat_g || 0}</Text>
+              <Text style={styles.statLabel}>Trans (g)</Text>
             </View>
           </View>
         </AnimatedCard>
@@ -636,8 +919,8 @@ export default function AnalyticsScreen() {
           <AnimatedCard delay={200} type="slide" style={styles.section}>
             <Text style={styles.sectionTitle}>Calorie Trend</Text>
             <View style={styles.chartCard}>
-              <ScrollView 
-                horizontal 
+              <ScrollView
+                horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ paddingRight: 20 }}
               >
@@ -648,21 +931,23 @@ export default function AnalyticsScreen() {
                     height={200}
                     barWidth={timeRange === 'week' ? 32 : (timeRange === 'month' ? 40 : 28)}
                     spacing={timeRange === 'week' ? 24 : (timeRange === 'month' ? 30 : 22)}
+                    labelWidth={timeRange === 'week' ? 56 : (timeRange === 'month' ? 70 : 50)}
                     roundedTop
                     roundedBottom
                     hideRules
-                    xAxisThickness={0}
-                    yAxisThickness={0}
-                    yAxisTextStyle={{ 
-                      color: Colors.textLight, 
-                      fontSize: 10, 
+                    xAxisThickness={1}
+                    yAxisThickness={1}
+                    yAxisTextStyle={{
+                      color: Colors.textLight,
+                      fontSize: 10,
                       fontWeight: '800',
                       textAlign: 'right',
                     }}
                     yAxisLabelWidth={35}
                     noOfSections={4}
                     maxValue={Math.max(...weeklyData.map(d => d.value), 2500)}
-                    initialSpacing={24}
+                    initialSpacing={16}
+                    endSpacing={16}
                     xAxisLabelTextStyle={{
                       color: Colors.textSecondary,
                       fontSize: 10,
@@ -681,6 +966,10 @@ export default function AnalyticsScreen() {
                         <View style={styles.hollowBar} />
                       ) : null
                     )}
+                    gradientColor={Colors.primaryLight}
+                    showGradient={true}
+                    isAnimated={true}
+                    animationDuration={1000}
                   />
                 </View>
               </ScrollView>
@@ -695,11 +984,21 @@ export default function AnalyticsScreen() {
               <PieChart
                 data={hasAnyMacros ? macroDistribution : [{ value: 1, color: Colors.border }]}
                 radius={90}
+                innerRadius={60}
+                donut
                 backgroundColor="transparent"
                 showText
                 textColor={Colors.white}
                 textSize={14}
                 fontWeight="900"
+                centerLabelComponent={() => (
+                  <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="nutrition" size={24} color="white" />
+                    <Text style={[styles.statLabel, { marginTop: 4, color: Colors.primary }]}>Macros</Text>
+                  </View>
+                )}
+                isAnimated
+                animationDuration={1000}
               />
             </View>
             <View style={styles.pieLegend}>
@@ -715,27 +1014,31 @@ export default function AnalyticsScreen() {
         </AnimatedCard>
 
         <AnimatedCard delay={400} type="slide" style={styles.section}>
-          <Text style={styles.sectionTitle}>Meal Type Breakdown</Text>
+          <InsightHeader
+            title="Meal Type Breakdown"
+            insight={aiAnalysis?.insights?.timing}
+          />
           <View style={styles.mealTypeCard}>
             {Object.entries(mealTypeBreakdown).map(([type, data]: [string, any]) => (
               <View key={type} style={styles.mealTypeRow}>
                 <View style={styles.mealTypeInfo}>
-                  <View style={[styles.mealTypeIconContainer, { backgroundColor: 
-                    type === 'breakfast' ? '#FF9F0A20' :
-                    type === 'lunch' ? '#30B0C720' :
-                    type === 'dinner' ? '#5856D620' : '#FF3B3020'
+                  <View style={[styles.mealTypeIconContainer, {
+                    backgroundColor:
+                      type === 'breakfast' ? '#FF9F0A20' :
+                        type === 'lunch' ? '#30B0C720' :
+                          type === 'dinner' ? '#5856D620' : '#FF3B3020'
                   }]}>
                     <Ionicons
                       name={
                         type === 'breakfast' ? 'sunny' :
-                        type === 'lunch' ? 'restaurant' :
-                        type === 'dinner' ? 'moon' : 'fast-food'
+                          type === 'lunch' ? 'restaurant' :
+                            type === 'dinner' ? 'moon' : 'fast-food'
                       }
                       size={20}
                       color={
                         type === 'breakfast' ? '#FF9F0A' :
-                        type === 'lunch' ? '#30B0C7' :
-                        type === 'dinner' ? '#5856D6' : '#FF3B30'
+                          type === 'lunch' ? '#30B0C7' :
+                            type === 'dinner' ? '#5856D6' : '#FF3B30'
                       }
                     />
                   </View>
@@ -755,7 +1058,10 @@ export default function AnalyticsScreen() {
         </AnimatedCard>
 
         <AnimatedCard delay={425} type="slide" style={styles.section}>
-          <Text style={styles.sectionTitle}>Top Foods</Text>
+          <InsightHeader
+            title="Top Foods"
+            insight={aiAnalysis?.insights?.variety}
+          />
           <View style={styles.topFoodsCard}>
             {topFoods.length > 0 ? (
               topFoods.map((food, index) => (
@@ -805,11 +1111,11 @@ export default function AnalyticsScreen() {
           <View style={styles.healthInsightsCard}>
             <View style={styles.organGrid}>
               {[
-                { label: 'Heart', score: bioImpact.organEffects.heart, icon: 'heart', color: '#FF2D55' },
-                { label: 'Liver', score: bioImpact.organEffects.liver, icon: 'shield-checkmark', color: '#34C759' },
-                { label: 'Kidney', score: bioImpact.organEffects.kidney, icon: 'water', color: '#5AC8FA' },
-                { label: 'Brain', score: bioImpact.organEffects.brain, icon: 'flash', color: '#FF9500' },
-                { label: 'Skin', score: bioImpact.organEffects.skin, icon: 'sparkles', color: '#AF52DE' },
+                { label: 'Heart', key: 'heart', score: bioImpact.organEffects.heart, icon: 'heart', color: Colors.error },
+                { label: 'Liver', key: 'liver', score: bioImpact.organEffects.liver, icon: 'shield-checkmark', color: Colors.success },
+                { label: 'Kidney', key: 'kidney', score: bioImpact.organEffects.kidney, icon: 'water', color: Colors.info },
+                { label: 'Brain', key: 'brain', score: bioImpact.organEffects.brain, icon: 'flash', color: Colors.warning },
+                { label: 'Skin', key: 'skin', score: bioImpact.organEffects.skin, icon: 'sparkles', color: Colors.primary },
               ].map((organ, index) => (
                 <View key={index} style={styles.organItem}>
                   <View style={[styles.organIconContainer, { backgroundColor: organ.color + '15' }]}>
@@ -818,19 +1124,65 @@ export default function AnalyticsScreen() {
                   <View style={styles.organInfo}>
                     <View style={styles.organHeader}>
                       <Text style={styles.organLabel}>{organ.label}</Text>
-                      <Text style={[styles.organScore, { color: organ.score < 50 ? '#FF3B30' : (organ.score < 80 ? '#FF9500' : '#34C759') }]}>
+                      <Text style={[styles.organScore, { color: organ.score < 50 ? Colors.error : (organ.score < 80 ? Colors.warning : Colors.success) }]}>
                         {organ.score}%
                       </Text>
                     </View>
                     <View style={styles.organProgressBg}>
-                      <View 
+                      <View
                         style={[
-                          styles.organProgressFill, 
-                          { 
-                            width: `${organ.score}%`, 
-                            backgroundColor: organ.score < 50 ? '#FF3B30' : (organ.score < 80 ? '#FF9500' : '#34C759') 
+                          styles.organProgressFill,
+                          {
+                            width: `${organ.score}%`,
+                            backgroundColor: organ.score < 50 ? Colors.error : (organ.score < 80 ? Colors.warning : Colors.success)
                           }
-                        ]} 
+                        ]}
+                      />
+                    </View>
+                    {aiAnalysis?.health_insights?.[organ.key] && (
+                      <Text style={styles.organInsightText} numberOfLines={2} ellipsizeMode="tail">
+                        {aiAnalysis.health_insights[organ.key]}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        </AnimatedCard>
+
+        <AnimatedCard delay={550} type="slide" style={styles.section}>
+          <Text style={styles.sectionTitle}>Biological Impact</Text>
+          <View style={styles.healthInsightsCard}>
+            <View style={styles.organGrid}>
+              {[
+                { label: 'Energy Levels', value: bioImpact.energy, icon: 'flash', color: Colors.warning },
+                { label: 'Muscle Recovery', value: bioImpact.recovery, icon: 'barbell', color: Colors.error },
+                { label: 'Mental Focus', value: bioImpact.focus, icon: 'eye', color: Colors.info },
+                { label: 'Sugar Stability', value: bioImpact.stability, icon: 'pulse', color: Colors.success },
+                { label: 'Antioxidant Load', value: bioImpact.antioxidants, icon: 'leaf', color: Colors.primary },
+                { label: 'Digestive Ease', value: bioImpact.digestion, icon: 'water', color: Colors.info },
+              ].map((item, index) => (
+                <View key={index} style={styles.organItem}>
+                  <View style={[styles.organIconContainer, { backgroundColor: item.color + '15' }]}>
+                    <Ionicons name={item.icon as any} size={20} color={item.color} />
+                  </View>
+                  <View style={styles.organInfo}>
+                    <View style={styles.organHeader}>
+                      <Text style={styles.organLabel}>{item.label}</Text>
+                      <Text style={[styles.organScore, { color: item.color }]}>
+                        {item.value}%
+                      </Text>
+                    </View>
+                    <View style={styles.organProgressBg}>
+                      <View
+                        style={[
+                          styles.organProgressFill,
+                          {
+                            width: `${item.value}%`,
+                            backgroundColor: item.color
+                          }
+                        ]}
                       />
                     </View>
                   </View>
@@ -840,288 +1192,36 @@ export default function AnalyticsScreen() {
           </View>
         </AnimatedCard>
 
-        <AnimatedCard delay={550} type="slide" style={styles.section}>
-          <Text style={styles.sectionTitle}>{isBioImpactOptimized ? 'Body Optimized' : 'Bio-Impact Alerts'}</Text>
-          <View style={styles.bioImpactCard}>
-            <View style={styles.bioGrid}>
-              <View style={styles.bioItem}>
-                <View style={[styles.bioIconBg, { backgroundColor: '#FF950020' }]}>
-                  <Ionicons name="flash" size={20} color="#FF9500" />
-                </View>
-                <View style={styles.bioInfo}>
-                  <View style={styles.bioLabelRow}>
-                    <Text style={styles.bioLabel}>Energy Levels</Text>
-                    <Text style={styles.bioValueText}>{bioImpact.energy}%</Text>
-                  </View>
-                  <View style={styles.bioProgressBg}>
-                    <View style={[styles.bioProgressFill, { width: `${bioImpact.energy}%`, backgroundColor: '#FF9500' }]} />
-                  </View>
-                </View>
+        {(() => {
+          const highlights: any[] = [
+            ...(aiAnalysis?.bio_alerts || []).map((a: any) => ({ ...a, type: 'alert' })),
+            ...(aiAnalysis?.red_flags || []).map((f: any) => ({ ...f, type: 'flag' })),
+          ];
+
+          if (highlights.length === 0) return null;
+
+          const getSeverityValue = (item: any) => {
+            const status = item.type === 'alert' ? item.status : item.severity;
+            if (status === 'critical') return 2;
+            if (status === 'warning') return 1;
+            return 0; // success / normal
+          };
+
+          const sortedHighlights = highlights.sort((a, b) => getSeverityValue(a) - getSeverityValue(b));
+
+          return (
+            <AnimatedCard delay={600} type="slide" style={styles.section}>
+              <Text style={styles.sectionTitle}>Highlights</Text>
+              <View style={styles.redFlagsCard}>
+                {sortedHighlights.map((item: any, index: number) => (
+                  item.type === 'alert' ?
+                    <CollapsibleBioAlert key={`alert-${index}`} alert={item} /> :
+                    <CollapsibleRedFlag key={`flag-${index}`} flag={item} />
+                ))}
               </View>
-
-              <View style={styles.bioItem}>
-                <View style={[styles.bioIconBg, { backgroundColor: '#FF2D5520' }]}>
-                  <Ionicons name="barbell" size={20} color="#FF2D55" />
-                </View>
-                <View style={styles.bioInfo}>
-                  <View style={styles.bioLabelRow}>
-                    <Text style={styles.bioLabel}>Muscle Recovery</Text>
-                    <Text style={styles.bioValueText}>{bioImpact.recovery}%</Text>
-                  </View>
-                  <View style={styles.bioProgressBg}>
-                    <View style={[styles.bioProgressFill, { width: `${bioImpact.recovery}%`, backgroundColor: '#FF2D55' }]} />
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.bioItem}>
-                <View style={[styles.bioIconBg, { backgroundColor: '#5856D620' }]}>
-                  <Ionicons name="eye" size={20} color="#5856D6" />
-                </View>
-                <View style={styles.bioInfo}>
-                  <View style={styles.bioLabelRow}>
-                    <Text style={styles.bioLabel}>Mental Focus</Text>
-                    <Text style={styles.bioValueText}>{bioImpact.focus}%</Text>
-                  </View>
-                  <View style={styles.bioProgressBg}>
-                    <View style={[styles.bioProgressFill, { width: `${bioImpact.focus}%`, backgroundColor: '#5856D6' }]} />
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.bioItem}>
-                <View style={[styles.bioIconBg, { backgroundColor: '#34C75920' }]}>
-                  <Ionicons name="pulse" size={20} color="#34C759" />
-                </View>
-                <View style={styles.bioInfo}>
-                  <View style={styles.bioLabelRow}>
-                    <Text style={styles.bioLabel}>Sugar Stability</Text>
-                    <Text style={styles.bioValueText}>{bioImpact.stability}%</Text>
-                  </View>
-                  <View style={styles.bioProgressBg}>
-                    <View style={[styles.bioProgressFill, { width: `${bioImpact.stability}%`, backgroundColor: '#34C759' }]} />
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.bioItem}>
-                <View style={[styles.bioIconBg, { backgroundColor: '#AF52DE20' }]}>
-                  <Ionicons name="leaf" size={20} color="#AF52DE" />
-                </View>
-                <View style={styles.bioInfo}>
-                  <View style={styles.bioLabelRow}>
-                    <Text style={styles.bioLabel}>Antioxidant Load</Text>
-                    <Text style={styles.bioValueText}>{bioImpact.antioxidants}%</Text>
-                  </View>
-                  <View style={styles.bioProgressBg}>
-                    <View style={[styles.bioProgressFill, { width: `${bioImpact.antioxidants}%`, backgroundColor: '#AF52DE' }]} />
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.bioItem}>
-                <View style={[styles.bioIconBg, { backgroundColor: '#5AC8FA20' }]}>
-                  <Ionicons name="water" size={20} color="#5AC8FA" />
-                </View>
-                <View style={styles.bioInfo}>
-                  <View style={styles.bioLabelRow}>
-                    <Text style={styles.bioLabel}>Digestive Ease</Text>
-                    <Text style={styles.bioValueText}>{bioImpact.digestion}%</Text>
-                  </View>
-                  <View style={styles.bioProgressBg}>
-                    <View style={[styles.bioProgressFill, { width: `${bioImpact.digestion}%`, backgroundColor: '#5AC8FA' }]} />
-                  </View>
-                </View>
-              </View>
-            </View>
-            
-            <View style={[styles.bioCorrectiveInsights, isBioImpactOptimized && { borderStyle: 'solid', borderColor: '#34C75940' }]}>
-              <Text style={styles.correctiveTitle}>{isBioImpactOptimized ? 'System Optimized' : 'Corrective Actions'}</Text>
-              
-              {bioImpact.stability < 70 && (
-                <TouchableOpacity 
-                  style={styles.correctiveItem}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/issue-details' as any,
-                      params: {
-                        issue: encodeURIComponent(
-                          JSON.stringify({
-                    title: 'Energy Spikes Detected',
-                    impact: 'Sugar Stability',
-                    score: bioImpact.stability,
-                    drivers: bioImpact.negativeDrivers.filter((d: string) => d.includes('Sugar') || d.includes('Eating') || d.includes('Sweeteners')),
-                    culpritFoods: Array.from(new Map([...(bioImpact.driverFoods['High Sugar Foods'] || []), ...(bioImpact.driverFoods['Artificial Sweeteners'] || []), ...(bioImpact.driverFoods['Late Night Eating'] || [])].map(f => [f.name + f.timestamp, f])).values()),
-                    solution: 'Your blood glucose is fluctuating too much. This causes brain fog and afternoon energy crashes. Switch to complex carbs like oats, quinoa, or sweet potatoes, and always pair them with protein.',
-                    hiddenLabels: [
-                      { label: 'Total Added Sugar', value: `${bioImpact.totals.sugar}g`, status: 'Critical', desc: `You consumed ${bioImpact.totals.sugar}g of sugar. The WHO recommends < 25g/day. High sugar causes insulin resistance and fatty liver.` },
-                      { label: 'Hidden Sweeteners', value: bioImpact.totals.additives > 0 ? 'Detected' : 'None', status: bioImpact.totals.additives > 0 ? 'Warning' : 'Good', desc: 'Aspartame and Sucralose can disrupt your gut microbiome and actually increase sugar cravings.' },
-                      { label: 'Glycemic Load', value: 'High', status: 'Alert', desc: 'Refined carbs without fiber enter the bloodstream instantly, triggering massive insulin spikes.' }
-                    ]
-                          })
-                        ),
-                      },
-                    } as any)
-                  }
-                >
-                  <Ionicons name="warning" size={20} color="#FF9500" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.correctiveText}>Energy Spikes Detected</Text>
-                    <Text style={styles.correctiveSubText}>Your meal timing or carb ratios are causing instability. Tap for details.</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
-                </TouchableOpacity>
-              )}
-              
-              {bioImpact.recovery < 70 && (
-                <TouchableOpacity 
-                  style={styles.correctiveItem}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/issue-details' as any,
-                      params: {
-                        issue: encodeURIComponent(
-                          JSON.stringify({
-                    title: 'Recovery Deficit',
-                    impact: 'Muscle Recovery',
-                    score: bioImpact.recovery,
-                    drivers: bioImpact.negativeDrivers.filter((d: string) => d.includes('Protein') || d.includes('Sodium') || d.includes('Processed')),
-                    culpritFoods: Array.from(new Map([...(bioImpact.driverFoods['Processed Sodium'] || []), ...(bioImpact.driverFoods['Processed Fats'] || [])].map(f => [f.name + f.timestamp, f])).values()),
-                    solution: 'Your muscles aren\'t getting enough amino acids to repair efficiently after activity. This can lead to chronic soreness and metabolic slowdown. Aim for 25-30g of protein in your next 3 meals.',
-                    hiddenLabels: [
-                      { label: 'Sodium Load', value: `${bioImpact.totals.sodium}mg`, status: bioImpact.totals.sodium > 2300 ? 'Critical' : 'Warning', desc: `You consumed ${bioImpact.totals.sodium}mg. Excessive sodium causes cellular dehydration and masks muscle definition.` },
-                      { label: 'Saturated Fat', value: `${bioImpact.totals.saturatedFat}g`, status: 'Warning', desc: 'High saturated fat from processed meats triggers systemic inflammation, slowing down muscle recovery.' },
-                      { label: 'Trans Fats', value: `${bioImpact.totals.transFat}g`, status: parseFloat(bioImpact.totals.transFat) > 0 ? 'Critical' : 'Good', desc: 'Found in fried foods, trans fats damage blood vessels and block nutrient delivery to muscles.' }
-                    ]
-                          })
-                        ),
-                      },
-                    } as any)
-                  }
-                >
-                  <Ionicons name="barbell" size={20} color="#FF2D55" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.correctiveText}>Recovery Deficit</Text>
-                    <Text style={styles.correctiveSubText}>Protein intake is below the threshold for optimal repair. Tap for details.</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
-                </TouchableOpacity>
-              )}
-
-              {bioImpact.focus < 70 && (
-                <TouchableOpacity 
-                  style={styles.correctiveItem}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/issue-details' as any,
-                      params: {
-                        issue: encodeURIComponent(
-                          JSON.stringify({
-                    title: 'Brain Fog Alert',
-                    impact: 'Mental Focus',
-                    score: bioImpact.focus,
-                    drivers: bioImpact.negativeDrivers.filter((d: string) => d.includes('Dyes') || d.includes('Sugar') || d.includes('Processed')),
-                    culpritFoods: Array.from(new Map([...(bioImpact.driverFoods['Artificial Dyes'] || []), ...(bioImpact.driverFoods['High Sugar Foods'] || [])].map(f => [f.name + f.timestamp, f])).values()),
-                    solution: 'Artificial additives and refined sugars cross the blood-brain barrier and cause neuro-inflammation. This leads to the "foggy" feeling. Boost your focus with Omega-3 fats (walnuts, salmon) and staying hydrated.',
-                    hiddenLabels: [
-                      { label: 'Artificial Dyes', value: bioImpact.totals.dyes > 0 ? 'Detected' : 'None', status: 'Critical', desc: 'Red 40 and Yellow 5 are linked to hyperactivity and reduced attention span in both children and adults.' },
-                      { label: 'Maltodextrin', value: 'High Prob.', status: 'Warning', desc: 'A common thickener with a higher glycemic index than table sugar. It causes rapid brain energy crashes.' }
-                    ]
-                          })
-                        ),
-                      },
-                    } as any)
-                  }
-                >
-                  <Ionicons name="eye" size={20} color="#5856D6" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.correctiveText}>Brain Fog Alert</Text>
-                    <Text style={styles.correctiveSubText}>Your focus score is declining. Tap to see the hidden culprits.</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
-                </TouchableOpacity>
-              )}
-
-              {bioImpact.digestion < 70 && (
-                <TouchableOpacity 
-                  style={styles.correctiveItem}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/issue-details' as any,
-                      params: {
-                        issue: encodeURIComponent(
-                          JSON.stringify({
-                    title: 'Sleep/Digestion Conflict',
-                    impact: 'Digestive Ease',
-                    score: bioImpact.digestion,
-                    drivers: bioImpact.negativeDrivers.filter((d: string) => d.includes('Night') || d.includes('Processed') || d.includes('Emulsifiers')),
-                    culpritFoods: Array.from(new Map([...(bioImpact.driverFoods['Late Night Eating'] || []), ...(bioImpact.driverFoods['Hidden Emulsifiers'] || [])].map(f => [f.name + f.timestamp, f])).values()),
-                    solution: 'Eating heavy meals too close to sleep forces your body to focus on digestion rather than cellular repair. This degrades sleep quality and metabolic health. Try a "kitchen closed" rule after 8 PM.',
-                    hiddenLabels: [
-                      { label: 'Nighttime Sodium', value: `${Math.round(bioImpact.totals.sodium * 0.4)}mg`, status: 'Warning', desc: 'Consuming high sodium at night causes water retention and makes you wake up feeling "puffy" and dehydrated.' },
-                      { label: 'Digestive Inhibitors', value: bioImpact.totals.additives > 0 ? 'Present' : 'None', status: 'Alert', desc: 'Emulsifiers and artificial thickeners in processed foods can irritate the gut lining, causing bloating.' }
-                    ]
-                          })
-                        ),
-                      },
-                    } as any)
-                  }
-                >
-                  <Ionicons name="moon" size={20} color="#5AC8FA" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.correctiveText}>Sleep/Digestion Conflict</Text>
-                    <Text style={styles.correctiveSubText}>Late-night meals are straining your metabolism. Tap for details.</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
-                </TouchableOpacity>
-              )}
-
-              {bioImpact.antioxidants < 50 && (
-                <TouchableOpacity 
-                  style={styles.correctiveItem}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/issue-details' as any,
-                      params: {
-                        issue: encodeURIComponent(
-                          JSON.stringify({
-                    title: 'Low Micronutrient Diversity',
-                    impact: 'Antioxidant Load',
-                    score: bioImpact.antioxidants,
-                    drivers: ['Lack of plant diversity', 'Refined processed foods'],
-                    culpritFoods: Array.from(new Map([...(bioImpact.driverFoods['Refined Carbs'] || []), ...(bioImpact.driverFoods['Processed Fats'] || [])].map(f => [f.name + f.timestamp, f])).values()),
-                    solution: 'Antioxidants protect your cells from oxidative stress. A lack of these can lead to faster aging and higher inflammation. Try the "Rainbow Rule": include 3 different colored plants in your next meal.',
-                    hiddenLabels: [
-                      { label: 'Phytochemical Gap', value: 'Critical', status: 'Critical', desc: 'Your log shows very low intake of flavonoids and carotenoids found in colorful produce.' },
-                      { label: 'Synthetic Preservatives', value: 'High', status: 'Warning', desc: 'Hidden BHA/BHT in packaged snacks can increase oxidative stress, requiring even MORE antioxidants to neutralize.' }
-                    ]
-                          })
-                        ),
-                      },
-                    } as any)
-                  }
-                >
-                  <Ionicons name="leaf" size={20} color="#AF52DE" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.correctiveText}>Low Micronutrient Diversity</Text>
-                    <Text style={styles.correctiveSubText}>Missing key antioxidants. Tap for details.</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
-                </TouchableOpacity>
-              )}
-
-              {isBioImpactOptimized && (
-                <View style={styles.correctiveItem}>
-                  <Ionicons name="checkmark-circle" size={24} color="#34C759" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.correctiveText, { color: '#1A1C1E' }]}>Perfect Biological Balance</Text>
-                    <Text style={styles.correctiveSubText}>Your current nutrition profile is supporting all core functions perfectly. Your body is in peak state!</Text>
-                  </View>
-                </View>
-              )}
-            </View>
-          </View>
-        </AnimatedCard>
+            </AnimatedCard>
+          );
+        })()}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -1138,68 +1238,87 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 24,
-    paddingBottom: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
   },
   timeRangeContainer: {
     flexDirection: 'row',
     backgroundColor: Colors.white,
-    borderRadius: 20,
-    padding: 6,
-    marginBottom: 24,
+    borderRadius: 24,
+    padding: 4,
+    marginBottom: 20,
     borderWidth: 2,
     borderColor: Colors.border,
     borderBottomWidth: 6,
   },
   timeRangeButton: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 14,
+    paddingVertical: 12,
+    borderRadius: 20,
     alignItems: 'center',
   },
   timeRangeButtonActive: {
     backgroundColor: Colors.primary,
   },
   timeRangeText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
     color: Colors.textSecondary,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   timeRangeTextActive: {
     color: Colors.white,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 18, // H2
     fontWeight: '900',
     color: Colors.text,
-    marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 16,
+    textTransform: 'uppercase',
+    letterSpacing: 1.0,
+    opacity: 0.9,
   },
-  premiumBadge: {
+  insightText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: 16,
+    fontWeight: '600',
+  },
+  statsGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 4,
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
   },
-  premiumText: {
-    color: Colors.white,
-    fontSize: 10,
+  statCard: {
+    width: '48.5%',
+    backgroundColor: Colors.white,
+    borderRadius: 24,
+    padding: 16,
+    height: 110, // Fixed height for consistent grid alignment
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 6,
+  },
+  statValue: {
+    fontSize: 22,
     fontWeight: '900',
+    color: Colors.text,
+    marginVertical: 4,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    textAlign: 'center',
     letterSpacing: 0.5,
   },
   insightsHero: {
@@ -1270,7 +1389,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   subSectionTitle: {
-    fontSize: 13,
+    fontSize: 15, // H3
     fontWeight: '900',
     color: Colors.textSecondary,
     marginBottom: 16,
@@ -1308,33 +1427,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
   },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  statCard: {
-    width: (width - 60) / 2,
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    padding: 16,
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderBottomWidth: 6,
-  },
-  statValue: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: Colors.text,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
   chartCard: {
     backgroundColor: Colors.white,
     borderRadius: 24,
@@ -1343,29 +1435,6 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderBottomWidth: 8,
     overflow: 'hidden',
-  },
-  pieCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderBottomWidth: 8,
-    alignItems: 'center',
-  },
-  pieChartWrapper: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 180,
-    height: 180,
-  },
-  hollowPieWrapper: {
-    borderRadius: 90,
-    borderWidth: 3,
-    borderColor: Colors.border,
-    borderBottomWidth: 10,
-    borderBottomColor: Colors.border,
-    backgroundColor: Colors.white,
   },
   chartWrapper: {
     paddingLeft: 0,
@@ -1382,46 +1451,53 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginHorizontal: 1,
   },
-  pieCenter: {
+  pieCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 8,
     alignItems: 'center',
   },
-  pieCenterText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  pieCenterValue: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: Colors.text,
+  pieChartWrapper: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 180,
+    height: 180,
+    marginBottom: 8,
   },
   pieLegend: {
     width: '100%',
-    marginTop: 24,
-    gap: 14,
+    marginTop: 16,
+    gap: 12,
   },
   legendRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
     gap: 12,
   },
   legendDot: {
-    width: 18,
-    height: 18,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)',
+    width: 14,
+    height: 14,
+    borderRadius: 4,
   },
   legendLabel: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
     color: Colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   legendValue: {
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '900',
     color: Colors.textSecondary,
   },
   mealTypeCard: {
@@ -1431,36 +1507,49 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: Colors.border,
     borderBottomWidth: 8,
-    gap: 18,
+    gap: 12,
   },
   mealTypeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   mealTypeInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
+  mealTypeIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   mealTypeName: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '900',
     color: Colors.text,
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   mealTypeStats: {
     alignItems: 'flex-end',
   },
   mealTypeCount: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 13,
+    fontWeight: '900',
     color: Colors.text,
   },
   mealTypeCalories: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.textSecondary,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   topFoodsCard: {
     backgroundColor: Colors.white,
@@ -1469,12 +1558,17 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: Colors.border,
     borderBottomWidth: 8,
-    gap: 14,
+    gap: 10,
   },
   foodRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   foodInfo: {
     flexDirection: 'row',
@@ -1486,17 +1580,17 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: Colors.primary + '15',
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   foodRankText: {
     fontSize: 12,
     fontWeight: '900',
-    color: Colors.primary,
+    color: Colors.white,
   },
   foodName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
     color: Colors.text,
     flex: 1,
@@ -1505,14 +1599,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   foodCount: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
     color: Colors.primary,
   },
   foodCalories: {
     fontSize: 11,
     color: Colors.textSecondary,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   ingredientsCard: {
     backgroundColor: Colors.white,
@@ -1525,27 +1619,28 @@ const styles = StyleSheet.create({
   ingredientsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   ingredientBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.primary + '10',
+    backgroundColor: '#F8F9FA',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.primary + '30',
+    borderColor: Colors.border,
     gap: 6,
   },
   ingredientBadgeText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
     color: Colors.text,
+    textTransform: 'uppercase',
   },
   ingCountBadge: {
     backgroundColor: Colors.primary,
-    borderRadius: 8,
+    borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
@@ -1564,13 +1659,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.textLight,
   },
-  mealTypeIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   healthInsightsCard: {
     backgroundColor: Colors.white,
     borderRadius: 24,
@@ -1580,21 +1668,27 @@ const styles = StyleSheet.create({
     borderBottomWidth: 8,
   },
   organGrid: {
-    gap: 16,
+    gap: 12,
   },
   organItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
     gap: 12,
   },
   organIconContainer: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: Colors.white,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
+    borderColor: Colors.border,
   },
   organInfo: {
     flex: 1,
@@ -1603,15 +1697,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   organLabel: {
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 14, // Standardized
+    fontWeight: '900',
     color: Colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   organScore: {
-    fontSize: 12,
+    fontSize: 14, // Standardized
     fontWeight: '900',
   },
   organProgressBg: {
@@ -1619,53 +1715,17 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
     borderRadius: 3,
     overflow: 'hidden',
+    marginBottom: 6,
   },
   organProgressFill: {
     height: '100%',
     borderRadius: 3,
   },
-  organFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 20,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  organFooterText: {
-    flex: 1,
-    fontSize: 11,
+  organInsightText: {
+    fontSize: 12, // Standardized caption
     fontWeight: '700',
     color: Colors.textSecondary,
     lineHeight: 16,
-  },
-  insightProgressBg: {
-    width: '100%',
-    height: 6,
-    backgroundColor: Colors.border,
-    borderRadius: 3,
-    marginTop: 8,
-    overflow: 'hidden',
-  },
-  insightProgressFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  insightCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 2,
-    borderColor: Colors.primary + '40',
-    borderBottomWidth: 8,
-    marginBottom: 24,
-  },
-  insightHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 14,
   },
   bioImpactCard: {
     backgroundColor: Colors.white,
@@ -1676,12 +1736,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 8,
   },
   bioGrid: {
-    gap: 16,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
   },
   bioItem: {
-    flexDirection: 'row',
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
+    marginBottom: 10,
   },
   bioIconBg: {
     width: 36,
@@ -1689,36 +1756,166 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   bioInfo: {
-    flex: 1,
-  },
-  bioLabel: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  bioProgressBg: {
-    height: 8,
-    backgroundColor: Colors.border,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  bioProgressFill: {
-    height: '100%',
-    borderRadius: 4,
+    width: '100%',
   },
   bioLabelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
+  },
+  bioLabel: {
+    fontSize: 11, // Standardized caption
+    fontWeight: '800',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   bioValueText: {
+    fontSize: 14, // Standardized
+    fontWeight: '900',
+    color: Colors.text,
+  },
+  bioProgressBg: {
+    height: 4,
+    backgroundColor: Colors.border,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  bioProgressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  redFlagsCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 8,
+    gap: 16,
+  },
+  alertCard: {
+    backgroundColor: '#F8F9FA',
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  alertIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  alertTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: Colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  alertBody: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  bioAlertMetric: {
     fontSize: 14,
     fontWeight: '900',
     color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  bioAlertMessage: {
+    fontSize: 14,
+    color: Colors.text,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  redFlagItem: {
+    // Deprecated in favor of alertCard, kept for safety if needed
+    backgroundColor: '#FFF5F5',
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#FF3B3020',
+  },
+  redFlagCritical: {
+    backgroundColor: '#FFF0F0',
+    borderColor: '#FF3B3030',
+  },
+  redFlagWarning: {
+    backgroundColor: '#FFF9F0',
+    borderColor: '#FF950030',
+  },
+  redFlagHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 10,
+  },
+  redFlagTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#FF3B30',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    flex: 1,
+  },
+  redFlagDescription: {
+    fontSize: 14,
+    color: Colors.text,
+    lineHeight: 20,
+    marginBottom: 14,
+    fontWeight: '700',
+  },
+  redFlagCulprits: {
+    marginTop: 10,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  redFlagCulpritsLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+    letterSpacing: 0.8,
+  },
+  redFlagCulpritsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  redFlagCulpritBadge: {
+    backgroundColor: Colors.white,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  redFlagCulpritText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  redFlagFrequency: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '900',
+    marginTop: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   bioCorrectiveInsights: {
     marginTop: 24,
@@ -1726,6 +1923,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     borderWidth: 2,
+    borderBottomWidth: 8,
     borderColor: '#E9ECEF',
     borderStyle: 'dashed',
     gap: 16,
@@ -1965,19 +2163,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '900',
     textTransform: 'uppercase',
-  },
-  insightTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: Colors.text,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  insightText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: 10,
-    fontWeight: '700',
   },
 });
