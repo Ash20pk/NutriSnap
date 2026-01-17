@@ -33,6 +33,21 @@ export const Colors = {
   protein: '#F28D35',
   carbs: '#2F593E',
   fat: '#5A4A3A',
+
+  // Progress bar colors (iOS-style)
+  progressGreen: '#34C759',
+  progressOrange: '#FF9500',
+  progressRed: '#FF3B30',
+
+  // Subtle border colors
+  borderSubtle: 'rgba(0, 0, 0, 0.05)',
+  shadowSubtle: 'rgba(0, 0, 0, 0.2)',
+  shadowLight: 'rgba(0, 0, 0, 0.1)',
+
+  // White overlay colors (for dark backgrounds)
+  whiteOverlay10: 'rgba(255, 255, 255, 0.1)',
+  whiteOverlay20: 'rgba(255, 255, 255, 0.2)',
+  whiteOverlay80: 'rgba(255, 255, 255, 0.8)',
   
   // Neutral colors
   white: '#FFFFFF',
@@ -67,4 +82,48 @@ export const Colors = {
   accentDark: '#1A3A2A',
   secondary: '#5A4A3A',
   tertiary: '#8B7A6A',
+};
+
+// Spacing system (8-point grid with common additions)
+export const Spacing = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+  xxxl: 32,
+  xxxxl: 48,
+  section: 80,  // For large section padding
+};
+
+// Border radius system
+export const Radius = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 14,
+  xl: 16,
+  xxl: 20,
+  xxxl: 24,
+  xxxxl: 32,
+  round: 40,    // For circular elements
+  full: 9999,
+};
+
+// Opacity values for consistent transparency
+export const Opacity = {
+  disabled: 0.5,
+  overlay: 0.7,
+  subtle: 0.1,
+  light: 0.15,
+  medium: 0.3,
+};
+
+// Helper to create rgba from hex with opacity
+export const withOpacity = (hex: string, opacity: number): string => {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
 };

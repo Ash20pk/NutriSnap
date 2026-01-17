@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import PageHeader from '../components/PageHeader';
+import EmptyState from '../components/EmptyState';
 import { Colors } from '../constants/Colors';
 
 function parseJsonParam<T>(value: unknown): T | null {
@@ -37,8 +38,11 @@ export default function FoodDetailsScreen() {
         />
         <View style={styles.body}>
           <View style={styles.card}>
-            <Text style={styles.emptyTitle}>Unable to load</Text>
-            <Text style={styles.emptyText}>Please go back and try again.</Text>
+            <EmptyState
+              icon="alert-circle-outline"
+              title="Unable to load"
+              subtitle="Please go back and try again."
+            />
           </View>
         </View>
       </View>

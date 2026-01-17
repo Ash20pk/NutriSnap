@@ -10,14 +10,13 @@ import {
   Platform,
   TextInput,
   Alert,
-  ActivityIndicator,
   Animated,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useUser } from '../../context/UserContext';
 import { mealApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import PageHeader from '../../components/PageHeader';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
@@ -26,18 +25,21 @@ import { Audio } from 'expo-av';
 import DuoButton from '../../components/DuoButton';
 import AnimatedCard from '../../components/AnimatedCard';
 import XpPopUp from '../../components/XpPopUp';
+import LoadingState from '../../components/LoadingState';
 
 export default function LogScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const { user } = useUser();
   const searchInputRef = useRef<TextInput>(null);
   const ENABLE_CAMERA_LOGGING = false;
-  const [mealType, setMealType] = useState('breakfast');
+  const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
   const [logMethod, setLogMethod] = useState<'photo' | 'manual' | null>(null);
   const [loading, setLoading] = useState(false);
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [usedVoice, setUsedVoice] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [selectedFoods, setSelectedFoods] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -45,8 +47,38 @@ export default function LogScreen() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [configQty, setConfigQty] = useState('');
   const [configUnit, setConfigUnit] = useState<'g' | 'oz'>('g');
+  const [mealNotes, setMealNotes] = useState('');
+  const [manualParseLoading, setManualParseLoading] = useState(false);
   const [showXp, setShowXp] = useState(false);
   const [earnedXp, setEarnedXp] = useState(0);
+
+  useEffect(() => {
+    const openMode = typeof params?.openMode === 'string' ? params.openMode : '';
+    const barcodeFoodRaw = typeof params?.barcodeFood === 'string' ? params.barcodeFood : '';
+    if (!openMode && !barcodeFoodRaw) return;
+
+    // Always open the modal when coming from barcode scan.
+    setLogMethod('manual');
+    setShowModal(true);
+
+    if (openMode === 'portion' && barcodeFoodRaw) {
+      try {
+        const food = JSON.parse(barcodeFoodRaw);
+        setSelectedFoods([]);
+        setConfiguringFood(food);
+        setEditingIndex(null);
+        setConfigQty('100');
+        setConfigUnit('g');
+      } catch (e) {
+        console.warn('Failed to parse barcodeFood param', e);
+      }
+    }
+    if (openMode === 'voice') {
+      setUsedVoice(true);
+      setMealNotes('');
+    }
+    // openMode === 'voice' just opens the modal in voice UI
+  }, [params?.openMode, params?.barcodeFood]);
 
   const voiceTranslateY = useRef(new Animated.Value(0)).current;
 
@@ -80,10 +112,12 @@ export default function LogScreen() {
       setVoiceLoading(false);
       setIsRecording(false);
       setRecording(null);
+      setMealNotes('');
+      setUsedVoice(false);
     }
   }, [showModal]);
 
-  const mealTypes = [
+  const mealTypes: { id: 'breakfast' | 'lunch' | 'dinner' | 'snack'; label: string; icon: string }[] = [
     { id: 'breakfast', label: 'Breakfast', icon: 'sunny' },
     { id: 'lunch', label: 'Lunch', icon: 'restaurant' },
     { id: 'dinner', label: 'Dinner', icon: 'moon' },
@@ -106,7 +140,35 @@ export default function LogScreen() {
     }
   };
 
+  const analyzeManualText = async () => {
+    if (!user?.id) {
+      Alert.alert('Error', 'You must be logged in');
+      return;
+    }
+    const text = (mealNotes || '').trim();
+    if (!text) {
+      Alert.alert('Describe your food', 'Type what you ate first.');
+      return;
+    }
+    try {
+      setManualParseLoading(true);
+      const res = await mealApi.textToMeal(text, user.id);
+      const foods = res?.foods || [];
+      if (!foods.length) {
+        Alert.alert('No foods detected', 'Try being more specific (include quantities if you can).');
+        return;
+      }
+      setSelectedFoods(foods);
+    } catch (e) {
+      console.error('Text-to-meal failed:', e);
+      Alert.alert('Error', 'Failed to analyze text. Try again.');
+    } finally {
+      setManualParseLoading(false);
+    }
+  };
+
   const handleManualLog = () => {
+    setUsedVoice(false);
     setLogMethod('manual');
     setShowModal(true);
   };
@@ -175,6 +237,7 @@ export default function LogScreen() {
       }
 
       setSelectedFoods(foods);
+      setUsedVoice(true);
     } catch (e) {
       console.error('Voice-to-meal failed:', e);
       Alert.alert('Error', 'Failed to process voice meal');
@@ -262,6 +325,7 @@ export default function LogScreen() {
         meal_type: mealType,
         foods: selectedFoods,
         logging_method: logMethod || 'manual',
+        notes: usedVoice ? undefined : (mealNotes || '').trim() || undefined,
       });
 
       const xp = (selectedFoods.length * 10) + 10;
@@ -272,6 +336,7 @@ export default function LogScreen() {
       setShowModal(false);
       setLogMethod(null);
       setEditingIndex(null);
+      setMealNotes('');
     } catch (error) {
       console.error('Error logging meal:', error);
       Alert.alert('Error', 'Failed to log meal');
@@ -360,6 +425,8 @@ export default function LogScreen() {
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                 setLogMethod('manual');
+                setUsedVoice(true);
+                setMealNotes('');
                 setShowModal(true);
               }}
             >
@@ -515,44 +582,96 @@ export default function LogScreen() {
                   </View>
                 ) : (
                   <>
-                    {/* Voice Search Interaction */}
-                    <Animated.View style={[
-                      styles.voiceSearchCentered,
-                      { transform: [{ translateY: voiceTranslateY }] }
-                    ]}>
-                      {!voiceLoading ? (
-                        <>
-                          <View style={styles.voicePromptContainerCentered}>
-                            <Text style={styles.voicePromptTitle}>Tap to speak your meal</Text>
-                            <Text style={styles.voicePromptSub}>{"\"2 boiled eggs and a bowl of poha\""}</Text>
-                          </View>
-                          <TouchableOpacity
-                            style={[
-                              styles.micButtonLarge, 
-                              isRecording && styles.micButtonActive,
-                            ]}
-                            onPress={() => {
-                              if (isRecording) {
-                                stopVoiceRecordingAndParse();
-                              } else {
-                                startVoiceRecording();
-                              }
-                            }}
-                          >
-                            <Ionicons
-                              name={isRecording ? 'stop' : 'mic'}
-                              size={32}
-                              color={isRecording ? Colors.white : Colors.primary}
+                    {usedVoice && (
+                      <Animated.View
+                        style={[
+                          styles.voiceSearchCentered,
+                          { transform: [{ translateY: voiceTranslateY }] },
+                        ]}
+                      >
+                        {!voiceLoading ? (
+                          <>
+                            <View style={styles.voicePromptContainerCentered}>
+                              <Text style={styles.voicePromptTitle}>Tap to speak your meal</Text>
+                              <Text style={styles.voicePromptSub}>{"\"2 boiled eggs and a bowl of poha\""}</Text>
+                            </View>
+                            <TouchableOpacity
+                              style={[styles.micButtonLarge, isRecording && styles.micButtonActive]}
+                              onPress={() => {
+                                if (isRecording) {
+                                  stopVoiceRecordingAndParse();
+                                } else {
+                                  startVoiceRecording();
+                                }
+                              }}
+                            >
+                              <Ionicons
+                                name={isRecording ? 'stop' : 'mic'}
+                                size={32}
+                                color={isRecording ? Colors.white : Colors.primary}
+                              />
+                            </TouchableOpacity>
+                          </>
+                        ) : (
+                          <View style={styles.processingContainer}>
+                            <LoadingState
+                              label="Analyzing your meal..."
+                              style={{ paddingVertical: 0 }}
+                              textStyle={styles.processingText}
                             />
-                          </TouchableOpacity>
-                        </>
-                      ) : (
-                        <View style={styles.processingContainer}>
-                          <ActivityIndicator size="large" color={Colors.primary} />
-                          <Text style={styles.processingText}>Analyzing your meal...</Text>
-                        </View>
-                      )}
-                    </Animated.View>
+                          </View>
+                        )}
+                      </Animated.View>
+                    )}
+
+                    {!usedVoice && (
+                      <Animated.View
+                        style={[
+                          styles.voiceSearchCentered,
+                          { transform: [{ translateY: voiceTranslateY }] },
+                        ]}
+                      >
+                        {!manualParseLoading ? (
+                          <>
+                            <View style={styles.voicePromptContainerCentered}>
+                              <Text style={styles.voicePromptTitle}>Describe your food</Text>
+                            </View>
+
+                            <View style={styles.manualInputWrapper}>
+                              <TextInput
+                                ref={searchInputRef}
+                                value={mealNotes}
+                                onChangeText={setMealNotes}
+                                placeholder="2 boiled eggs and a bowl of poha"
+                                placeholderTextColor={Colors.textLight}
+                                selectionColor={Colors.primary}
+                                multiline
+                                style={styles.manualInput}
+                              />
+                              <TouchableOpacity
+                                style={[
+                                  styles.analyzeButton,
+                                  (!mealNotes.trim()) && styles.analyzeButtonDisabled,
+                                ]}
+                                onPress={analyzeManualText}
+                                disabled={!mealNotes.trim()}
+                                activeOpacity={0.8}
+                              >
+                                <Ionicons name="sparkles" size={20} color={mealNotes.trim() ? Colors.white : Colors.textLight} />
+                              </TouchableOpacity>
+                            </View>
+                          </>
+                        ) : (
+                          <View style={styles.processingContainer}>
+                            <LoadingState
+                              label="Analyzing your meal..."
+                              style={{ paddingVertical: 0 }}
+                              textStyle={styles.processingText}
+                            />
+                          </View>
+                        )}
+                      </Animated.View>
+                    )}
 
                     {/* Search Results */}
                     {searchResults.length > 0 && (
@@ -779,6 +898,38 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingHorizontal: 24,
   },
+  modeToggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 16,
+    padding: 4,
+    marginHorizontal: 24,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: Colors.border,
+  },
+  modeToggleButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 6,
+  },
+  modeToggleButtonActive: {
+    backgroundColor: Colors.primary,
+  },
+  modeToggleText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  modeToggleTextActive: {
+    color: Colors.white,
+  },
   modalScrollView: {
     flexGrow: 0, 
     flexShrink: 1,
@@ -832,6 +983,54 @@ const styles = StyleSheet.create({
     borderBottomWidth: 8,
     gap: 20,
   },
+  manualEntryContainer: {
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 32,
+    padding: 30,
+    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 8,
+    gap: 20,
+  },
+  manualInputWrapper: {
+    width: '100%',
+    position: 'relative',
+  },
+  manualInput: {
+    backgroundColor: Colors.white,
+    borderRadius: 20,
+    padding: 16,
+    paddingRight: 56,
+    minHeight: 100,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 4,
+    color: Colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+    textAlignVertical: 'top',
+  },
+  analyzeButton: {
+    position: 'absolute',
+    right: 12,
+    top: 29,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  analyzeButtonDisabled: {
+    backgroundColor: Colors.border,
+    shadowOpacity: 0,
+  },
   voicePromptContainerCentered: {
     alignItems: 'center',
   },
@@ -839,7 +1038,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '900',
     color: Colors.text,
-    marginBottom: 8,
     textAlign: 'center',
   },
   voicePromptSub: {

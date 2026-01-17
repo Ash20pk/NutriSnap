@@ -8,7 +8,7 @@ import {
   TextStyle,
   Animated,
 } from 'react-native';
-import { Colors } from '../constants/Colors';
+import { Colors, Spacing, Radius } from '../constants/Colors';
 import * as Haptics from 'expo-haptics';
 
 interface DuoButtonProps {
@@ -40,7 +40,7 @@ export default function DuoButton({
 }: DuoButtonProps) {
   const animatedValue = React.useRef(new Animated.Value(0)).current;
 
-  const finalShadowColor = shadowColor || (color === Colors.primary ? '#1A3A2A' : 'rgba(0,0,0,0.2)');
+  const finalShadowColor = shadowColor || (color === Colors.primary ? Colors.primaryDark : Colors.shadowSubtle);
 
   const onPressIn = () => {
     if (disabled || loading) return;
@@ -84,7 +84,7 @@ export default function DuoButton({
           styles.shadow,
           {
             backgroundColor: finalShadowColor,
-            borderRadius: 16,
+            borderRadius: Radius.xl,
             bottom: -4,
           },
         ]}
@@ -99,7 +99,7 @@ export default function DuoButton({
           disabled={disabled || loading}
           style={[
             styles.button,
-            { backgroundColor: color, paddingVertical, borderRadius: 16 },
+            { backgroundColor: color, paddingVertical, borderRadius: Radius.xl },
             disabled && styles.disabled,
           ]}
         >
@@ -124,7 +124,7 @@ export default function DuoButton({
 const styles = StyleSheet.create({
   container: {
     position: 'relative',
-    marginVertical: 4,
+    marginVertical: Spacing.xs,
   },
   button: {
     alignItems: 'center',
@@ -144,11 +144,11 @@ const styles = StyleSheet.create({
     width: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: Spacing.sm + 2,
   },
   rightIconSlot: {
     width: 22,
-    marginLeft: 10,
+    marginLeft: Spacing.sm + 2,
   },
   shadow: {
     position: 'absolute',

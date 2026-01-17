@@ -16,10 +16,14 @@ import { useUser } from '../../context/UserContext';
 import { mealApi, analyticsApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
-import { BarChart, PieChart } from 'react-native-gifted-charts';
 import * as Haptics from 'expo-haptics';
 import PageHeader from '../../components/PageHeader';
 import AnimatedCard from '../../components/AnimatedCard';
+import StandardBarChart from '../../components/StandardBarChart';
+import StandardDonutChart from '../../components/StandardDonutChart';
+import AppCard from '../../components/AppCard';
+import SectionTitle from '../../components/SectionTitle';
+import EmptyState from '../../components/EmptyState';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 48;
@@ -193,12 +197,33 @@ const CollapsibleRedFlag = ({ flag }: { flag: any }) => {
   );
 };
 
-const truncateWords = (text: any, maxWords: number) => {
+const truncateWords = (text: unknown, maxWords: number) => {
   if (typeof text !== 'string') return '';
   const words = text.trim().split(/\s+/);
   if (words.length <= maxWords) return text;
   return words.slice(0, maxWords).join(' ') + '…';
 };
+
+// Type definitions for analytics data
+interface OrganEffects {
+  heart?: number;
+  liver?: number;
+  kidney?: number;
+  brain?: number;
+  skin?: number;
+  [key: string]: number | undefined;
+}
+
+interface ApiBioImpact {
+  energy?: number;
+  recovery?: number;
+  focus?: number;
+  stability?: number;
+  antioxidants?: number;
+  digestion?: number;
+  organ_effects?: OrganEffects;
+  [key: string]: number | OrganEffects | undefined;
+}
 
 export default function AnalyticsScreen() {
   const { user } = useUser();
@@ -607,19 +632,20 @@ export default function AnalyticsScreen() {
         setAiAnalysis(aiData);
 
         if (aiData.bio_impact && typeof aiData.bio_impact === 'object') {
+          const bio = aiData.bio_impact as ApiBioImpact;
           setBioImpact({
-            energy: aiData.bio_impact.energy ?? 0,
-            recovery: aiData.bio_impact.recovery ?? 0,
-            focus: aiData.bio_impact.focus ?? 0,
-            stability: aiData.bio_impact.stability ?? 0,
-            antioxidants: aiData.bio_impact.antioxidants ?? 0,
-            digestion: aiData.bio_impact.digestion ?? 0,
+            energy: bio.energy ?? 0,
+            recovery: bio.recovery ?? 0,
+            focus: bio.focus ?? 0,
+            stability: bio.stability ?? 0,
+            antioxidants: bio.antioxidants ?? 0,
+            digestion: bio.digestion ?? 0,
             organEffects: {
-              heart: aiData.bio_impact.organ_effects?.heart ?? 0,
-              liver: aiData.bio_impact.organ_effects?.liver ?? 0,
-              kidney: aiData.bio_impact.organ_effects?.kidney ?? 0,
-              brain: aiData.bio_impact.organ_effects?.brain ?? 0,
-              skin: aiData.bio_impact.organ_effects?.skin ?? 0,
+              heart: bio.organ_effects?.heart ?? 0,
+              liver: bio.organ_effects?.liver ?? 0,
+              kidney: bio.organ_effects?.kidney ?? 0,
+              brain: bio.organ_effects?.brain ?? 0,
+              skin: bio.organ_effects?.skin ?? 0,
             },
           });
         }
@@ -651,19 +677,20 @@ export default function AnalyticsScreen() {
         setAiAnalysis(aiData);
 
         if (aiData.bio_impact && typeof aiData.bio_impact === 'object') {
+          const bio = aiData.bio_impact as ApiBioImpact;
           setBioImpact({
-            energy: aiData.bio_impact.energy ?? 0,
-            recovery: aiData.bio_impact.recovery ?? 0,
-            focus: aiData.bio_impact.focus ?? 0,
-            stability: aiData.bio_impact.stability ?? 0,
-            antioxidants: aiData.bio_impact.antioxidants ?? 0,
-            digestion: aiData.bio_impact.digestion ?? 0,
+            energy: bio.energy ?? 0,
+            recovery: bio.recovery ?? 0,
+            focus: bio.focus ?? 0,
+            stability: bio.stability ?? 0,
+            antioxidants: bio.antioxidants ?? 0,
+            digestion: bio.digestion ?? 0,
             organEffects: {
-              heart: aiData.bio_impact.organ_effects?.heart ?? 0,
-              liver: aiData.bio_impact.organ_effects?.liver ?? 0,
-              kidney: aiData.bio_impact.organ_effects?.kidney ?? 0,
-              brain: aiData.bio_impact.organ_effects?.brain ?? 0,
-              skin: aiData.bio_impact.organ_effects?.skin ?? 0,
+              heart: bio.organ_effects?.heart ?? 0,
+              liver: bio.organ_effects?.liver ?? 0,
+              kidney: bio.organ_effects?.kidney ?? 0,
+              brain: bio.organ_effects?.brain ?? 0,
+              skin: bio.organ_effects?.skin ?? 0,
             },
           });
         }
@@ -917,103 +944,69 @@ export default function AnalyticsScreen() {
 
         {weeklyData.length > 0 && (
           <AnimatedCard delay={200} type="slide" style={styles.section}>
-            <Text style={styles.sectionTitle}>Calorie Trend</Text>
-            <View style={styles.chartCard}>
+            <SectionTitle title="Calorie Trend" />
+            <AppCard style={styles.chartCard} padding={0}>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ paddingRight: 20 }}
               >
-                <View style={styles.chartWrapper}>
-                  <BarChart
+                <View style={[styles.chartWrapper, { padding: 20 }]}>
+                  <StandardBarChart
                     data={weeklyData}
                     width={timeRange === 'week' ? CARD_WIDTH - 40 : (timeRange === 'month' ? CARD_WIDTH - 40 : CARD_WIDTH * 2)}
                     height={200}
-                    barWidth={timeRange === 'week' ? 32 : (timeRange === 'month' ? 40 : 28)}
-                    spacing={timeRange === 'week' ? 24 : (timeRange === 'month' ? 30 : 22)}
+                    barWidth={timeRange === 'week' ? 20 : (timeRange === 'month' ? 40 : 28)}
+                    spacing={timeRange === 'week' ? 15 : (timeRange === 'month' ? 30 : 22)}
                     labelWidth={timeRange === 'week' ? 56 : (timeRange === 'month' ? 70 : 50)}
-                    roundedTop
-                    roundedBottom
-                    hideRules
-                    xAxisThickness={1}
-                    yAxisThickness={1}
-                    yAxisTextStyle={{
-                      color: Colors.textLight,
-                      fontSize: 10,
-                      fontWeight: '800',
-                      textAlign: 'right',
-                    }}
-                    yAxisLabelWidth={35}
-                    noOfSections={4}
-                    maxValue={Math.max(...weeklyData.map(d => d.value), 2500)}
-                    initialSpacing={16}
-                    endSpacing={16}
-                    xAxisLabelTextStyle={{
-                      color: Colors.textSecondary,
-                      fontSize: 10,
-                      fontWeight: '900',
-                      textAlign: 'center',
-                    }}
-                    hideYAxisText={false}
                     showValuesAsTopLabel
-                    topLabelTextStyle={{
-                      color: Colors.textSecondary,
-                      fontSize: 9,
-                      fontWeight: '900',
-                    }}
-                    barInnerComponent={(item: any) => (
-                      item.value === 0 ? (
-                        <View style={styles.hollowBar} />
-                      ) : null
-                    )}
-                    gradientColor={Colors.primaryLight}
-                    showGradient={true}
-                    isAnimated={true}
-                    animationDuration={1000}
+                    maxValueFallback={3000}
                   />
                 </View>
               </ScrollView>
-            </View>
+            </AppCard>
           </AnimatedCard>
         )}
 
         <AnimatedCard delay={300} type="slide" style={styles.section}>
-          <Text style={styles.sectionTitle}>Macro Distribution</Text>
-          <View style={styles.pieCard}>
-            <View style={styles.pieChartWrapper}>
-              <PieChart
-                data={hasAnyMacros ? macroDistribution : [{ value: 1, color: Colors.border }]}
-                radius={90}
-                innerRadius={60}
-                donut
-                backgroundColor="transparent"
-                showText
-                textColor={Colors.white}
-                textSize={14}
-                fontWeight="900"
-                centerLabelComponent={() => (
-                  <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name="nutrition" size={24} color="white" />
-                    <Text style={[styles.statLabel, { marginTop: 4, color: Colors.primary }]}>Macros</Text>
-                  </View>
-                )}
-                isAnimated
-                animationDuration={1000}
-              />
-            </View>
-            <View style={styles.pieLegend}>
-              {macroDistribution.map((item, index) => (
-                <View key={index} style={styles.legendRow}>
-                  <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                  <Text style={styles.legendLabel}>{item.label}</Text>
-                  <Text style={styles.legendValue}>{hasAnyMacros ? (item.amountText ?? '0g') : '0g'}</Text>
+          <SectionTitle title="Macro Distribution" />
+          <AppCard style={styles.standardCard} padding={0}>
+            <View style={[styles.macroContent, { padding: 20 }]}>
+              <View style={styles.pieChartContainer}>
+                <View style={styles.pieChartWrapper}>
+                  <StandardDonutChart
+                    data={hasAnyMacros ? macroDistribution : [{ value: 1, color: Colors.border }]}
+                    radius={90}
+                    innerRadius={60}
+                    showText
+                    centerLabelComponent={() => (
+                      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="nutrition" size={20} color={Colors.white} />
+                        <Text style={{ marginTop: 4, color: Colors.primary, fontSize: 10, fontWeight: '900' }}>
+                          Macros
+                        </Text>
+                      </View>
+                    )}
+                  />
                 </View>
-              ))}
+              </View>
+
+              <View style={styles.macroLegend}>
+                {macroDistribution.map((item, index) => (
+                  <View key={index} style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                    <View style={styles.legendInfo}>
+                      <Text style={styles.legendLabel}>{item.label}</Text>
+                      <Text style={styles.legendValue}>{Math.round(item.value)}g</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
+          </AppCard>
         </AnimatedCard>
 
-        <AnimatedCard delay={400} type="slide" style={styles.section}>
+        <AnimatedCard delay={350} type="slide" style={styles.section}>
           <InsightHeader
             title="Meal Type Breakdown"
             insight={aiAnalysis?.insights?.timing}
@@ -1079,17 +1072,19 @@ export default function AnalyticsScreen() {
                 </View>
               ))
             ) : (
-              <View style={styles.emptyFoods}>
-                <Ionicons name="fast-food-outline" size={32} color={Colors.border} />
-                <Text style={styles.emptyFoodsText}>No food data yet</Text>
-              </View>
+              <EmptyState
+                style={styles.emptyFoods}
+                icon="fast-food-outline"
+                title="No food data yet"
+                titleStyle={styles.emptyFoodsText}
+              />
             )}
           </View>
         </AnimatedCard>
 
         {ingredientInsights.length > 0 && (
           <AnimatedCard delay={475} type="slide" style={styles.section}>
-            <Text style={styles.sectionTitle}>Frequent Ingredients</Text>
+            <SectionTitle title="Frequent Ingredients" />
             <View style={styles.ingredientsCard}>
               <View style={styles.ingredientsGrid}>
                 {ingredientInsights.map((ing, index) => (
@@ -1107,7 +1102,7 @@ export default function AnalyticsScreen() {
         )}
 
         <AnimatedCard delay={500} type="slide" style={styles.section}>
-          <Text style={styles.sectionTitle}>Health Insights</Text>
+          <SectionTitle title="Health Insights" />
           <View style={styles.healthInsightsCard}>
             <View style={styles.organGrid}>
               {[
@@ -1152,7 +1147,7 @@ export default function AnalyticsScreen() {
         </AnimatedCard>
 
         <AnimatedCard delay={550} type="slide" style={styles.section}>
-          <Text style={styles.sectionTitle}>Biological Impact</Text>
+          <SectionTitle title="Biological Impact" />
           <View style={styles.healthInsightsCard}>
             <View style={styles.organGrid}>
               {[
@@ -1211,7 +1206,7 @@ export default function AnalyticsScreen() {
 
           return (
             <AnimatedCard delay={600} type="slide" style={styles.section}>
-              <Text style={styles.sectionTitle}>Highlights</Text>
+              <SectionTitle title="Highlights" />
               <View style={styles.redFlagsCard}>
                 {sortedHighlights.map((item: any, index: number) => (
                   item.type === 'alert' ?
@@ -1272,6 +1267,15 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 20,
+  },
+  standardCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 6,
+    borderBottomColor: Colors.border,
   },
   sectionTitle: {
     fontSize: 18, // H2
@@ -1451,54 +1455,49 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginHorizontal: 1,
   },
-  pieCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderBottomWidth: 8,
+  macroContent: {
+    // No extra padding
+  },
+  pieChartContainer: {
     alignItems: 'center',
+    marginBottom: 24,
   },
   pieChartWrapper: {
     justifyContent: 'center',
     alignItems: 'center',
-    width: 180,
-    height: 180,
-    marginBottom: 8,
+    width: 140,
+    height: 140,
   },
-  pieLegend: {
-    width: '100%',
-    marginTop: 16,
-    gap: 12,
+  macroLegend: {
+    gap: 14,
   },
-  legendRow: {
+  legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-    padding: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
     gap: 12,
   },
   legendDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  legendInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   legendLabel: {
-    flex: 1,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
     color: Colors.text,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   legendValue: {
     fontSize: 14,
-    fontWeight: '900',
     color: Colors.textSecondary,
+    fontWeight: '800',
   },
   mealTypeCard: {
     backgroundColor: Colors.white,

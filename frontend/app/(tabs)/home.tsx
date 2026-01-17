@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,29 +11,39 @@ import {
   Modal,
   Easing,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { useUser } from '../../context/UserContext';
-import { mealApi } from '../../utils/api';
+import { mealApi, questApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
-import { format } from 'date-fns';
-import { BarChart, PieChart } from 'react-native-gifted-charts';
+import { format, getISOWeek, getISOWeekYear } from 'date-fns';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import PageHeader from '../../components/PageHeader';
 import DuoButton from '../../components/DuoButton';
 import AnimatedCard from '../../components/AnimatedCard';
+import StandardBarChart from '../../components/StandardBarChart';
+import StandardDonutChart from '../../components/StandardDonutChart';
+import AppCard from '../../components/AppCard';
+import SectionTitle from '../../components/SectionTitle';
 import * as Haptics from 'expo-haptics';
 
 const { width } = Dimensions.get('window');
+
+const WEEKLY_WRAP_RELEASE_HOUR = 22;
+const WEEKLY_WRAP_RELEASE_MINUTE = 0;
+const WEEKLY_WRAP_STORAGE_KEY = 'weekly_wrap_last_shown_iso_week';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useUser();
   const [stats, setStats] = useState<any>(null);
+  const [questStats, setQuestStats] = useState<any>(null);
   const [weeklyData, setWeeklyData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [hasShownGoalToday, setHasShownGoalToday] = useState(false);
+  const [showWeeklyWrapBanner, setShowWeeklyWrapBanner] = useState(false);
   const sparkleAnims = useRef([...Array(6)].map(() => new Animated.Value(0))).current;
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -55,14 +65,51 @@ export default function HomeScreen() {
     if (!user) return;
     setLoading(true);
     try {
-      const data = await mealApi.getStats(user.id);
-      setStats(data);
+      const [mealStats, qStats] = await Promise.all([
+        mealApi.getStats(user.id),
+        questApi.getStats(user.id),
+      ]);
+      setStats(mealStats);
+      setQuestStats(qStats);
     } catch (error) {
       console.error('Error fetching stats:', error);
     } finally {
       setLoading(false);
     }
   }, [user]);
+
+  const computeWeeklyWrapKey = useCallback((d: Date) => {
+    return `${getISOWeekYear(d)}-W${getISOWeek(d)}`;
+  }, []);
+
+  const getWeeklyWrapReferenceDate = useCallback((now: Date) => {
+    // Weekly wrap is released Sunday 10pm local time.
+    // Grace window: allow showing on Monday as well, but the wrap still belongs to Sunday.
+    if (now.getDay() === 1) {
+      const sunday = new Date(now);
+      sunday.setDate(now.getDate() - 1);
+      return sunday;
+    }
+    return now;
+  }, []);
+
+  const shouldShowWeeklyWrap = useCallback(async () => {
+    const now = new Date();
+    const day = now.getDay();
+    if (day !== 0 && day !== 1) return false;
+
+    const ref = getWeeklyWrapReferenceDate(now);
+    const release = new Date(ref);
+    release.setHours(WEEKLY_WRAP_RELEASE_HOUR, WEEKLY_WRAP_RELEASE_MINUTE, 0, 0);
+
+    // On Sunday: only after 10pm.
+    // On Monday: grace window for the same Sunday wrap (release already passed).
+    if (day === 0 && now.getTime() < release.getTime()) return false;
+
+    const key = computeWeeklyWrapKey(ref);
+    const lastShown = await AsyncStorage.getItem(WEEKLY_WRAP_STORAGE_KEY);
+    return lastShown !== key;
+  }, [computeWeeklyWrapKey, getWeeklyWrapReferenceDate]);
 
   const fetchWeeklyData = React.useCallback(async () => {
     if (!user) return;
@@ -103,8 +150,11 @@ export default function HomeScreen() {
     if (user) {
       fetchStats();
       fetchWeeklyData();
+      shouldShowWeeklyWrap()
+        .then(setShowWeeklyWrapBanner)
+        .catch(() => setShowWeeklyWrapBanner(false));
     }
-  }, [user, fetchStats, fetchWeeklyData]);
+  }, [user, fetchStats, fetchWeeklyData, shouldShowWeeklyWrap]);
 
   useEffect(() => {
     Animated.parallel([
@@ -244,7 +294,7 @@ export default function HomeScreen() {
 
             <View style={styles.streakBadge}>
               <Ionicons name="flame" size={20} color={Colors.accent} />
-              <Text style={styles.streakText}>5</Text>
+              <Text style={styles.streakText}>{questStats?.current_streak ?? 0}</Text>
             </View>
           </View>
         }
@@ -266,79 +316,89 @@ export default function HomeScreen() {
           />
         }
       >
-        {/* Weekly Snapshot Banner */}
-        <AnimatedCard delay={100} type="pop" style={styles.bannerContainer}>
-          <TouchableOpacity 
-            style={styles.bannerCard}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-              router.push('/weekly-wrap');
-            }}
-            activeOpacity={0.9}
-          >
-            <LinearGradient 
-              colors={[Colors.primary, Colors.accent]} 
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill} 
-            />
-            
-            <Animated.View
-              style={[
-                StyleSheet.absoluteFill,
-                {
-                  transform: [
-                    {
-                      translateX: shineAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [-width, width * 1.5],
-                      }),
-                    },
-                    { rotate: '25deg' },
-                  ],
-                },
-              ]}
+        {showWeeklyWrapBanner && (
+          <AnimatedCard delay={100} type="pop" style={styles.bannerContainer}>
+            <TouchableOpacity 
+              style={styles.bannerCard}
+              onPress={async () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                try {
+                  const now = new Date();
+                  const ref = getWeeklyWrapReferenceDate(now);
+                  const key = computeWeeklyWrapKey(ref);
+                  await AsyncStorage.setItem(WEEKLY_WRAP_STORAGE_KEY, key);
+                } catch {
+                  // ignore
+                }
+                setShowWeeklyWrapBanner(false);
+                router.push('/weekly-wrap');
+              }}
+              activeOpacity={0.9}
             >
-              <LinearGradient
-                colors={['transparent', 'rgba(255,255,255,0.0)', 'rgba(255,255,255,0.3)', 'rgba(255,255,255,0.0)', 'transparent']}
+              <LinearGradient 
+                colors={[Colors.primary, Colors.accent]} 
                 start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{ width: 150, height: '200%', top: -50 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill} 
               />
-            </Animated.View>
+              
+              <Animated.View
+                style={[
+                  StyleSheet.absoluteFill,
+                  {
+                    transform: [
+                      {
+                        translateX: shineAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [-width, width * 1.5],
+                        }),
+                      },
+                      { rotate: '25deg' },
+                    ],
+                  },
+                ]}
+              >
+                <LinearGradient
+                  colors={['transparent', 'rgba(255,255,255,0.0)', 'rgba(255,255,255,0.3)', 'rgba(255,255,255,0.0)', 'transparent']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{ width: 150, height: '200%', top: -50 }}
+                />
+              </Animated.View>
 
-            <View style={[styles.bannerCircle, { top: -30, right: -20, width: 120, height: 120 }]} />
-            <View style={[styles.bannerCircle, { bottom: -40, left: 40, width: 150, height: 150 }]} />
-            <View style={styles.bannerIconFloating}>
-              <Ionicons name="stats-chart" size={120} color={Colors.white} />
-            </View>
+              <View style={[styles.bannerCircle, { top: -30, right: -20, width: 120, height: 120 }]} />
+              <View style={[styles.bannerCircle, { bottom: -40, left: 40, width: 150, height: 150 }]} />
+              <View style={styles.bannerIconFloating}>
+                <Ionicons name="stats-chart" size={120} color={Colors.white} />
+              </View>
 
-            <View style={styles.bannerBadge}>
-              <Text style={styles.bannerBadgeText}>NEW UPDATE</Text>
-            </View>
-            
-            <View style={styles.bannerContent}>
-              <View style={styles.bannerTextContainer}>
-                <Text style={styles.bannerTitle}>Weekly Report is Ready!</Text>
-                <Text style={styles.bannerSubtitle}>
-                  You&apos;ve completed another week of healthy eating. See your progress!
-                </Text>
-                <View style={styles.bannerCTA}>
-                  <Text style={styles.bannerCTAText}>SHOW ME</Text>
+              <View style={styles.bannerBadge}>
+                <Text style={styles.bannerBadgeText}>WEEKLY</Text>
+              </View>
+              
+              <View style={styles.bannerContent}>
+                <View style={styles.bannerTextContainer}>
+                  <Text style={styles.bannerTitle}>Weekly Report is Ready!</Text>
+                  <Text style={styles.bannerSubtitle}>
+                    You&apos;ve completed another week of healthy eating. See your progress!
+                  </Text>
+                  <View style={styles.bannerCTA}>
+                    <Text style={styles.bannerCTAText}>SHOW ME</Text>
+                  </View>
+                </View>
+                <View style={styles.bannerImageContainer}>
+                  <Ionicons name="trophy" size={60} color={Colors.warning} />
                 </View>
               </View>
-              <View style={styles.bannerImageContainer}>
-                <Ionicons name="trophy" size={60} color={Colors.warning} />
-              </View>
-            </View>
-          </TouchableOpacity>
-        </AnimatedCard>
+            </TouchableOpacity>
+          </AnimatedCard>
+        )}
 
         {/* Today's Calories - Glass Card */}
         <AnimatedCard delay={200} type="slide" style={styles.section}>
-          <Text style={styles.sectionTitle}>Today&apos;s Calories</Text>
-          <View style={styles.standardCard}>
-            <View style={styles.caloriesContent}>
+          <SectionTitle title="Today's Calories" />
+          <AppCard style={styles.standardCard} padding={0}>
+            <View style={[styles.caloriesContent, { padding: 20 }]}>
               <View style={styles.caloriesHeader}>
                 <View>
                   <Text style={styles.caloriesValue}>
@@ -370,29 +430,29 @@ export default function HomeScreen() {
                 </View>
               </View>
             </View>
-          </View>
+          </AppCard>
         </AnimatedCard>
 
         {/* Macro Breakdown - Glass Card */}
         <AnimatedCard delay={300} type="slide" style={styles.section}>
-          <Text style={styles.sectionTitle}>Macro Breakdown</Text>
-          <View style={styles.standardCard}>
-            <View style={styles.macroContent}>
+          <SectionTitle title="Macro Distribution" />
+          <AppCard style={styles.standardCard} padding={0}>
+            <View style={[styles.macroContent, { padding: 20 }]}> 
               <View style={styles.pieChartContainer}>
                 <View style={[styles.pieChartWrapper, !hasAnyMacros && styles.hollowPieWrapper]}>
-                  <PieChart
+                  <StandardDonutChart
                     data={macroData}
-                    donut
-                    radius={70}
-                    innerRadius={50}
-                    backgroundColor="transparent"
+                    radius={90}
+                    innerRadius={60}
+                    showText
                     centerLabelComponent={() => (
                       <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                        <Ionicons name="nutrition" size={20} color="white" />
+                        <Ionicons name="nutrition" size={20} color={Colors.white} />
+                        <Text style={{ marginTop: 4, color: Colors.primary, fontSize: 10, fontWeight: '900' }}>
+                          Macros
+                        </Text>
                       </View>
                     )}
-                    isAnimated
-                    animationDuration={1000}
                   />
                 </View>
               </View>
@@ -427,53 +487,28 @@ export default function HomeScreen() {
                 </View>
               </View>
             </View>
-          </View>
+          </AppCard>
         </AnimatedCard>
 
         {/* Weekly Trend Chart - Glass Card */}
         {weeklyData.length > 0 && (
           <AnimatedCard delay={400} type="slide" style={styles.section}>
-            <Text style={styles.sectionTitle}>This Week&apos;s Trend</Text>
-            <View style={styles.standardCard}>
-              <View style={styles.chartContent}>
-                  <BarChart
-                    data={weeklyData}
-                    width={weeklyChartWidth}
-                    height={180}
-                    barWidth={22}
-                    spacing={22}
-                    labelWidth={44}
-                    roundedTop
-                    roundedBottom
-                    hideRules
-                    xAxisThickness={1}
-                    yAxisThickness={1}
-                    yAxisTextStyle={{ 
-                      color: Colors.textLight, 
-                      fontSize: 10,
-                      fontWeight: '800',
-                    }}
-                    noOfSections={4}
-                    maxValue={Math.max(...weeklyData.map(d => d.value), 2000)}
-                    cappedBars={false}
-                    initialSpacing={16}
-                    endSpacing={16}
-                    xAxisLabelTextStyle={{
-                      color: Colors.textSecondary,
-                      fontSize: 10,
-                      fontWeight: '900',
-                      textAlign: 'center',
-                    }}
-                    barInnerComponent={(item: any) => (
-                      item.value === 0 ? (
-                        <View style={styles.hollowBar} />
-                      ) : null
-                    )}
-                    isAnimated
-                    animationDuration={1000}
-                  />
+            <SectionTitle title="Calorie Trend" />
+            <AppCard style={styles.standardCard} padding={0}>
+              <View style={[styles.chartContent, { paddingTop: 16, paddingBottom: 16 }]}
+              >
+                <StandardBarChart
+                  data={weeklyData}
+                  width={weeklyChartWidth}
+                  height={200}
+                  barWidth={20}
+                  spacing={15}
+                  labelWidth={56}
+                  showValuesAsTopLabel={true}
+                  maxValueFallback={3000}
+                />
               </View>
-            </View>
+            </AppCard>
           </AnimatedCard>
         )}
 
@@ -567,9 +602,9 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     padding: 24,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: Colors.whiteOverlay10,
     borderBottomWidth: 10,
-    borderBottomColor: 'rgba(0,0,0,0.2)',
+    borderBottomColor: Colors.shadowSubtle,
     position: 'relative',
     overflow: 'hidden',
   },
@@ -587,7 +622,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginBottom: 16,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: Colors.whiteOverlay20,
     borderBottomWidth: 4,
   },
   bannerBadgeText: {
@@ -614,7 +649,7 @@ const styles = StyleSheet.create({
   bannerSubtitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.8)',
+    color: Colors.whiteOverlay80,
     lineHeight: 20,
     marginBottom: 20,
   },
@@ -625,7 +660,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignSelf: 'flex-start',
     borderBottomWidth: 4,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
+    borderBottomColor: Colors.shadowLight,
   },
   bannerCTAText: {
     color: Colors.accent,

@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import PageHeader from '../../components/PageHeader';
 import { Ionicons } from '@expo/vector-icons';
+import EmptyState from '../../components/EmptyState';
 import { useUser } from '../../context/UserContext';
 import { recipeApi } from '../../utils/api';
 import { router, Stack, useFocusEffect } from 'expo-router';
@@ -120,13 +121,11 @@ export default function SavedRecipesScreen() {
                 }
                 ListEmptyComponent={
                     !loading ? (
-                        <View style={styles.emptyState}>
-                            <View style={styles.emptyIcon}>
-                                <Ionicons name="book-outline" size={32} color={Colors.textSecondary} opacity={0.5} />
-                            </View>
-                            <Text style={styles.emptyText}>No saved recipes yet</Text>
-                            <Text style={styles.emptySubtext}>Generate recipes with AI Chef and save them here!</Text>
-                        </View>
+                        <EmptyState
+                            icon="book-outline"
+                            title="No saved recipes yet"
+                            subtitle="Generate recipes with AI Chef and save them here!"
+                        />
                     ) : null
                 }
             />
@@ -201,35 +200,5 @@ const styles = StyleSheet.create({
         marginLeft: 'auto',
         fontWeight: '700',
         opacity: 0.5,
-    },
-    emptyState: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 80,
-    },
-    emptyIcon: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: Colors.backgroundSecondary,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 20,
-        borderWidth: 2,
-        borderColor: Colors.border,
-    },
-    emptyText: {
-        fontSize: 20,
-        fontWeight: '900',
-        color: Colors.text,
-        marginBottom: 8,
-    },
-    emptySubtext: {
-        fontSize: 15,
-        color: Colors.textSecondary,
-        textAlign: 'center',
-        maxWidth: 260,
-        fontWeight: '600',
-        lineHeight: 22,
     },
 });

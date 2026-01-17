@@ -1,27 +1,106 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import PageHeader from '../../components/PageHeader';
 import DuoButton from '../../components/DuoButton';
 import AnimatedCard from '../../components/AnimatedCard';
+import EmptyState from '../../components/EmptyState';
+import LoadingState from '../../components/LoadingState';
+import { socialApi } from '../../utils/api';
 import * as Haptics from 'expo-haptics';
 
-const MOCK_RECIPES = [
-  { id: 'r1', name: 'High Protein Oats', calories: 350, protein: 25 },
-  { id: 'r2', name: 'Chicken Quinoa Bowl', calories: 450, protein: 35 },
-];
-
-const MOCK_BADGES = [
-  { id: 'b1', title: 'First Log', icon: 'sparkles', earned: true },
-  { id: 'b3', title: 'Streak Starter', icon: 'flame', earned: true },
-];
+type PublicUserStats = {
+  id: string;
+  name: string;
+  username: string | null;
+  bio: string | null;
+  avatar_url: string | null;
+  total_xp: number;
+  level: number;
+  current_streak: number;
+  longest_streak: number;
+  quests_completed: number;
+  badges_earned: number;
+  followers_count: number;
+  following_count: number;
+  is_followed_by_me: boolean;
+};
 
 export default function PublicProfileScreen() {
-  const { name } = useLocalSearchParams();
+  const params = useLocalSearchParams();
   const router = useRouter();
-  const [isFollowing, setIsFollowing] = useState(false);
+
+  const userId = typeof params.id === 'string' ? params.id : Array.isArray(params.id) ? params.id[0] : '';
+
+  const [profile, setProfile] = useState<PublicUserStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+  const [avatarImageFailed, setAvatarImageFailed] = useState(false);
+
+  const dicebearUrl = useMemo(() => {
+    if (!profile) return null;
+    const seed = encodeURIComponent((profile.username || profile.name || profile.id || 'U').trim());
+    return `https://api.dicebear.com/7.x/bottts/png?seed=${seed}`;
+  }, [profile]);
+
+  useEffect(() => {
+    setAvatarImageFailed(false);
+  }, [profile?.avatar_url, dicebearUrl]);
+
+  const fetchProfile = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const res = await socialApi.getPublicUserStats(userId);
+      setProfile({
+        ...res,
+        is_followed_by_me: !!(res as any)?.is_followed_by_me,
+      });
+    } catch (e) {
+      console.error('Error fetching public profile:', e);
+      setProfile(null);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchProfile();
+  }, [fetchProfile]);
+
+  const handleToggleFollow = useCallback(async () => {
+    if (!profile?.id || followLoading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+
+    const nextFollow = !profile.is_followed_by_me;
+    setFollowLoading(true);
+    setProfile((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        is_followed_by_me: nextFollow,
+        followers_count: Math.max(0, prev.followers_count + (nextFollow ? 1 : -1)),
+      };
+    });
+
+    try {
+      if (nextFollow) {
+        await socialApi.followUser(profile.id);
+      } else {
+        await socialApi.unfollowUser(profile.id);
+      }
+      await fetchProfile();
+    } catch (e) {
+      console.error('Error toggling follow:', e);
+      await fetchProfile();
+    } finally {
+      setFollowLoading(false);
+    }
+  }, [fetchProfile, followLoading, profile]);
 
   return (
     <View style={styles.container}>
@@ -46,80 +125,121 @@ export default function PublicProfileScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent} 
         showsVerticalScrollIndicator={false}
-      >
-        <AnimatedCard delay={100} type="pop" style={styles.profileCard}>
-          <View style={styles.avatarWrap}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{(name as string)?.[0]?.toUpperCase() || 'U'}</Text>
-            </View>
-          </View>
-          
-          <Text style={styles.userName}>{name || 'User'}</Text>
-          <Text style={styles.userBio}>Fueling my fitness journey with NutriSnap! 🥗💪</Text>
-
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>124</Text>
-              <Text style={styles.statLabel}>Followers</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>86</Text>
-              <Text style={styles.statLabel}>Following</Text>
-            </View>
-          </View>
-
-          <DuoButton
-            title={isFollowing ? 'Unfollow' : 'Follow'}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-              setIsFollowing(!isFollowing);
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              fetchProfile();
             }}
-            color={isFollowing ? Colors.white : Colors.primary}
-            shadowColor={isFollowing ? Colors.border : undefined}
-            textStyle={{ color: isFollowing ? Colors.text : Colors.white }}
-            size="large"
-            style={styles.followButton}
+            tintColor={Colors.primary}
           />
-        </AnimatedCard>
+        }
+      >
+        {loading ? (
+          <LoadingState label="Loading profile..." />
+        ) : !profile ? (
+          <View style={{ paddingTop: 24 }}>
+            <EmptyState
+              icon="alert-circle-outline"
+              title="Unable to load"
+              subtitle="Pull to refresh or try again later."
+            />
+          </View>
+        ) : (
+          <>
+            <AnimatedCard delay={100} type="pop" style={styles.profileCard}>
+              <View style={styles.avatarWrap}>
+                <View style={styles.avatar}>
+                  {!avatarImageFailed ? (
+                    <Image
+                      source={{ uri: profile.avatar_url || (dicebearUrl as string) }}
+                      style={{ width: '100%', height: '100%', borderRadius: 36 }}
+                      onError={() => setAvatarImageFailed(true)}
+                    />
+                  ) : (
+                    <Text style={styles.avatarText}>
+                      {(profile.name || profile.username || 'U')[0]?.toUpperCase() || 'U'}
+                    </Text>
+                  )}
+                </View>
+              </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Shared Recipes</Text>
-          {MOCK_RECIPES.map((recipe, index) => (
-            <AnimatedCard key={recipe.id} delay={200 + index * 100} type="slide">
-              <TouchableOpacity 
-                style={styles.recipeCard} 
-                activeOpacity={0.9}
-                onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})}
-              >
-                <View style={styles.recipeIconWrap}>
-                  <Ionicons name="restaurant" size={24} color={Colors.primary} />
+              <Text style={styles.userName}>{profile.name || 'User'}</Text>
+              {profile.username ? (
+                <Text style={styles.usernameText}>@{profile.username}</Text>
+              ) : null}
+              {profile.bio ? <Text style={styles.userBio}>{profile.bio}</Text> : null}
+
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statValue}>{profile.followers_count}</Text>
+                  <Text style={styles.statLabel}>Followers</Text>
                 </View>
-                <View style={styles.recipeInfo}>
-                  <Text style={styles.recipeName}>{recipe.name}</Text>
-                  <Text style={styles.recipeMeta}>{recipe.calories} kcal • {recipe.protein}g protein</Text>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Text style={styles.statValue}>{profile.following_count}</Text>
+                  <Text style={styles.statLabel}>Following</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
-              </TouchableOpacity>
+              </View>
+
+              <DuoButton
+                title={profile.is_followed_by_me ? 'Unfollow' : 'Follow'}
+                onPress={handleToggleFollow}
+                loading={followLoading}
+                color={profile.is_followed_by_me ? Colors.white : Colors.primary}
+                shadowColor={profile.is_followed_by_me ? Colors.border : undefined}
+                textStyle={{ color: profile.is_followed_by_me ? Colors.text : Colors.white }}
+                size="large"
+                style={styles.followButton}
+              />
             </AnimatedCard>
-          ))}
-        </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Badges</Text>
-          <View style={styles.badgesGrid}>
-            {MOCK_BADGES.map((b, index) => (
-              <AnimatedCard key={b.id} delay={400 + index * 100} type="pop" style={styles.badgeCardWrapper}>
-                <View style={styles.badgeCard}>
-                  <View style={styles.badgeIconWrap}>
-                    <Ionicons name={b.icon as any} size={20} color={Colors.primary} />
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Stats</Text>
+              <AnimatedCard delay={200} type="slide">
+                <View style={styles.recipeCard}>
+                  <View style={styles.recipeIconWrap}>
+                    <Ionicons name="trophy" size={24} color={Colors.primary} />
                   </View>
-                  <Text style={styles.badgeTitle}>{b.title}</Text>
+                  <View style={styles.recipeInfo}>
+                    <Text style={styles.recipeName}>Level {profile.level}</Text>
+                    <Text style={styles.recipeMeta}>{profile.total_xp} XP • {profile.badges_earned} badges</Text>
+                  </View>
                 </View>
               </AnimatedCard>
-            ))}
-          </View>
-        </View>
+              <AnimatedCard delay={300} type="slide">
+                <View style={styles.recipeCard}>
+                  <View style={styles.recipeIconWrap}>
+                    <Ionicons name="flame" size={24} color={Colors.warning} />
+                  </View>
+                  <View style={styles.recipeInfo}>
+                    <Text style={styles.recipeName}>Streak</Text>
+                    <Text style={styles.recipeMeta}>{profile.current_streak} current • {profile.longest_streak} best</Text>
+                  </View>
+                </View>
+              </AnimatedCard>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Shared Recipes</Text>
+              <EmptyState
+                icon="restaurant"
+                title="No shared recipes yet"
+                subtitle="This section will appear when recipe sharing is enabled."
+              />
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Badges</Text>
+              <EmptyState
+                icon="ribbon-outline"
+                title="No badges to show"
+                subtitle="This section will appear when public badges are enabled."
+              />
+            </View>
+          </>
+        )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -184,9 +304,18 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: Colors.text,
     textTransform: 'uppercase',
-    marginBottom: 10,
+    marginBottom: 6,
     textAlign: 'center',
     letterSpacing: 0.5,
+  },
+  usernameText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 10,
   },
   userBio: {
     fontSize: 15,

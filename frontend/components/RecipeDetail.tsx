@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Colors } from '../constants/Colors';
+import { Colors, Spacing, Radius } from '../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import AnimatedCard from './AnimatedCard';
 import * as Haptics from 'expo-haptics';
@@ -49,19 +49,19 @@ export default function RecipeDetail({ recipe, headerRight, footer }: RecipeDeta
                 <View style={styles.macroItem}>
                     <Text style={styles.macroValue}>{recipe.protein}g</Text>
                     <Text style={styles.macroLabel}>Protein</Text>
-                    <View style={[styles.macroBar, { backgroundColor: '#34C759', width: '60%' }]} />
+                    <View style={[styles.macroBar, { backgroundColor: Colors.progressGreen, width: '60%' }]} />
                 </View>
                 <View style={styles.macroDivider} />
                 <View style={styles.macroItem}>
                     <Text style={styles.macroValue}>{recipe.carbs}g</Text>
                     <Text style={styles.macroLabel}>Carbs</Text>
-                    <View style={[styles.macroBar, { backgroundColor: '#FF9500', width: '40%' }]} />
+                    <View style={[styles.macroBar, { backgroundColor: Colors.progressOrange, width: '40%' }]} />
                 </View>
                 <View style={styles.macroDivider} />
                 <View style={styles.macroItem}>
                     <Text style={styles.macroValue}>{recipe.fat}g</Text>
                     <Text style={styles.macroLabel}>Fat</Text>
-                    <View style={[styles.macroBar, { backgroundColor: '#FF3B30', width: '30%' }]} />
+                    <View style={[styles.macroBar, { backgroundColor: Colors.progressRed, width: '30%' }]} />
                 </View>
             </AnimatedCard>
 
@@ -132,17 +132,17 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.background,
     },
     content: {
-        padding: 24,
+        padding: Spacing.xxl,
         paddingBottom: 120,
     },
     header: {
-        marginBottom: 24,
+        marginBottom: Spacing.xxl,
     },
     titleRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        gap: 12,
+        gap: Spacing.md,
     },
     title: {
         flex: 1,
@@ -151,27 +151,27 @@ const styles = StyleSheet.create({
         color: Colors.text,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
-        marginBottom: 8,
+        marginBottom: Spacing.sm,
     },
     description: {
         fontSize: 15,
         color: Colors.textSecondary,
-        marginBottom: 16,
+        marginBottom: Spacing.lg,
         lineHeight: 22,
         fontWeight: '500',
     },
     badges: {
         flexDirection: 'row',
-        gap: 10,
+        gap: Spacing.sm + 2,
     },
     badge: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
         backgroundColor: Colors.backgroundSecondary,
-        paddingHorizontal: 12,
+        paddingHorizontal: Spacing.md,
         paddingVertical: 6,
-        borderRadius: 14,
+        borderRadius: Radius.lg,
         borderWidth: 1,
         borderColor: Colors.border,
     },
@@ -184,12 +184,12 @@ const styles = StyleSheet.create({
     macrosCard: {
         flexDirection: 'row',
         backgroundColor: Colors.white,
-        borderRadius: 24,
-        padding: 20,
-        marginBottom: 24,
+        borderRadius: Radius.xxxl,
+        padding: Spacing.xl,
+        marginBottom: Spacing.xxl,
         borderWidth: 2,
         borderColor: Colors.border,
-        borderBottomWidth: 8,
+        borderBottomWidth: Spacing.sm,
         justifyContent: 'space-between',
     },
     macroItem: {
@@ -223,17 +223,17 @@ const styles = StyleSheet.create({
     tabs: {
         flexDirection: 'row',
         backgroundColor: Colors.backgroundSecondary,
-        borderRadius: 20,
+        borderRadius: Radius.xxl,
         padding: 6,
-        marginBottom: 20,
+        marginBottom: Spacing.xl,
         borderWidth: 1,
         borderColor: Colors.border,
     },
     tab: {
         flex: 1,
-        paddingVertical: 12,
+        paddingVertical: Spacing.md,
         alignItems: 'center',
-        borderRadius: 14,
+        borderRadius: Radius.lg,
     },
     activeTab: {
         backgroundColor: Colors.white,
@@ -256,36 +256,36 @@ const styles = StyleSheet.create({
     },
     detailsCard: {
         backgroundColor: Colors.white,
-        borderRadius: 28,
-        padding: 24,
+        borderRadius: Radius.xxxxl - 4,
+        padding: Spacing.xxl,
         borderWidth: 2,
         borderColor: Colors.border,
-        marginBottom: 24,
-        borderBottomWidth: 10,
+        marginBottom: Spacing.xxl,
+        borderBottomWidth: Spacing.sm + 2,
     },
     list: {
-        gap: 18,
+        gap: Spacing.lg + 2,
     },
     listItem: {
         flexDirection: 'row',
-        gap: 14,
+        gap: Spacing.lg - 2,
         alignItems: 'flex-start',
     },
     bullet: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
+        width: Spacing.sm,
+        height: Spacing.sm,
+        borderRadius: Radius.xs,
         backgroundColor: Colors.primary,
-        marginTop: 8,
+        marginTop: Spacing.sm,
     },
     stepItem: {
         flexDirection: 'row',
-        gap: 16,
+        gap: Spacing.lg,
     },
     stepNumber: {
         width: 28,
         height: 28,
-        borderRadius: 14,
+        borderRadius: Radius.lg,
         backgroundColor: Colors.primary + '15',
         alignItems: 'center',
         justifyContent: 'center',
@@ -306,11 +306,11 @@ const styles = StyleSheet.create({
     },
     tipsContainer: {
         flexDirection: 'row',
-        gap: 14,
+        gap: Spacing.lg - 2,
         backgroundColor: Colors.secondary + '10',
-        padding: 20,
-        borderRadius: 24,
-        marginBottom: 24,
+        padding: Spacing.xl,
+        borderRadius: Radius.xxxl,
+        marginBottom: Spacing.xxl,
         borderWidth: 2,
         borderColor: Colors.secondary + '30',
         borderStyle: 'dashed',

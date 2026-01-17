@@ -4,6 +4,9 @@ import { useAuth } from './AuthContext';
 
 interface UserProfile {
   id: string;
+  username?: string | null;
+  bio?: string | null;
+  avatar_url?: string | null;
   name: string;
   age: number;
   gender: string;

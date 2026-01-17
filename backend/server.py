@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException, Depends, Header, Form
+from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException, Depends, Header, Form, Query
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 import os
@@ -92,6 +92,9 @@ logger = logging.getLogger(__name__)
 async def _ensure_schema(conn: asyncpg.Connection):
     await conn.execute(
         """
+        -- Required for gen_random_uuid() defaults used across tables
+        CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
         CREATE TABLE IF NOT EXISTS profiles (
             id uuid PRIMARY KEY,
             name text,
@@ -215,12 +218,105 @@ async def _ensure_schema(conn: asyncpg.Connection):
           ON foods_ingestion_queue(food_id);
         CREATE INDEX IF NOT EXISTS idx_queue_query_lower 
           ON foods_ingestion_queue(lower(query));
+
+        -- =====================
+        -- QUEST SYSTEM TABLES
+        -- =====================
+
+        CREATE TABLE IF NOT EXISTS quest_definitions (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            quest_type text NOT NULL,
+            title text NOT NULL,
+            description text,
+            icon text NOT NULL DEFAULT 'checkmark-circle',
+            icon_color text NOT NULL DEFAULT '#2F593E',
+            xp_reward int NOT NULL DEFAULT 20,
+            target_value int NOT NULL DEFAULT 1,
+            target_unit text,
+            difficulty text NOT NULL DEFAULT 'easy',
+            is_daily boolean NOT NULL DEFAULT true,
+            is_active boolean NOT NULL DEFAULT true,
+            created_at timestamptz NOT NULL DEFAULT now()
+        );
+
+        CREATE TABLE IF NOT EXISTS user_quests (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+            quest_definition_id uuid NOT NULL REFERENCES quest_definitions(id) ON DELETE CASCADE,
+            quest_date date NOT NULL DEFAULT CURRENT_DATE,
+            current_value double precision NOT NULL DEFAULT 0,
+            target_value double precision NOT NULL,
+            is_completed boolean NOT NULL DEFAULT false,
+            completed_at timestamptz,
+            xp_claimed boolean NOT NULL DEFAULT false,
+            created_at timestamptz NOT NULL DEFAULT now(),
+            updated_at timestamptz NOT NULL DEFAULT now(),
+            UNIQUE(user_id, quest_definition_id, quest_date)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_user_quests_user_date ON user_quests(user_id, quest_date);
+        CREATE INDEX IF NOT EXISTS idx_user_quests_completed ON user_quests(user_id, is_completed, xp_claimed);
+
+        CREATE TABLE IF NOT EXISTS badge_definitions (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            badge_type text NOT NULL UNIQUE,
+            title text NOT NULL,
+            description text NOT NULL,
+            icon text NOT NULL DEFAULT 'sparkles',
+            xp_reward int NOT NULL DEFAULT 50,
+            requirement_type text NOT NULL,
+            requirement_value int NOT NULL DEFAULT 1,
+            tier int NOT NULL DEFAULT 1,
+            is_active boolean NOT NULL DEFAULT true,
+            created_at timestamptz NOT NULL DEFAULT now()
+        );
+
+        CREATE TABLE IF NOT EXISTS user_badges (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+            badge_definition_id uuid NOT NULL REFERENCES badge_definitions(id) ON DELETE CASCADE,
+            earned_at timestamptz NOT NULL DEFAULT now(),
+            UNIQUE(user_id, badge_definition_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_user_badges_user ON user_badges(user_id);
+
+        CREATE TABLE IF NOT EXISTS user_xp (
+            user_id uuid PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+            total_xp int NOT NULL DEFAULT 0,
+            level int NOT NULL DEFAULT 1,
+            current_streak int NOT NULL DEFAULT 0,
+            longest_streak int NOT NULL DEFAULT 0,
+            last_active_date date,
+            quests_completed int NOT NULL DEFAULT 0,
+            badges_earned int NOT NULL DEFAULT 0,
+            updated_at timestamptz NOT NULL DEFAULT now()
+        );
+
+        CREATE TABLE IF NOT EXISTS user_follows (
+            follower_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+            following_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+            created_at timestamptz NOT NULL DEFAULT now(),
+            PRIMARY KEY (follower_id, following_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_user_follows_follower ON user_follows(follower_id);
+        CREATE INDEX IF NOT EXISTS idx_user_follows_following ON user_follows(following_id);
         """
     )
 
     # Evolve foods schema for global catalog + micronutrients + sync metadata (safe/idempotent)
     await conn.execute(
         """
+        ALTER TABLE profiles
+          ADD COLUMN IF NOT EXISTS username text NULL,
+          ADD COLUMN IF NOT EXISTS bio text NULL,
+          ADD COLUMN IF NOT EXISTS avatar_url text NULL;
+
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_profiles_username_lower
+          ON profiles (lower(username))
+          WHERE username IS NOT NULL;
+
         ALTER TABLE foods
           ADD COLUMN IF NOT EXISTS source text NULL,
           ADD COLUMN IF NOT EXISTS external_id text NULL,
@@ -341,6 +437,136 @@ def _to_float(value: Any) -> float | None:
         return float(value)
     except Exception:
         return None
+
+
+def _parse_jsonb_field(value: Any, default: Any = None) -> Any:
+    """Parse a JSONB field that may be a string or already parsed.
+
+    Args:
+        value: The field value (could be str, dict, list, or None)
+        default: Default value to return if parsing fails (default: None)
+
+    Returns:
+        Parsed JSON value or default
+    """
+    if value is None:
+        return default if default is not None else {}
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except Exception:
+            return default if default is not None else {}
+    return value
+
+
+def _parse_analytics_cache_fields(cache: Dict[str, Any]) -> Dict[str, Any]:
+    """Parse all JSONB fields from an analytics cache record.
+
+    Args:
+        cache: The cache record from the database
+
+    Returns:
+        Dictionary with parsed fields
+    """
+    return {
+        "insights": _parse_jsonb_field(cache.get("insights"), {}),
+        "bio_impact": _parse_jsonb_field(cache.get("bio_impact"), {}),
+        "health_insights": _parse_jsonb_field(cache.get("health_insights"), {}),
+        "bio_alerts": _parse_jsonb_field(cache.get("bio_alerts"), []),
+        "red_flags": _parse_jsonb_field(cache.get("red_flags"), []),
+    }
+
+
+# Micronutrient field mappings: (output_key, db_column_suffix)
+_MICRONUTRIENT_FIELDS = [
+    ("fiber_g", "fiber_g_per_100g"),
+    ("sugar_g", "sugar_g_per_100g"),
+    ("saturated_fat_g", "saturated_fat_g_per_100g"),
+    ("trans_fat_g", "trans_fat_g_per_100g"),
+    ("cholesterol_mg", "cholesterol_mg_per_100g"),
+    ("sodium_mg", "sodium_mg_per_100g"),
+    ("potassium_mg", "potassium_mg_per_100g"),
+    ("vitamin_a_ug", "vitamin_a_ug_per_100g"),
+    ("calcium_mg", "calcium_mg_per_100g"),
+    ("iron_mg", "iron_mg_per_100g"),
+    ("magnesium_mg", "magnesium_mg_per_100g"),
+    ("phosphorus_mg", "phosphorus_mg_per_100g"),
+    ("zinc_mg", "zinc_mg_per_100g"),
+    ("copper_mg", "copper_mg_per_100g"),
+    ("manganese_mg", "manganese_mg_per_100g"),
+    ("selenium_ug", "selenium_ug_per_100g"),
+    ("vitamin_c_mg", "vitamin_c_mg_per_100g"),
+    ("vitamin_d_ug", "vitamin_d_ug_per_100g"),
+    ("vitamin_e_mg", "vitamin_e_mg_per_100g"),
+    ("vitamin_k_ug", "vitamin_k_ug_per_100g"),
+    ("thiamin_b1_mg", "thiamin_b1_mg_per_100g"),
+    ("riboflavin_b2_mg", "riboflavin_b2_mg_per_100g"),
+    ("niacin_b3_mg", "niacin_b3_mg_per_100g"),
+    ("vitamin_b6_mg", "vitamin_b6_mg_per_100g"),
+    ("folate_ug", "folate_ug_per_100g"),
+    ("vitamin_b12_ug", "vitamin_b12_ug_per_100g"),
+    ("caffeine_mg", "caffeine_mg_per_100g"),
+    ("alcohol_g", "alcohol_g_per_100g"),
+]
+
+
+def _create_empty_micros() -> Dict[str, float]:
+    """Create an empty micronutrients dictionary with all fields set to 0.0."""
+    return {key: 0.0 for key, _ in _MICRONUTRIENT_FIELDS}
+
+
+def _accumulate_micros(micros: Dict[str, float], food_row: Dict[str, Any], ratio: float) -> None:
+    """Accumulate micronutrients from a food row into the micros dictionary.
+
+    Args:
+        micros: The micronutrients dictionary to update (modified in place)
+        food_row: The food database row with per-100g values
+        ratio: The ratio of grams consumed / 100 (e.g., 150g = 1.5 ratio)
+    """
+    for output_key, db_column in _MICRONUTRIENT_FIELDS:
+        micros[output_key] += float(food_row.get(db_column) or 0) * ratio
+
+
+def _compute_meal_micros(meal: Dict[str, Any], foods_by_id: Dict[str, Any]) -> Dict[str, float]:
+    """Compute total micronutrients for a meal based on its foods.
+
+    Args:
+        meal: The meal dictionary with a 'foods' list
+        foods_by_id: Dictionary mapping food_id strings to food database rows
+
+    Returns:
+        Dictionary of total micronutrients for the meal
+    """
+    micros = _create_empty_micros()
+    foods = meal.get("foods") or []
+
+    if not isinstance(foods, list):
+        return micros
+
+    for f in foods:
+        if not isinstance(f, dict):
+            continue
+        fid = f.get("food_id")
+        if not fid:
+            continue
+        row = foods_by_id.get(str(fid))
+        if not row:
+            continue
+
+        grams = f.get("quantity")
+        if grams is None:
+            grams = f.get("displayQuantity")
+        try:
+            grams_f = float(grams or 0)
+        except Exception:
+            grams_f = 0.0
+        if grams_f <= 0:
+            continue
+
+        ratio = grams_f / 100.0
+        _accumulate_micros(micros, row, ratio)
+
+    return micros
 
 
 def _convert_unit(amount: float, unit: str, target_unit: str) -> float | None:
@@ -613,6 +839,9 @@ def _uuid(value: str) -> uuid.UUID:
 def _profile_from_record(record: asyncpg.Record) -> dict:
     return {
         "id": str(record["id"]),
+        "username": record.get("username"),
+        "bio": record.get("bio"),
+        "avatar_url": record.get("avatar_url"),
         "name": record["name"],
         "age": record["age"],
         "gender": record["gender"],
@@ -750,7 +979,7 @@ async def get_current_uid_optional(authorization: str | None = Header(default=No
         token = _get_bearer_token(authorization)
         decoded = _verify_supabase_token(token)
         return str(decoded.get("sub"))
-    except:
+    except Exception:
         return None
 
 
@@ -762,6 +991,9 @@ def _require_user_match(uid: str, user_id: str):
 
 class UserProfile(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    username: Optional[str] = None
+    bio: Optional[str] = None
+    avatar_url: Optional[str] = None
     name: str
     age: int
     gender: str
@@ -807,6 +1039,7 @@ class MealLog(BaseModel):
     user_id: str
     meal_type: str  # "breakfast", "lunch", "dinner", "snack"
     foods: List[Dict[str, Any]]  # [{"name": "Dal", "quantity": 150, "calories": 120, ...}]
+    micros: Dict[str, Any] = Field(default_factory=dict)
     total_calories: float
     total_protein: float
     total_carbs: float
@@ -836,6 +1069,20 @@ class VoiceToMealFoodItem(BaseModel):
 class VoiceToMealResponse(BaseModel):
     transcript: str
     foods: List[Dict[str, Any]]
+
+
+class TextToMealRequest(BaseModel):
+    user_id: str
+    text: str
+
+class TranscribeResponse(BaseModel):
+    transcript: str
+
+
+class PortionInferResponse(BaseModel):
+    transcript: str
+    quantity: Optional[float] = None
+    unit: Optional[str] = None  # 'g' | 'oz'
 
 class FoodPresenceResponse(BaseModel):
     has_food: bool
@@ -1321,6 +1568,58 @@ async def _transcribe_audio_file(file: UploadFile) -> str:
     return (getattr(transcription, "text", None) or "").strip()
 
 
+async def _infer_portion_from_text(transcript: str) -> Dict[str, Any]:
+    if openai_client is None:
+        raise RuntimeError("OPENAI_API_KEY is not set")
+
+    cleaned = (transcript or "").strip()
+    if not cleaned:
+        return {"quantity": None, "unit": None}
+
+    response = await openai_client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You infer a portion amount from a user's spoken message. "
+                    "Return JSON only with schema: {\"quantity\": number|null, \"unit\": \"g\"|\"oz\"|null}. "
+                    "Rules: "
+                    "- If the user gives grams, use unit 'g'. "
+                    "- If the user gives ounces/oz, use unit 'oz'. "
+                    "- If the user mentions a number without a unit, assume grams. "
+                    "- If the user says something ambiguous (e.g. 'a scoop', 'one serving') and you cannot infer a numeric quantity, return nulls. "
+                    "- Do not include any extra keys."
+                ),
+            },
+            {"role": "user", "content": cleaned},
+        ],
+        temperature=0,
+        response_format={"type": "json_object"},
+    )
+
+    content = response.choices[0].message.content if response.choices else ""
+    extracted = _extract_json_from_text(content)
+    parsed = json.loads(extracted) if extracted else {}
+    if not isinstance(parsed, dict):
+        return {"quantity": None, "unit": None}
+
+    qty = parsed.get("quantity")
+    unit = parsed.get("unit")
+
+    try:
+        qty_num = float(qty) if qty is not None else None
+    except Exception:
+        qty_num = None
+
+    if unit is not None:
+        unit = str(unit).strip().lower()
+        if unit not in {"g", "oz"}:
+            unit = None
+
+    return {"quantity": qty_num, "unit": unit}
+
+
 async def _parse_voice_meal_text(transcript: str) -> List[VoiceToMealFoodItem]:
     if openai_client is None:
         raise RuntimeError("OPENAI_API_KEY is not set")
@@ -1444,9 +1743,287 @@ async def onboard_user(user_data: UserProfileCreate, uid: str = Depends(get_curr
         if not row:
             raise HTTPException(status_code=500, detail="Failed to create profile")
         return UserProfile(**_profile_from_record(row))
+
     except Exception as e:
         logger.error(f"Error onboarding user: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/meals/transcribe", response_model=TranscribeResponse)
+async def transcribe_audio(
+    user_id: str = Form(...),
+    audio: UploadFile = File(...),
+    uid: str = Depends(get_current_uid),
+):
+    """Transcribe short audio (used for portion dictation in barcode flow)."""
+    try:
+        _require_user_match(uid, user_id)
+        transcript = await _transcribe_audio_file(audio)
+        return TranscribeResponse(transcript=transcript)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[TRANSCRIBE] Error: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/meals/infer-portion", response_model=PortionInferResponse)
+async def infer_portion(
+    user_id: str = Form(...),
+    audio: UploadFile = File(...),
+    uid: str = Depends(get_current_uid),
+):
+    """Transcribe audio and infer portion quantity+unit (g/oz) for barcode flow."""
+    try:
+        _require_user_match(uid, user_id)
+        transcript = await _transcribe_audio_file(audio)
+        inferred = await _infer_portion_from_text(transcript)
+        return PortionInferResponse(
+            transcript=transcript,
+            quantity=inferred.get("quantity"),
+            unit=inferred.get("unit"),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[INFER_PORTION] Error: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class UsernameUpdateRequest(BaseModel):
+    username: str
+
+
+class ProfileUpdateRequest(BaseModel):
+    bio: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
+@api_router.post("/user/me/username")
+async def set_my_username(payload: UsernameUpdateRequest, uid: str = Depends(get_current_uid)):
+    username = (payload.username or "").strip().lower()
+    if not re.match(r"^[a-z0-9_]{3,20}$", username):
+        raise HTTPException(status_code=400, detail="Username must be 3-20 chars and contain only letters, numbers, underscores")
+
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        try:
+            row = await conn.fetchrow(
+                "UPDATE profiles SET username = $2 WHERE id = $1 RETURNING id, username",
+                _uuid(uid),
+                username,
+            )
+        except UniqueViolationError:
+            raise HTTPException(status_code=409, detail="Username is already taken")
+
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"user_id": str(row["id"]), "username": row["username"]}
+
+
+@api_router.put("/user/me/profile", response_model=UserProfile)
+async def update_my_profile(payload: ProfileUpdateRequest, uid: str = Depends(get_current_uid)):
+    bio = payload.bio
+    if bio is not None:
+        bio = str(bio).strip()
+        if len(bio) > 160:
+            raise HTTPException(status_code=400, detail="Bio must be 160 characters or less")
+
+    avatar_url = payload.avatar_url
+    if avatar_url is not None:
+        avatar_url = str(avatar_url).strip()
+        if avatar_url == "":
+            avatar_url = None
+
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE profiles
+            SET bio = COALESCE($2, bio),
+                avatar_url = COALESCE($3, avatar_url)
+            WHERE id = $1
+            RETURNING *
+            """,
+            _uuid(uid),
+            bio,
+            avatar_url,
+        )
+
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+    return UserProfile(**_profile_from_record(row))
+
+
+@api_router.get("/users/search")
+async def search_users(query: str = Query("", min_length=1, max_length=32), uid: str = Depends(get_current_uid)):
+    q = query.strip().lower()
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT
+              p.id,
+              p.name,
+              p.username,
+              EXISTS(
+                SELECT 1
+                FROM user_follows uf
+                WHERE uf.follower_id = $1 AND uf.following_id = p.id
+              ) AS is_following
+            FROM profiles p
+            WHERE p.username IS NOT NULL
+              AND lower(p.username) LIKE $2
+            ORDER BY lower(p.username) ASC
+            LIMIT 25
+            """,
+            _uuid(uid),
+            f"%{q}%",
+        )
+
+    results = []
+    for r in rows:
+        results.append({
+            "id": str(r["id"]),
+            "name": r["name"],
+            "username": r["username"],
+            "is_following": bool(r["is_following"]),
+        })
+
+    return {"results": results}
+
+
+@api_router.post("/users/{target_user_id}/follow")
+async def follow_user(target_user_id: str, uid: str = Depends(get_current_uid)):
+    if uid == target_user_id:
+        raise HTTPException(status_code=400, detail="Cannot follow yourself")
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        exists = await conn.fetchval("SELECT 1 FROM profiles WHERE id = $1", _uuid(target_user_id))
+        if not exists:
+            raise HTTPException(status_code=404, detail="User not found")
+        await conn.execute(
+            "INSERT INTO user_follows (follower_id, following_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            _uuid(uid),
+            _uuid(target_user_id),
+        )
+    return {"ok": True}
+
+
+@api_router.delete("/users/{target_user_id}/follow")
+async def unfollow_user(target_user_id: str, uid: str = Depends(get_current_uid)):
+    if uid == target_user_id:
+        raise HTTPException(status_code=400, detail="Cannot unfollow yourself")
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM user_follows WHERE follower_id = $1 AND following_id = $2",
+            _uuid(uid),
+            _uuid(target_user_id),
+        )
+    return {"ok": True}
+
+
+@api_router.get("/users/me/following")
+async def list_following(uid: str = Depends(get_current_uid)):
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT p.id, p.name, p.username
+            FROM user_follows uf
+            JOIN profiles p ON p.id = uf.following_id
+            WHERE uf.follower_id = $1
+            ORDER BY uf.created_at DESC
+            LIMIT 200
+            """,
+            _uuid(uid),
+        )
+    return {
+        "following": [
+            {"id": str(r["id"]), "name": r["name"], "username": r["username"]}
+            for r in rows
+        ]
+    }
+
+
+@api_router.get("/users/me/followers")
+async def list_followers(uid: str = Depends(get_current_uid)):
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT p.id, p.name, p.username
+            FROM user_follows uf
+            JOIN profiles p ON p.id = uf.follower_id
+            WHERE uf.following_id = $1
+            ORDER BY uf.created_at DESC
+            LIMIT 200
+            """,
+            _uuid(uid),
+        )
+    return {
+        "followers": [
+            {"id": str(r["id"]), "name": r["name"], "username": r["username"]}
+            for r in rows
+        ]
+    }
+
+
+@api_router.get("/users/{user_id}/public-stats")
+async def get_public_user_stats(user_id: str, uid: str = Depends(get_current_uid)):
+    """Public-facing stats for profile/leaderboard: XP/level/streak + follower counts (no meal scan)."""
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        await _ensure_user_xp(conn, user_id)
+        row = await conn.fetchrow(
+            """
+            SELECT
+              p.id,
+              p.name,
+              p.username,
+              p.bio,
+              p.avatar_url,
+              ux.total_xp,
+              ux.level,
+              ux.current_streak,
+              ux.longest_streak,
+              ux.quests_completed,
+              ux.badges_earned,
+              (SELECT COUNT(*)::int FROM user_follows uf WHERE uf.following_id = p.id) AS followers_count,
+              (SELECT COUNT(*)::int FROM user_follows uf WHERE uf.follower_id = p.id) AS following_count,
+              EXISTS(
+                SELECT 1 FROM user_follows uf
+                WHERE uf.follower_id = $2 AND uf.following_id = p.id
+              ) AS is_followed_by_me
+            FROM profiles p
+            JOIN user_xp ux ON ux.user_id = p.id
+            WHERE p.id = $1
+            """,
+            _uuid(user_id),
+            _uuid(uid),
+        )
+
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {
+        "id": str(row["id"]),
+        "name": row["name"],
+        "username": row["username"],
+        "bio": row["bio"],
+        "avatar_url": row["avatar_url"],
+        "total_xp": int(row["total_xp"] or 0),
+        "level": int(row["level"] or 1),
+        "current_streak": int(row["current_streak"] or 0),
+        "longest_streak": int(row["longest_streak"] or 0),
+        "quests_completed": int(row["quests_completed"] or 0),
+        "badges_earned": int(row["badges_earned"] or 0),
+        "followers_count": int(row["followers_count"] or 0),
+        "following_count": int(row["following_count"] or 0),
+        "is_followed_by_me": bool(row["is_followed_by_me"]),
+    }
+
 
 
 @api_router.get("/user/me", response_model=UserProfile)
@@ -1559,6 +2136,121 @@ async def get_categories():
         rows = await conn.fetch("SELECT DISTINCT category FROM foods ORDER BY category ASC")
     return {"categories": [str(r["category"]) for r in rows]}
 
+
+@api_router.get("/foods/barcode/{barcode}")
+async def get_food_by_barcode(barcode: str, uid: str = Depends(get_current_uid)):
+    """Lookup a packaged food by barcode.
+
+    Flow:
+    - Check local foods cache (foods.barcode)
+    - If missing, fetch from OpenFoodFacts and upsert into foods
+    """
+    code = (barcode or "").strip()
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing barcode")
+
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, name, brand, barcode, category,
+                   calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g,
+                   source, external_id, verified
+            FROM foods
+            WHERE barcode = $1
+            LIMIT 1
+            """,
+            code,
+        )
+        if row:
+            out = dict(row)
+            out["id"] = str(out["id"])
+            return {"food": out, "cached": True}
+
+        payload = await _fetch_openfoodfacts(code)
+        product = (payload or {}).get("product")
+        if not product:
+            raise HTTPException(status_code=404, detail="Barcode not found")
+
+        nutriments = product.get("nutriments") or {}
+        name = (product.get("product_name") or product.get("product_name_en") or "").strip() or f"Barcode {code}"
+        brand = (product.get("brands") or "").strip() or None
+        image_url = (product.get("image_url") or "").strip() or None
+        ingredients = (product.get("ingredients_text") or product.get("ingredients_text_en") or "").strip() or None
+
+        calories_per_100g = float(_to_float(nutriments.get("energy-kcal_100g")) or 0)
+        protein_per_100g = float(_to_float(nutriments.get("proteins_100g")) or 0)
+        carbs_per_100g = float(_to_float(nutriments.get("carbohydrates_100g")) or 0)
+        fat_per_100g = float(_to_float(nutriments.get("fat_100g")) or 0)
+
+        # Atomic upsert (requires unique index on foods.barcode; ensured via migration 016)
+        food_id = uuid.uuid4()
+        await conn.execute(
+            """
+            INSERT INTO foods (
+                id, name, category,
+                calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g,
+                is_vegetarian,
+                source, external_id, brand, barcode, image_url, ingredients,
+                verified, last_used_at, last_synced_at, sync_status
+            ) VALUES (
+                $1,$2,$3,
+                $4,$5,$6,$7,
+                $8,
+                $9,$10,$11,$12,$13,$14,
+                $15, now(), now(), 'cached'
+            )
+            ON CONFLICT (barcode) WHERE barcode IS NOT NULL
+            DO UPDATE SET
+                name = EXCLUDED.name,
+                brand = EXCLUDED.brand,
+                category = EXCLUDED.category,
+                calories_per_100g = EXCLUDED.calories_per_100g,
+                protein_per_100g = EXCLUDED.protein_per_100g,
+                carbs_per_100g = EXCLUDED.carbs_per_100g,
+                fat_per_100g = EXCLUDED.fat_per_100g,
+                image_url = EXCLUDED.image_url,
+                ingredients = EXCLUDED.ingredients,
+                source = EXCLUDED.source,
+                external_id = EXCLUDED.external_id,
+                last_synced_at = now(),
+                sync_status = 'cached'
+            """,
+            food_id,
+            name,
+            "packaged",
+            calories_per_100g,
+            protein_per_100g,
+            carbs_per_100g,
+            fat_per_100g,
+            True,
+            "openfoodfacts",
+            code,
+            brand,
+            code,
+            image_url,
+            ingredients,
+            False,
+        )
+
+        saved = await conn.fetchrow(
+            """
+            SELECT id, name, brand, barcode, category,
+                   calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g,
+                   source, external_id, verified
+            FROM foods
+            WHERE barcode = $1
+            LIMIT 1
+            """,
+            code,
+        )
+        if not saved:
+            raise HTTPException(status_code=500, detail="Failed to cache barcode")
+
+        out = dict(saved)
+        out["id"] = str(out["id"])
+        return {"food": out, "cached": False}
+
 # ===== Meal Logging =====
 
 @api_router.post("/meals/log-photo")
@@ -1638,6 +2330,34 @@ async def voice_to_meal(
         raise
     except Exception as e:
         logger.error(f"[VOICE_TO_MEAL] Unexpected error: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/meals/text-to-meal", response_model=VoiceToMealResponse)
+async def text_to_meal(payload: TextToMealRequest, uid: str = Depends(get_current_uid)):
+    """Parse a typed meal description into structured foods for the manual logging confirmation UI."""
+    try:
+        _require_user_match(uid, payload.user_id)
+
+        transcript = (payload.text or "").strip()
+        parsed_foods = await _parse_voice_meal_text(transcript)
+        if not parsed_foods:
+            return VoiceToMealResponse(transcript=transcript, foods=[])
+
+        pool = _require_pool()
+        matched_foods: List[Dict[str, Any]] = []
+        async with pool.acquire() as conn:
+            for item in parsed_foods:
+                matched = await match_food_to_database_db(conn, item.name, float(item.quantity_grams))
+                matched["displayQuantity"] = round(float(item.quantity_grams), 1)
+                matched["displayUnit"] = "g"
+                matched_foods.append(matched)
+
+        return VoiceToMealResponse(transcript=transcript, foods=matched_foods)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[TEXT_TO_MEAL] Error: {type(e).__name__}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -2019,90 +2739,7 @@ async def get_meal_history(
                 foods_by_id[str(fr["id"])] = dict(fr)
 
         for m in meals:
-            micros = {
-                "fiber_g": 0.0,
-                "sugar_g": 0.0,
-                "saturated_fat_g": 0.0,
-                "trans_fat_g": 0.0,
-                "cholesterol_mg": 0.0,
-                "sodium_mg": 0.0,
-                "potassium_mg": 0.0,
-                "vitamin_a_ug": 0.0,
-                "calcium_mg": 0.0,
-                "iron_mg": 0.0,
-                "magnesium_mg": 0.0,
-                "phosphorus_mg": 0.0,
-                "zinc_mg": 0.0,
-                "copper_mg": 0.0,
-                "manganese_mg": 0.0,
-                "selenium_ug": 0.0,
-                "vitamin_c_mg": 0.0,
-                "vitamin_d_ug": 0.0,
-                "vitamin_e_mg": 0.0,
-                "vitamin_k_ug": 0.0,
-                "thiamin_b1_mg": 0.0,
-                "riboflavin_b2_mg": 0.0,
-                "niacin_b3_mg": 0.0,
-                "vitamin_b6_mg": 0.0,
-                "folate_ug": 0.0,
-                "vitamin_b12_ug": 0.0,
-                "caffeine_mg": 0.0,
-                "alcohol_g": 0.0,
-            }
-
-            foods = m.get("foods") or []
-            if isinstance(foods, list):
-                for f in foods:
-                    if not isinstance(f, dict):
-                        continue
-                    fid = f.get("food_id")
-                    if not fid:
-                        continue
-                    row = foods_by_id.get(str(fid))
-                    if not row:
-                        continue
-
-                    grams = f.get("quantity")
-                    if grams is None:
-                        grams = f.get("displayQuantity")
-                    try:
-                        grams_f = float(grams or 0)
-                    except Exception:
-                        grams_f = 0.0
-                    if grams_f <= 0:
-                        continue
-                    ratio = grams_f / 100.0
-
-                    micros["fiber_g"] += float(row.get("fiber_g_per_100g") or 0) * ratio
-                    micros["sugar_g"] += float(row.get("sugar_g_per_100g") or 0) * ratio
-                    micros["saturated_fat_g"] += float(row.get("saturated_fat_g_per_100g") or 0) * ratio
-                    micros["trans_fat_g"] += float(row.get("trans_fat_g_per_100g") or 0) * ratio
-                    micros["cholesterol_mg"] += float(row.get("cholesterol_mg_per_100g") or 0) * ratio
-                    micros["sodium_mg"] += float(row.get("sodium_mg_per_100g") or 0) * ratio
-                    micros["potassium_mg"] += float(row.get("potassium_mg_per_100g") or 0) * ratio
-                    micros["vitamin_a_ug"] += float(row.get("vitamin_a_ug_per_100g") or 0) * ratio
-                    micros["calcium_mg"] += float(row.get("calcium_mg_per_100g") or 0) * ratio
-                    micros["iron_mg"] += float(row.get("iron_mg_per_100g") or 0) * ratio
-                    micros["magnesium_mg"] += float(row.get("magnesium_mg_per_100g") or 0) * ratio
-                    micros["phosphorus_mg"] += float(row.get("phosphorus_mg_per_100g") or 0) * ratio
-                    micros["zinc_mg"] += float(row.get("zinc_mg_per_100g") or 0) * ratio
-                    micros["copper_mg"] += float(row.get("copper_mg_per_100g") or 0) * ratio
-                    micros["manganese_mg"] += float(row.get("manganese_mg_per_100g") or 0) * ratio
-                    micros["selenium_ug"] += float(row.get("selenium_ug_per_100g") or 0) * ratio
-                    micros["vitamin_c_mg"] += float(row.get("vitamin_c_mg_per_100g") or 0) * ratio
-                    micros["vitamin_d_ug"] += float(row.get("vitamin_d_ug_per_100g") or 0) * ratio
-                    micros["vitamin_e_mg"] += float(row.get("vitamin_e_mg_per_100g") or 0) * ratio
-                    micros["vitamin_k_ug"] += float(row.get("vitamin_k_ug_per_100g") or 0) * ratio
-                    micros["thiamin_b1_mg"] += float(row.get("thiamin_b1_mg_per_100g") or 0) * ratio
-                    micros["riboflavin_b2_mg"] += float(row.get("riboflavin_b2_mg_per_100g") or 0) * ratio
-                    micros["niacin_b3_mg"] += float(row.get("niacin_b3_mg_per_100g") or 0) * ratio
-                    micros["vitamin_b6_mg"] += float(row.get("vitamin_b6_mg_per_100g") or 0) * ratio
-                    micros["folate_ug"] += float(row.get("folate_ug_per_100g") or 0) * ratio
-                    micros["vitamin_b12_ug"] += float(row.get("vitamin_b12_ug_per_100g") or 0) * ratio
-                    micros["caffeine_mg"] += float(row.get("caffeine_mg_per_100g") or 0) * ratio
-                    micros["alcohol_g"] += float(row.get("alcohol_g_per_100g") or 0) * ratio
-
-            m["micros"] = micros
+            m["micros"] = _compute_meal_micros(m, foods_by_id)
 
     return {"meals": meals, "count": len(meals)}
 
@@ -2853,49 +3490,9 @@ async def get_analytics(
             expires_at = cache["expires_at"]
             if expires_at and expires_at > datetime.now(timezone.utc):
                 logger.info(f"Returning cached analytics for user {user_id}, time_range={time_range}")
-                
-                # Parse JSONB fields if they're strings
-                insights = cache["insights"]
-                if isinstance(insights, str):
-                    try:
-                        insights = json.loads(insights)
-                    except Exception:
-                        insights = {}
-                
-                bio_impact = cache["bio_impact"]
-                if isinstance(bio_impact, str):
-                    try:
-                        bio_impact = json.loads(bio_impact)
-                    except Exception:
-                        bio_impact = {}
-                
-                health_insights = cache.get("health_insights", {})
-                if isinstance(health_insights, str):
-                    try:
-                        health_insights = json.loads(health_insights)
-                    except Exception:
-                        health_insights = {}
-                
-                bio_alerts = cache.get("bio_alerts", [])
-                if isinstance(bio_alerts, str):
-                    try:
-                        bio_alerts = json.loads(bio_alerts)
-                    except Exception:
-                        bio_alerts = []
-                
-                red_flags = cache.get("red_flags", [])
-                if isinstance(red_flags, str):
-                    try:
-                        red_flags = json.loads(red_flags)
-                    except Exception:
-                        red_flags = []
-                
+                parsed = _parse_analytics_cache_fields(cache)
                 return {
-                    "insights": insights,
-                    "bio_impact": bio_impact,
-                    "health_insights": health_insights,
-                    "bio_alerts": bio_alerts,
-                    "red_flags": red_flags,
+                    **parsed,
                     "cached": True,
                     "last_refreshed_at": cache["last_refreshed_at"].isoformat(),
                     "expires_at": expires_at.isoformat(),
@@ -2905,50 +3502,10 @@ async def get_analytics(
         # Cache miss or expired - return stale data and trigger background refresh
         if cache:
             logger.info(f"Cache expired for user {user_id}, returning stale data and triggering refresh")
-            
-            # Parse JSONB fields if they're strings
-            insights = cache["insights"]
-            if isinstance(insights, str):
-                try:
-                    insights = json.loads(insights)
-                except Exception:
-                    insights = {}
-            
-            bio_impact = cache["bio_impact"]
-            if isinstance(bio_impact, str):
-                try:
-                    bio_impact = json.loads(bio_impact)
-                except Exception:
-                    bio_impact = {}
-            
-            health_insights = cache.get("health_insights", {})
-            if isinstance(health_insights, str):
-                try:
-                    health_insights = json.loads(health_insights)
-                except Exception:
-                    health_insights = {}
-            
-            bio_alerts = cache.get("bio_alerts", [])
-            if isinstance(bio_alerts, str):
-                try:
-                    bio_alerts = json.loads(bio_alerts)
-                except Exception:
-                    bio_alerts = []
-            
-            red_flags = cache.get("red_flags", [])
-            if isinstance(red_flags, str):
-                try:
-                    red_flags = json.loads(red_flags)
-                except Exception:
-                    red_flags = []
-            
+            parsed = _parse_analytics_cache_fields(cache)
             # TODO: Trigger background refresh job here
             return {
-                "insights": insights,
-                "bio_impact": bio_impact,
-                "health_insights": health_insights,
-                "bio_alerts": bio_alerts,
-                "red_flags": red_flags,
+                **parsed,
                 "cached": True,
                 "stale": True,
                 "last_refreshed_at": cache["last_refreshed_at"].isoformat(),
@@ -3065,90 +3622,7 @@ async def get_analytics_bundle(
                 foods_by_id[str(fr["id"])] = dict(fr)
 
         for m in meals:
-            micros = {
-                "fiber_g": 0.0,
-                "sugar_g": 0.0,
-                "saturated_fat_g": 0.0,
-                "trans_fat_g": 0.0,
-                "cholesterol_mg": 0.0,
-                "sodium_mg": 0.0,
-                "potassium_mg": 0.0,
-                "vitamin_a_ug": 0.0,
-                "calcium_mg": 0.0,
-                "iron_mg": 0.0,
-                "magnesium_mg": 0.0,
-                "phosphorus_mg": 0.0,
-                "zinc_mg": 0.0,
-                "copper_mg": 0.0,
-                "manganese_mg": 0.0,
-                "selenium_ug": 0.0,
-                "vitamin_c_mg": 0.0,
-                "vitamin_d_ug": 0.0,
-                "vitamin_e_mg": 0.0,
-                "vitamin_k_ug": 0.0,
-                "thiamin_b1_mg": 0.0,
-                "riboflavin_b2_mg": 0.0,
-                "niacin_b3_mg": 0.0,
-                "vitamin_b6_mg": 0.0,
-                "folate_ug": 0.0,
-                "vitamin_b12_ug": 0.0,
-                "caffeine_mg": 0.0,
-                "alcohol_g": 0.0,
-            }
-
-            foods = m.get("foods") or []
-            if isinstance(foods, list):
-                for f in foods:
-                    if not isinstance(f, dict):
-                        continue
-                    fid = f.get("food_id")
-                    if not fid:
-                        continue
-                    row = foods_by_id.get(str(fid))
-                    if not row:
-                        continue
-
-                    grams = f.get("quantity")
-                    if grams is None:
-                        grams = f.get("displayQuantity")
-                    try:
-                        grams_f = float(grams or 0)
-                    except Exception:
-                        grams_f = 0.0
-                    if grams_f <= 0:
-                        continue
-                    ratio = grams_f / 100.0
-
-                    micros["fiber_g"] += float(row.get("fiber_g_per_100g") or 0) * ratio
-                    micros["sugar_g"] += float(row.get("sugar_g_per_100g") or 0) * ratio
-                    micros["saturated_fat_g"] += float(row.get("saturated_fat_g_per_100g") or 0) * ratio
-                    micros["trans_fat_g"] += float(row.get("trans_fat_g_per_100g") or 0) * ratio
-                    micros["cholesterol_mg"] += float(row.get("cholesterol_mg_per_100g") or 0) * ratio
-                    micros["sodium_mg"] += float(row.get("sodium_mg_per_100g") or 0) * ratio
-                    micros["potassium_mg"] += float(row.get("potassium_mg_per_100g") or 0) * ratio
-                    micros["vitamin_a_ug"] += float(row.get("vitamin_a_ug_per_100g") or 0) * ratio
-                    micros["calcium_mg"] += float(row.get("calcium_mg_per_100g") or 0) * ratio
-                    micros["iron_mg"] += float(row.get("iron_mg_per_100g") or 0) * ratio
-                    micros["magnesium_mg"] += float(row.get("magnesium_mg_per_100g") or 0) * ratio
-                    micros["phosphorus_mg"] += float(row.get("phosphorus_mg_per_100g") or 0) * ratio
-                    micros["zinc_mg"] += float(row.get("zinc_mg_per_100g") or 0) * ratio
-                    micros["copper_mg"] += float(row.get("copper_mg_per_100g") or 0) * ratio
-                    micros["manganese_mg"] += float(row.get("manganese_mg_per_100g") or 0) * ratio
-                    micros["selenium_ug"] += float(row.get("selenium_ug_per_100g") or 0) * ratio
-                    micros["vitamin_c_mg"] += float(row.get("vitamin_c_mg_per_100g") or 0) * ratio
-                    micros["vitamin_d_ug"] += float(row.get("vitamin_d_ug_per_100g") or 0) * ratio
-                    micros["vitamin_e_mg"] += float(row.get("vitamin_e_mg_per_100g") or 0) * ratio
-                    micros["vitamin_k_ug"] += float(row.get("vitamin_k_ug_per_100g") or 0) * ratio
-                    micros["thiamin_b1_mg"] += float(row.get("thiamin_b1_mg_per_100g") or 0) * ratio
-                    micros["riboflavin_b2_mg"] += float(row.get("riboflavin_b2_mg_per_100g") or 0) * ratio
-                    micros["niacin_b3_mg"] += float(row.get("niacin_b3_mg_per_100g") or 0) * ratio
-                    micros["vitamin_b6_mg"] += float(row.get("vitamin_b6_mg_per_100g") or 0) * ratio
-                    micros["folate_ug"] += float(row.get("folate_ug_per_100g") or 0) * ratio
-                    micros["vitamin_b12_ug"] += float(row.get("vitamin_b12_ug_per_100g") or 0) * ratio
-                    micros["caffeine_mg"] += float(row.get("caffeine_mg_per_100g") or 0) * ratio
-                    micros["alcohol_g"] += float(row.get("alcohol_g_per_100g") or 0) * ratio
-
-            m["micros"] = micros
+            m["micros"] = _compute_meal_micros(m, foods_by_id)
 
         cache = await conn.fetchrow(
             """
@@ -3175,49 +3649,9 @@ async def get_analytics_bundle(
         if cache:
             expires_at = cache["expires_at"]
             is_valid = bool(expires_at and expires_at > datetime.now(timezone.utc))
-            
-            # Parse JSONB fields if they're strings
-            insights = cache["insights"]
-            if isinstance(insights, str):
-                try:
-                    insights = json.loads(insights)
-                except Exception:
-                    insights = {}
-            
-            bio_impact = cache["bio_impact"]
-            if isinstance(bio_impact, str):
-                try:
-                    bio_impact = json.loads(bio_impact)
-                except Exception:
-                    bio_impact = {}
-            
-            health_insights = cache.get("health_insights", {})
-            if isinstance(health_insights, str):
-                try:
-                    health_insights = json.loads(health_insights)
-                except Exception:
-                    health_insights = {}
-            
-            bio_alerts = cache.get("bio_alerts", [])
-            if isinstance(bio_alerts, str):
-                try:
-                    bio_alerts = json.loads(bio_alerts)
-                except Exception:
-                    bio_alerts = []
-            
-            red_flags = cache.get("red_flags", [])
-            if isinstance(red_flags, str):
-                try:
-                    red_flags = json.loads(red_flags)
-                except Exception:
-                    red_flags = []
-            
+            parsed = _parse_analytics_cache_fields(cache)
             ai = {
-                "insights": insights,
-                "bio_impact": bio_impact,
-                "health_insights": health_insights,
-                "bio_alerts": bio_alerts,
-                "red_flags": red_flags,
+                **parsed,
                 "cached": True,
                 "stale": not is_valid,
                 "last_refreshed_at": cache["last_refreshed_at"].isoformat() if cache["last_refreshed_at"] else None,
@@ -3377,97 +3811,7 @@ async def refresh_analytics(
             logger.error(f"[ANALYTICS_REFRESH] CRITICAL: No food_ids found in meals! Meals may not have food_id references.")
 
         for m in meals_for_ai:
-            micros = {
-                "fiber_g": 0.0,
-                "sugar_g": 0.0,
-                "saturated_fat_g": 0.0,
-                "trans_fat_g": 0.0,
-                "cholesterol_mg": 0.0,
-                "sodium_mg": 0.0,
-                "potassium_mg": 0.0,
-                "vitamin_a_ug": 0.0,
-                "calcium_mg": 0.0,
-                "iron_mg": 0.0,
-                "magnesium_mg": 0.0,
-                "phosphorus_mg": 0.0,
-                "zinc_mg": 0.0,
-                "copper_mg": 0.0,
-                "manganese_mg": 0.0,
-                "selenium_ug": 0.0,
-                "vitamin_c_mg": 0.0,
-                "vitamin_d_ug": 0.0,
-                "vitamin_e_mg": 0.0,
-                "vitamin_k_ug": 0.0,
-                "thiamin_b1_mg": 0.0,
-                "riboflavin_b2_mg": 0.0,
-                "niacin_b3_mg": 0.0,
-                "vitamin_b6_mg": 0.0,
-                "folate_ug": 0.0,
-                "vitamin_b12_ug": 0.0,
-                "caffeine_mg": 0.0,
-                "alcohol_g": 0.0,
-            }
-
-            foods = m.get("foods") or []
-            if not isinstance(foods, list):
-                m["micros"] = micros
-                continue
-            for f in foods:
-                if not isinstance(f, dict):
-                    continue
-                fid = f.get("food_id")
-                if not fid:
-                    logger.warning(f"[ANALYTICS_REFRESH] Food item missing food_id: {f.get('name')}")
-                    continue
-                row = foods_by_id.get(str(fid))
-                if not row:
-                    logger.warning(f"[ANALYTICS_REFRESH] No food data found for food_id: {fid}")
-                    continue
-
-                grams = f.get("quantity")
-                if grams is None:
-                    grams = f.get("displayQuantity")
-                try:
-                    grams_f = float(grams or 0)
-                except Exception as e:
-                    logger.warning(f"[ANALYTICS_REFRESH] Invalid quantity for {f.get('name')}: {grams}, error: {e}")
-                    grams_f = 0.0
-                if grams_f <= 0:
-                    logger.warning(f"[ANALYTICS_REFRESH] Zero/negative quantity for {f.get('name')}: {grams_f}g - SKIPPING micro computation")
-                    continue
-                ratio = grams_f / 100.0
-                logger.debug(f"[ANALYTICS_REFRESH] Computing micros for {f.get('name')}: {grams_f}g (ratio={ratio:.2f}), sugar_per_100g={row.get('sugar_g_per_100g')}")
-
-                micros["fiber_g"] += float(row.get("fiber_g_per_100g") or 0) * ratio
-                micros["sugar_g"] += float(row.get("sugar_g_per_100g") or 0) * ratio
-                micros["saturated_fat_g"] += float(row.get("saturated_fat_g_per_100g") or 0) * ratio
-                micros["trans_fat_g"] += float(row.get("trans_fat_g_per_100g") or 0) * ratio
-                micros["cholesterol_mg"] += float(row.get("cholesterol_mg_per_100g") or 0) * ratio
-                micros["sodium_mg"] += float(row.get("sodium_mg_per_100g") or 0) * ratio
-                micros["potassium_mg"] += float(row.get("potassium_mg_per_100g") or 0) * ratio
-                micros["vitamin_a_ug"] += float(row.get("vitamin_a_ug_per_100g") or 0) * ratio
-                micros["calcium_mg"] += float(row.get("calcium_mg_per_100g") or 0) * ratio
-                micros["iron_mg"] += float(row.get("iron_mg_per_100g") or 0) * ratio
-                micros["magnesium_mg"] += float(row.get("magnesium_mg_per_100g") or 0) * ratio
-                micros["phosphorus_mg"] += float(row.get("phosphorus_mg_per_100g") or 0) * ratio
-                micros["zinc_mg"] += float(row.get("zinc_mg_per_100g") or 0) * ratio
-                micros["copper_mg"] += float(row.get("copper_mg_per_100g") or 0) * ratio
-                micros["manganese_mg"] += float(row.get("manganese_mg_per_100g") or 0) * ratio
-                micros["selenium_ug"] += float(row.get("selenium_ug_per_100g") or 0) * ratio
-                micros["vitamin_c_mg"] += float(row.get("vitamin_c_mg_per_100g") or 0) * ratio
-                micros["vitamin_d_ug"] += float(row.get("vitamin_d_ug_per_100g") or 0) * ratio
-                micros["vitamin_e_mg"] += float(row.get("vitamin_e_mg_per_100g") or 0) * ratio
-                micros["vitamin_k_ug"] += float(row.get("vitamin_k_ug_per_100g") or 0) * ratio
-                micros["thiamin_b1_mg"] += float(row.get("thiamin_b1_mg_per_100g") or 0) * ratio
-                micros["riboflavin_b2_mg"] += float(row.get("riboflavin_b2_mg_per_100g") or 0) * ratio
-                micros["niacin_b3_mg"] += float(row.get("niacin_b3_mg_per_100g") or 0) * ratio
-                micros["vitamin_b6_mg"] += float(row.get("vitamin_b6_mg_per_100g") or 0) * ratio
-                micros["folate_ug"] += float(row.get("folate_ug_per_100g") or 0) * ratio
-                micros["vitamin_b12_ug"] += float(row.get("vitamin_b12_ug_per_100g") or 0) * ratio
-                micros["caffeine_mg"] += float(row.get("caffeine_mg_per_100g") or 0) * ratio
-                micros["alcohol_g"] += float(row.get("alcohol_g_per_100g") or 0) * ratio
-
-            m["micros"] = micros
+            m["micros"] = _compute_meal_micros(m, foods_by_id)
         
         # Log sample meal micros for debugging
         total_micros_computed = sum(1 for m in meals_for_ai if m.get("micros", {}).get("sugar_g", 0) > 0 or m.get("micros", {}).get("calcium_mg", 0) > 0)
@@ -3853,6 +4197,520 @@ async def increment_times_cooked(recipe_id: str, uid: str = Depends(get_current_
         
         return {"times_cooked": row["times_cooked"]}
 
+
+# =====================
+# QUEST API
+# =====================
+
+async def _ensure_user_xp(conn: asyncpg.Connection, user_id: str):
+    """Ensure user_xp record exists for user."""
+    await conn.execute(
+        """
+        INSERT INTO user_xp (user_id) VALUES ($1)
+        ON CONFLICT (user_id) DO NOTHING
+        """,
+        _uuid(user_id)
+    )
+
+
+async def _get_user_meal_stats_for_quests(conn: asyncpg.Connection, user_id: str, quest_date: str) -> dict:
+    """Get meal stats for quest progress calculation."""
+    # Get meals for the quest date
+    rows = await conn.fetch(
+        """
+        SELECT 
+            COUNT(*) as meal_count,
+            COALESCE(SUM(total_calories), 0) as total_calories,
+            COALESCE(SUM(total_protein), 0) as total_protein,
+            COALESCE(SUM(total_carbs), 0) as total_carbs,
+            COALESCE(SUM(total_fat), 0) as total_fat,
+            COUNT(CASE WHEN image_base64 IS NOT NULL AND image_base64 != '' THEN 1 END) as photo_logs,
+            COUNT(CASE WHEN meal_type = 'breakfast' AND EXTRACT(HOUR FROM timestamp) < 10 THEN 1 END) as early_breakfasts
+        FROM meals
+        WHERE user_id = $1
+          AND DATE(timestamp) = $2::date
+        """,
+        _uuid(user_id),
+        quest_date
+    )
+    
+    row = rows[0] if rows else None
+    
+    # Get user targets
+    profile = await conn.fetchrow(
+        "SELECT daily_calorie_target, protein_target, carbs_target, fat_target FROM profiles WHERE id = $1",
+        _uuid(user_id)
+    )
+    
+    targets = {
+        "calories": float(profile["daily_calorie_target"] or 2000) if profile else 2000,
+        "protein": float(profile["protein_target"] or 150) if profile else 150,
+        "carbs": float(profile["carbs_target"] or 200) if profile else 200,
+        "fat": float(profile["fat_target"] or 65) if profile else 65,
+    }
+    
+    return {
+        "meal_count": int(row["meal_count"]) if row else 0,
+        "total_calories": float(row["total_calories"]) if row else 0,
+        "total_protein": float(row["total_protein"]) if row else 0,
+        "total_carbs": float(row["total_carbs"]) if row else 0,
+        "total_fat": float(row["total_fat"]) if row else 0,
+        "photo_logs": int(row["photo_logs"]) if row else 0,
+        "early_breakfasts": int(row["early_breakfasts"]) if row else 0,
+        "targets": targets,
+    }
+
+
+def _calculate_quest_progress(quest_type: str, target_value: float, stats: dict) -> tuple[float, bool]:
+    """Calculate current progress and completion status for a quest."""
+    current = 0.0
+    
+    if quest_type == "log_meals":
+        current = stats["meal_count"]
+    elif quest_type == "hit_protein":
+        # Progress as percentage of target
+        protein_pct = (stats["total_protein"] / stats["targets"]["protein"]) * 100 if stats["targets"]["protein"] > 0 else 0
+        current = min(protein_pct, 100)
+    elif quest_type == "stay_under_calories":
+        # Under target = 100%, over = scaled down
+        cal_pct = (stats["total_calories"] / stats["targets"]["calories"]) * 100 if stats["targets"]["calories"] > 0 else 0
+        current = 100 if cal_pct <= 100 else max(0, 200 - cal_pct)
+    elif quest_type == "hit_all_macros":
+        # Check if all macros are within ±10% of target
+        p_pct = (stats["total_protein"] / stats["targets"]["protein"]) * 100 if stats["targets"]["protein"] > 0 else 0
+        c_pct = (stats["total_carbs"] / stats["targets"]["carbs"]) * 100 if stats["targets"]["carbs"] > 0 else 0
+        f_pct = (stats["total_fat"] / stats["targets"]["fat"]) * 100 if stats["targets"]["fat"] > 0 else 0
+        
+        in_range = lambda pct: 90 <= pct <= 110
+        if in_range(p_pct) and in_range(c_pct) and in_range(f_pct):
+            current = 100
+        else:
+            # Average of how close each macro is to target
+            current = min(100, (min(p_pct, 100) + min(c_pct, 100) + min(f_pct, 100)) / 3)
+    elif quest_type == "log_photo":
+        current = stats["photo_logs"]
+    elif quest_type == "log_breakfast":
+        current = stats["early_breakfasts"]
+    
+    is_completed = current >= target_value
+    return current, is_completed
+
+
+@api_router.get("/quests/{user_id}/daily")
+async def get_daily_quests(user_id: str, uid: str = Depends(get_current_uid)):
+    """Get user's daily quests with current progress."""
+    _require_user_match(uid, user_id)
+    pool = _require_pool()
+    
+    today = datetime.now(timezone.utc).date()
+    
+    async with pool.acquire() as conn:
+        await _ensure_user_xp(conn, user_id)
+        
+        # Check if quests exist for today, if not create them
+        existing = await conn.fetchval(
+            "SELECT COUNT(*) FROM user_quests WHERE user_id = $1 AND quest_date = $2::date",
+            _uuid(user_id), today
+        )
+        
+        if existing == 0:
+            # Get active quest definitions and create user quests
+            definitions = await conn.fetch(
+                "SELECT id, quest_type, target_value FROM quest_definitions WHERE is_daily = true AND is_active = true LIMIT 3"
+            )
+            for defn in definitions:
+                await conn.execute(
+                    """
+                    INSERT INTO user_quests (user_id, quest_definition_id, quest_date, target_value)
+                    VALUES ($1, $2, $3::date, $4)
+                    ON CONFLICT (user_id, quest_definition_id, quest_date) DO NOTHING
+                    """,
+                    _uuid(user_id), defn["id"], today, float(defn["target_value"])
+                )
+        
+        # Get meal stats for progress calculation
+        stats = await _get_user_meal_stats_for_quests(conn, user_id, today)
+        
+        # Fetch quests with definitions
+        quests = await conn.fetch(
+            """
+            SELECT 
+                uq.id, uq.current_value, uq.target_value, uq.is_completed, uq.xp_claimed,
+                qd.quest_type, qd.title, qd.description, qd.icon, qd.icon_color, 
+                qd.xp_reward, qd.target_unit
+            FROM user_quests uq
+            JOIN quest_definitions qd ON uq.quest_definition_id = qd.id
+            WHERE uq.user_id = $1 AND uq.quest_date = $2::date
+            ORDER BY qd.xp_reward DESC
+            """,
+            _uuid(user_id), today
+        )
+        
+        result = []
+        for q in quests:
+            # Calculate real-time progress
+            current, is_completed = _calculate_quest_progress(
+                q["quest_type"], q["target_value"], stats
+            )
+            
+            # Update if changed
+            if current != q["current_value"] or is_completed != q["is_completed"]:
+                await conn.execute(
+                    """
+                    UPDATE user_quests 
+                    SET current_value = $1, is_completed = $2, 
+                        completed_at = CASE WHEN $2 AND completed_at IS NULL THEN now() ELSE completed_at END,
+                        updated_at = now()
+                    WHERE id = $3
+                    """,
+                    current, is_completed, q["id"]
+                )
+            
+            result.append({
+                "id": str(q["id"]),
+                "title": q["title"],
+                "description": q["description"],
+                "icon": q["icon"],
+                "icon_color": q["icon_color"],
+                "xp": q["xp_reward"],
+                "current": round(current, 1),
+                "target": q["target_value"],
+                "unit": q["target_unit"],
+                "is_completed": is_completed,
+                "xp_claimed": q["xp_claimed"],
+            })
+        
+        return {"quests": result, "date": today.isoformat()}
+
+
+@api_router.post("/quests/{user_id}/claim/{quest_id}")
+async def claim_quest_xp(user_id: str, quest_id: str, uid: str = Depends(get_current_uid)):
+    """Claim XP reward for a completed quest."""
+    _require_user_match(uid, user_id)
+    pool = _require_pool()
+    
+    async with pool.acquire() as conn:
+        # Get quest and verify it's completed and not yet claimed
+        quest = await conn.fetchrow(
+            """
+            SELECT uq.id, uq.is_completed, uq.xp_claimed, qd.xp_reward
+            FROM user_quests uq
+            JOIN quest_definitions qd ON uq.quest_definition_id = qd.id
+            WHERE uq.id = $1 AND uq.user_id = $2
+            """,
+            _uuid(quest_id), _uuid(user_id)
+        )
+        
+        if not quest:
+            raise HTTPException(status_code=404, detail="Quest not found")
+        if not quest["is_completed"]:
+            raise HTTPException(status_code=400, detail="Quest not yet completed")
+        if quest["xp_claimed"]:
+            raise HTTPException(status_code=400, detail="XP already claimed")
+        
+        xp_reward = quest["xp_reward"]
+        
+        # Mark as claimed
+        await conn.execute(
+            "UPDATE user_quests SET xp_claimed = true, updated_at = now() WHERE id = $1",
+            _uuid(quest_id)
+        )
+        
+        # Update user XP
+        await _ensure_user_xp(conn, user_id)
+        new_xp = await conn.fetchrow(
+            """
+            UPDATE user_xp 
+            SET total_xp = total_xp + $1, 
+                quests_completed = quests_completed + 1,
+                level = GREATEST(1, (total_xp + $1) / 100 + 1),
+                updated_at = now()
+            WHERE user_id = $2
+            RETURNING total_xp, level, quests_completed
+            """,
+            xp_reward, _uuid(user_id)
+        )
+        
+        return {
+            "xp_earned": xp_reward,
+            "total_xp": new_xp["total_xp"],
+            "level": new_xp["level"],
+            "quests_completed": new_xp["quests_completed"],
+        }
+
+
+@api_router.get("/quests/{user_id}/badges")
+async def get_user_badges(user_id: str, uid: str = Depends(get_current_uid)):
+    """Get user's badges (earned and available)."""
+    _require_user_match(uid, user_id)
+    pool = _require_pool()
+    
+    async with pool.acquire() as conn:
+        # Get all badge definitions with earned status
+        badges = await conn.fetch(
+            """
+            SELECT 
+                bd.id, bd.badge_type, bd.title, bd.description, bd.icon, 
+                bd.xp_reward, bd.tier,
+                ub.earned_at IS NOT NULL as earned,
+                ub.earned_at
+            FROM badge_definitions bd
+            LEFT JOIN user_badges ub ON bd.id = ub.badge_definition_id AND ub.user_id = $1
+            WHERE bd.is_active = true
+            ORDER BY ub.earned_at DESC NULLS LAST, bd.tier, bd.xp_reward DESC
+            """,
+            _uuid(user_id)
+        )
+        
+        return {
+            "badges": [
+                {
+                    "id": str(b["id"]),
+                    "type": b["badge_type"],
+                    "title": b["title"],
+                    "description": b["description"],
+                    "icon": b["icon"],
+                    "xp": b["xp_reward"],
+                    "tier": b["tier"],
+                    "earned": b["earned"],
+                    "earned_at": b["earned_at"].isoformat() if b["earned_at"] else None,
+                }
+                for b in badges
+            ]
+        }
+
+
+@api_router.get("/quests/{user_id}/stats")
+async def get_quest_stats(user_id: str, uid: str = Depends(get_current_uid)):
+    """Get user's XP, level, streak, and quest stats."""
+    _require_user_match(uid, user_id)
+    pool = _require_pool()
+    
+    async with pool.acquire() as conn:
+        await _ensure_user_xp(conn, user_id)
+        
+        # Update streak based on meal activity
+        today = datetime.now(timezone.utc).date()
+        yesterday = today - timedelta(days=1)
+        
+        # Check if user logged meals today and yesterday
+        activity = await conn.fetch(
+            """
+            SELECT DATE(timestamp) as meal_date
+            FROM meals
+            WHERE user_id = $1 AND DATE(timestamp) >= $2
+            GROUP BY DATE(timestamp)
+            """,
+            _uuid(user_id), yesterday
+        )
+        
+        active_dates = {row["meal_date"] for row in activity}
+        logged_today = today in active_dates
+        logged_yesterday = yesterday in active_dates
+        
+        # Get current stats
+        stats = await conn.fetchrow(
+            "SELECT total_xp, level, current_streak, longest_streak, quests_completed, badges_earned, last_active_date FROM user_xp WHERE user_id = $1",
+            _uuid(user_id)
+        )
+        
+        current_streak = stats["current_streak"] if stats else 0
+        longest_streak = stats["longest_streak"] if stats else 0
+        last_active = stats["last_active_date"] if stats else None
+        
+        # Update streak logic
+        if logged_today:
+            if last_active == yesterday or (last_active == today):
+                # Continue or maintain streak
+                if last_active != today:
+                    current_streak += 1
+            elif last_active is None or (today - last_active).days > 1:
+                # Start new streak
+                current_streak = 1
+            
+            longest_streak = max(longest_streak, current_streak)
+            
+            await conn.execute(
+                """
+                UPDATE user_xp 
+                SET current_streak = $1, longest_streak = $2, last_active_date = $3, updated_at = now()
+                WHERE user_id = $4
+                """,
+                current_streak, longest_streak, today, _uuid(user_id)
+            )
+        elif last_active and (today - last_active).days > 1:
+            # Streak broken
+            current_streak = 0
+            await conn.execute(
+                "UPDATE user_xp SET current_streak = 0, updated_at = now() WHERE user_id = $1",
+                _uuid(user_id)
+            )
+        
+        # Calculate XP needed for next level
+        total_xp = stats["total_xp"] if stats else 0
+        level = stats["level"] if stats else 1
+        xp_for_next = (level * 100) - (total_xp % 100)
+        
+        return {
+            "total_xp": total_xp,
+            "level": level,
+            "xp_for_next_level": xp_for_next,
+            "current_streak": current_streak,
+            "longest_streak": longest_streak,
+            "quests_completed": stats["quests_completed"] if stats else 0,
+            "badges_earned": stats["badges_earned"] if stats else 0,
+        }
+
+
+@api_router.post("/quests/{user_id}/check-badges")
+async def check_and_award_badges(user_id: str, uid: str = Depends(get_current_uid)):
+    """Check if user has earned any new badges and award them."""
+    _require_user_match(uid, user_id)
+    pool = _require_pool()
+    
+    async with pool.acquire() as conn:
+        await _ensure_user_xp(conn, user_id)
+        
+        # Get user stats for badge checking
+        meal_count = await conn.fetchval(
+            "SELECT COUNT(*) FROM meals WHERE user_id = $1", _uuid(user_id)
+        )
+        
+        user_stats = await conn.fetchrow(
+            "SELECT current_streak, quests_completed FROM user_xp WHERE user_id = $1",
+            _uuid(user_id)
+        )
+        streak = user_stats["current_streak"] if user_stats else 0
+        quests = user_stats["quests_completed"] if user_stats else 0
+        
+        # Get badges not yet earned
+        available = await conn.fetch(
+            """
+            SELECT bd.id, bd.badge_type, bd.requirement_type, bd.requirement_value, bd.xp_reward, bd.title
+            FROM badge_definitions bd
+            WHERE bd.is_active = true
+              AND NOT EXISTS (
+                  SELECT 1 FROM user_badges ub 
+                  WHERE ub.badge_definition_id = bd.id AND ub.user_id = $1
+              )
+            """,
+            _uuid(user_id)
+        )
+        
+        newly_earned = []
+        total_xp_earned = 0
+        
+        for badge in available:
+            earned = False
+            req_type = badge["requirement_type"]
+            req_val = badge["requirement_value"]
+            
+            if req_type == "meal_count" and meal_count >= req_val:
+                earned = True
+            elif req_type == "streak" and streak >= req_val:
+                earned = True
+            elif req_type == "quest_count" and quests >= req_val:
+                earned = True
+            
+            if earned:
+                # Award badge
+                await conn.execute(
+                    "INSERT INTO user_badges (user_id, badge_definition_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                    _uuid(user_id), badge["id"]
+                )
+                
+                # Add XP
+                total_xp_earned += badge["xp_reward"]
+                newly_earned.append({
+                    "id": str(badge["id"]),
+                    "title": badge["title"],
+                    "xp": badge["xp_reward"],
+                })
+        
+        # Update user XP and badge count
+        if newly_earned:
+            await conn.execute(
+                """
+                UPDATE user_xp 
+                SET total_xp = total_xp + $1, 
+                    badges_earned = badges_earned + $2,
+                    level = GREATEST(1, (total_xp + $1) / 100 + 1),
+                    updated_at = now()
+                WHERE user_id = $3
+                """,
+                total_xp_earned, len(newly_earned), _uuid(user_id)
+            )
+        
+        return {
+            "newly_earned": newly_earned,
+            "xp_earned": total_xp_earned,
+        }
+@api_router.get("/quests/leaderboard")
+async def get_leaderboard(
+    scope: str = Query("global", pattern="^(global|friends)$"),
+    uid: str = Depends(get_current_uid),
+):
+    """Get leaderboard. scope='global' for all users, scope='friends' for followed users + self."""
+    pool = _require_pool()
+    
+    async with pool.acquire() as conn:
+        if scope == "friends":
+            rows = await conn.fetch(
+                """
+                SELECT 
+                    ux.user_id,
+                    ux.total_xp,
+                    ux.level,
+                    ux.badges_earned,
+                    p.name,
+                    ux.user_id = $1 as is_current_user
+                FROM user_xp ux
+                JOIN profiles p ON ux.user_id = p.id
+                WHERE ux.user_id = $1
+                   OR ux.user_id IN (
+                        SELECT following_id
+                        FROM user_follows
+                        WHERE follower_id = $1
+                   )
+                ORDER BY ux.total_xp DESC
+                LIMIT 50
+                """,
+                _uuid(uid)
+            )
+        else:
+            rows = await conn.fetch(
+                """
+                SELECT 
+                    ux.user_id,
+                    ux.total_xp,
+                    ux.level,
+                    ux.badges_earned,
+                    p.name,
+                    ux.user_id = $1 as is_current_user
+                FROM user_xp ux
+                JOIN profiles p ON ux.user_id = p.id
+                ORDER BY ux.total_xp DESC
+                LIMIT 50
+                """,
+                _uuid(uid)
+            )
+        
+        leaderboard = []
+        for i, row in enumerate(rows):
+            leaderboard.append({
+                "rank": i + 1,
+                "user_id": str(row["user_id"]),
+                "name": row["name"] or "Anonymous Chef",
+                "total_xp": row["total_xp"],
+                "level": row["level"],
+                "badges_earned": row["badges_earned"],
+                "is_current_user": row["is_current_user"],
+            })
+            
+        # If current user is not in top 50, fetch their rank (optional, for "My Rank" feature)
+        # For now, we'll just return the top 50 list.
+        
+        return {"leaderboard": leaderboard, "scope": scope}
 
 # Include router
 app.include_router(api_router)
