@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
-import { useFont } from '@shopify/react-native-skia';
+import { useFont, matchFont } from '@shopify/react-native-skia';
 import { Pie, PolarChart } from 'victory-native';
 import { Colors } from '../constants/Colors';
 
@@ -30,7 +30,11 @@ export default function StandardDonutChart({
   style,
   innerCircleColor = Colors.white,
 }: Props) {
-  const font = useFont(require('../assets/fonts/SpaceMono-Regular.ttf'), 10);
+  // Use matchFont for synchronous, guaranteed font loading
+  const font = matchFont({
+    fontSize: 12,
+    fontWeight: 'bold',
+  });
 
   // Ensure we have valid data and handle zero values gracefully
   const safeData = data.length > 0 ? data : [{ value: 1, color: Colors.border, text: '' }];
@@ -41,11 +45,14 @@ export default function StandardDonutChart({
     : [{ value: 1, color: Colors.border, text: '' }];
   const size = radius * 2;
 
-  const chartData = dataForChart.map((d, idx) => ({
-    value: d.value,
-    label: d.text ?? String(idx + 1),
-    color: d.color,
-  }));
+  const chartData = dataForChart.map((d, idx) => {
+    const percentage = Math.round((d.value / totalValue) * 100);
+    return {
+      value: d.value,
+      label: `${percentage}%`,
+      color: d.color,
+    };
+  });
 
   return (
     <View style={[styles.wrap, style, { width: size, height: size }]}>
@@ -61,8 +68,8 @@ export default function StandardDonutChart({
           {() => (
             <>
               <Pie.Slice animate={{ type: 'timing', duration: 900 }} opacity={1}>
-                {showText && hasPositiveValues && font ? (
-                  <Pie.Label font={font} color={Colors.textSecondary} />
+                {showText && hasPositiveValues ? (
+                  <Pie.Label font={font} color={Colors.white} />
                 ) : null}
               </Pie.Slice>
               <Pie.SliceAngularInset

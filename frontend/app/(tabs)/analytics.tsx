@@ -17,6 +17,7 @@ import { mealApi, analyticsApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import * as Haptics from 'expo-haptics';
+import { router } from 'expo-router';
 import PageHeader from '../../components/PageHeader';
 import AnimatedCard from '../../components/AnimatedCard';
 import StandardBarChart from '../../components/StandardBarChart';
@@ -982,7 +983,7 @@ export default function AnalyticsScreen() {
                     centerLabelComponent={() => (
                       <View style={{ alignItems: 'center', justifyContent: 'center' }}>
                         <Ionicons name="nutrition" size={20} color={Colors.white} />
-                        <Text style={{ marginTop: 4, color: Colors.primary, fontSize: 10, fontWeight: '900' }}>
+                        <Text style={{ marginTop: 4, color: Colors.primary, fontSize: 10, fontWeight: '900', textAlign: 'center' }}>
                           Macros
                         </Text>
                       </View>
@@ -1267,6 +1268,43 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 20,
+  },
+  toolCard: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: Colors.white,
+    borderRadius: 24,
+    padding: 18,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 6,
+  },
+  toolIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: Colors.warning + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.warning + '35',
+    borderBottomWidth: 4,
+  },
+  toolTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: Colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 2,
+  },
+  toolSubtitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    lineHeight: 18,
   },
   standardCard: {
     backgroundColor: Colors.white,

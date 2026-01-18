@@ -74,7 +74,7 @@ interface UserSearchResult {
 }
 
 export default function QuestScreen() {
-  const { user } = useUser();
+  const { user, showXpPopup } = useUser();
   const [activeTab, setActiveTab] = useState<'quests' | 'leaderboard' | 'badges'>('quests');
   const [leaderboardScope, setLeaderboardScope] = useState<'global' | 'friends'>('global');
 
@@ -210,7 +210,8 @@ export default function QuestScreen() {
       // Refresh leaderboard after claiming XP to reflect new score
       await refreshLeaderboard();
 
-      Alert.alert('XP Claimed!', `+${result.xp_earned} XP\nTotal: ${result.total_xp} XP`);
+      // Show XP popup
+      showXpPopup(result.xp_earned);
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.detail || 'Failed to claim XP');
     } finally {

@@ -13,19 +13,19 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
-  Keyboard,
-  TouchableWithoutFeedback,
+  ScrollView,
 } from 'react-native';
 import { CameraView, Camera, BarcodeScanningResult } from 'expo-camera';
 import { Colors } from '../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import DuoButton from '../components/DuoButton';
 import AnimatedCard from '../components/AnimatedCard';
-import { foodApi, mealApi } from '../utils/api';
+import { FoodHealthCheckResult, foodApi, mealApi } from '../utils/api';
 import { useUser } from '../context/UserContext';
 import { Audio } from 'expo-av';
+import * as ImagePicker from 'expo-image-picker';
 
 const { width } = Dimensions.get('window');
 
@@ -35,13 +35,144 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 export default function BarcodeScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const mode = typeof params?.mode === 'string' ? params.mode : '';
+  const isHealthMode = mode === 'health';
   const { user } = useUser();
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [scanned, setScanned] = useState(false);
   const [scannedProduct, setScannedProduct] = useState<any>(null);
   const [showResultModal, setShowResultModal] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [modalStep, setModalStep] = useState<1 | 2>(1);
+
+  const [isSubmittingLabels, setIsSubmittingLabels] = useState(false);
+  const [isProcessingLabel, setIsProcessingLabel] = useState(false);
+
+  // Contribution modal state
+  const [showContributionModal, setShowContributionModal] = useState(false);
+  const [contributionBarcode, setContributionBarcode] = useState('');
+  const [contributionNeedsFront, setContributionNeedsFront] = useState(false);
+
+  const isProcessingRef = useRef(false);
+
+  const resetScanning = () => {
+    setShowResultModal(false);
+    setShowContributionModal(false);
+    setContributionBarcode('');
+    setContributionNeedsFront(false);
+    // Add a small delay to prevent immediate re-scan if still holding phone over barcode
+    setTimeout(() => {
+      isProcessingRef.current = false;
+    }, 1000);
+  };
+
+  const processLabelPhoto = async (barcode: string) => {
+    if (!user?.id) {
+      Alert.alert('Error', 'You must be logged in.');
+      return;
+    }
+    if (isSubmittingLabels) return;
+
+    try {
+      // Request camera permission
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission Required', 'Camera permission is needed to take label photos.');
+        return;
+      }
+
+      setIsSubmittingLabels(true);
+
+      let frontImageBase64: string | undefined;
+      if (contributionNeedsFront) {
+        const front = await ImagePicker.launchCameraAsync({
+          base64: true,
+          quality: 0.55,
+          allowsEditing: false,
+        });
+        if (front.canceled || !front.assets?.[0]?.base64) {
+          setIsSubmittingLabels(false);
+          return;
+        }
+        frontImageBase64 = front.assets[0].base64;
+      }
+
+      const label = await ImagePicker.launchCameraAsync({
+        base64: true,
+        quality: 0.55,
+        allowsEditing: false,
+      });
+
+      if (label.canceled || !label.assets?.[0]?.base64) {
+        setIsSubmittingLabels(false);
+        return;
+      }
+
+      const imageBase64 = label.assets[0].base64;
+
+      // Send to AI for processing
+      setIsProcessingLabel(true);
+      const response = await foodApi.processLabelImage(barcode, user.id, imageBase64, frontImageBase64);
+      setIsProcessingLabel(false);
+
+      // Close contribution modal
+      setShowContributionModal(false);
+
+      // Set the scanned product from AI response
+      const food = response.food;
+      const product = {
+        name: food?.name || `Barcode ${barcode}`,
+        brand: food?.brand || '',
+        serving_size: 100,
+        calories_per_100g: Number(food?.calories_per_100g || 0),
+        protein_per_100g: Number(food?.protein_per_100g || 0),
+        carbs_per_100g: Number(food?.carbs_per_100g || 0),
+        fat_per_100g: Number(food?.fat_per_100g || 0),
+        fiber_g_per_100g: Number(food?.fiber_g_per_100g || 0),
+        sugar_g_per_100g: Number(food?.sugar_g_per_100g || 0),
+        sodium_mg_per_100g: Number(food?.sodium_mg_per_100g || 0),
+        ingredients: food?.ingredients || '',
+        image_url: food?.image_url || '',
+        calories: Math.round(Number(food?.calories_per_100g || 0)),
+        protein: Number(food?.protein_per_100g || 0),
+        carbs: Number(food?.carbs_per_100g || 0),
+        fat: Number(food?.fat_per_100g || 0),
+        category: food?.category || 'packaged',
+        barcode: barcode,
+        food_id: food?.id,
+        cached: false,
+      };
+
+      setScannedProduct(product);
+
+      // Set health check if returned
+      if (response.health_check) {
+        setHealthCheck(response.health_check);
+      }
+
+      // Show result modal
+      setShowResultModal(true);
+      setPortionQty('100');
+      setPortionUnit('g');
+      setMealType('snack');
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (e: any) {
+      console.error('Label processing failed:', e);
+      setIsProcessingLabel(false);
+      const message = e?.response?.data?.detail || 'Could not process the label. Please try again.';
+      Alert.alert('Processing Failed', message, [
+        { text: 'Try Again', onPress: () => processLabelPhoto(barcode) },
+        { text: 'Scan Again', style: 'cancel', onPress: resetScanning },
+      ]);
+    } finally {
+      setIsProcessingLabel(false);
+      setIsSubmittingLabels(false);
+    }
+  };
+
+  const [healthCheck, setHealthCheck] = useState<FoodHealthCheckResult | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
 
   const [portionQty, setPortionQty] = useState('100');
   const [portionUnit, setPortionUnit] = useState<'g' | 'oz'>('g');
@@ -105,7 +236,7 @@ export default function BarcodeScreen() {
       await rec.startAsync();
       setRecording(rec);
       setIsRecording(true);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
     } catch (e) {
       console.error('Failed to start recording:', e);
       Alert.alert('Error', 'Failed to start recording');
@@ -188,7 +319,7 @@ export default function BarcodeScreen() {
           },
         ],
       });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
       setShowResultModal(false);
       router.back();
     } catch (e) {
@@ -207,16 +338,29 @@ export default function BarcodeScreen() {
   }, []);
 
   const handleBarCodeScanned = async ({ type, data }: BarcodeScanningResult) => {
-    if (scanned || showResultModal) return;
-    
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    setScanned(true);
-    setModalStep(1);
+    if (isProcessingRef.current) return;
 
+    isProcessingRef.current = true;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
+    setModalStep(1);
     setIsLookingUp(true);
+    if (isHealthMode) setHealthLoading(true);
+
     try {
-      const res = await foodApi.getByBarcode(data);
+      // Pass includeHealthCheck=true for health mode to get health check in single request
+      const res = await foodApi.getByBarcode(data, isHealthMode);
       const f: any = res?.food;
+
+      // Check if barcode exists but data is incomplete
+      if (res?.needs_contribution) {
+        setIsLookingUp(false);
+        setHealthLoading(false);
+        setContributionBarcode(data);
+        setContributionNeedsFront(false);
+        setShowContributionModal(true);
+        return;
+      }
+
       const product = {
         name: f?.name || `Barcode ${data}`,
         brand: f?.brand || '',
@@ -225,6 +369,11 @@ export default function BarcodeScreen() {
         protein_per_100g: Number(f?.protein_per_100g || 0),
         carbs_per_100g: Number(f?.carbs_per_100g || 0),
         fat_per_100g: Number(f?.fat_per_100g || 0),
+        fiber_g_per_100g: Number(f?.fiber_g_per_100g || 0),
+        sugar_g_per_100g: Number(f?.sugar_g_per_100g || 0),
+        sodium_mg_per_100g: Number(f?.sodium_mg_per_100g || 0),
+        ingredients: f?.ingredients || '',
+        image_url: f?.image_url || '',
         calories: Math.round(Number(f?.calories_per_100g || 0)),
         protein: Number(f?.protein_per_100g || 0),
         carbs: Number(f?.carbs_per_100g || 0),
@@ -236,36 +385,42 @@ export default function BarcodeScreen() {
       };
 
       setScannedProduct(product);
+
+      // Health check is now included in the barcode lookup response
+      if (isHealthMode && res?.health_check) {
+        setHealthCheck(res.health_check);
+      } else {
+        setHealthCheck(null);
+      }
+      setHealthLoading(false);
+
       setShowResultModal(true);
       setPortionQty('100');
       setPortionUnit('g');
       setMealType('snack');
-      setVoiceTranscript('');
       setIsRecording(false);
       setRecording(null);
       setTimeout(() => qtyInputRef.current?.focus(), 250);
     } catch (e: any) {
       const status = e?.response?.status;
       if (status === 404) {
-        Alert.alert(
-          'Product Not Found',
-          `Barcode: ${data}\n\nWe couldn't find this product yet. Try another barcode or log manually.`,
-          [
-            { text: 'Manual Entry', onPress: () => router.back() },
-            { text: 'Scan Again', style: 'cancel', onPress: () => setScanned(false) },
-          ]
-        );
+        // Show contribution modal for not found products
+        setContributionBarcode(data);
+        setContributionNeedsFront(true);
+        setShowContributionModal(true);
       } else {
         Alert.alert(
           'Lookup Failed',
           'Could not fetch product details. Please try again.',
-          [{ text: 'Scan Again', onPress: () => setScanned(false) }]
+          [{ text: 'Scan Again', onPress: resetScanning }]
         );
       }
     } finally {
       setIsLookingUp(false);
     }
   };
+
+
 
   if (hasPermission === null) {
     return (
@@ -290,203 +445,427 @@ export default function BarcodeScreen() {
     );
   }
 
+  const shouldShowCamera = !(showResultModal || showContributionModal || isProcessingLabel);
+
   return (
     <SafeAreaView style={styles.container}>
-      <CameraView
-        style={styles.camera}
-        facing="back"
-        barcodeScannerSettings={{
-          barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'qr', 'code128', 'code39'],
-        }}
-        onBarcodeScanned={(scanned || showResultModal) ? undefined : handleBarCodeScanned}
+      <Modal
+        visible={isProcessingLabel}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {}}
       >
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.closeButton} 
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-              router.back();
-            }}
-          >
-            <Ionicons name="close" size={28} color={Colors.white} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.overlay}>
-          <View style={styles.scanningFrame}>
-            <View style={styles.corner} />
-            <View style={[styles.corner, styles.cornerTR]} />
-            <View style={[styles.corner, styles.cornerBL]} />
-            <View style={[styles.corner, styles.cornerBR]} />
-            <View style={styles.scanLine} />
+        <View style={styles.processingOverlay}>
+          <View style={styles.processingCard}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={styles.processingTitle}>Parsing label…</Text>
+            <Text style={styles.processingSubtitle}>This can take up to a minute</Text>
           </View>
-          
-          <AnimatedCard type="pop" delay={200} style={styles.instructionBox}>
-            <Ionicons name="barcode-outline" size={32} color={Colors.white} />
-            <Text style={styles.instructionTitle}>{isLookingUp ? 'Looking Up…' : 'Scan Barcode'}</Text>
-            <Text style={styles.instructionText}>
-              {isLookingUp ? 'Fetching product details' : 'Align the barcode within the frame'}
-            </Text>
-            {isLookingUp && <ActivityIndicator color={Colors.white} style={{ marginTop: 10 }} />}
-            <View style={styles.tipBadge}>
-              <Text style={styles.tipText}>💡 TIP: HOLD STEADY</Text>
+        </View>
+      </Modal>
+
+      {shouldShowCamera ? (
+        <CameraView
+          style={styles.camera}
+          facing="back"
+          barcodeScannerSettings={{
+            barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'qr', 'code128', 'code39'],
+          }}
+          onBarcodeScanned={handleBarCodeScanned}
+        >
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+                router.back();
+              }}
+            >
+              <Ionicons name="close" size={28} color={Colors.white} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.overlay}>
+            <View style={styles.scanningFrame}>
+              <View style={styles.corner} />
+              <View style={[styles.corner, styles.cornerTR]} />
+              <View style={[styles.corner, styles.cornerBL]} />
+              <View style={[styles.corner, styles.cornerBR]} />
+              <View style={styles.scanLine} />
+            </View>
+
+            <AnimatedCard type="pop" delay={200} style={styles.instructionBox}>
+              <Ionicons name="barcode-outline" size={32} color={Colors.white} />
+              <Text style={styles.instructionTitle}>{isLookingUp ? 'Looking Up…' : 'Scan Barcode'}</Text>
+              <Text style={styles.instructionText}>
+                {isLookingUp ? 'Fetching product details' : 'Align the barcode within the frame'}
+              </Text>
+              {isLookingUp && <ActivityIndicator color={Colors.white} style={{ marginTop: 10 }} />}
+              <View style={styles.tipBadge}>
+                <Text style={styles.tipText}>💡 TIP: HOLD STEADY</Text>
+              </View>
+            </AnimatedCard>
+          </View>
+        </CameraView>
+      ) : (
+        <View style={styles.cameraOffPlaceholder}>
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+                router.back();
+              }}
+            >
+              <Ionicons name="close" size={28} color={Colors.white} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Result Modal */}
+      <Modal
+        visible={showResultModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={resetScanning}
+      >
+        <View style={styles.modalOverlay}>
+          <AnimatedCard type="pop" style={styles.resultCard}>
+            {/* Close button outside ScrollView to stay fixed */}
+            <TouchableOpacity
+              style={styles.resultCloseButton}
+              onPress={resetScanning}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="close" size={22} color={Colors.text} />
+            </TouchableOpacity>
+
+            <ScrollView
+              style={styles.resultScroll}
+              contentContainerStyle={styles.resultScrollContent}
+              showsVerticalScrollIndicator={true}
+              bounces={true}
+              nestedScrollEnabled={true}
+              keyboardDismissMode="on-drag"
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.successIconWrap}>
+                <Ionicons
+                  name={isHealthMode ? 'shield-checkmark' : 'checkmark-circle'}
+                  size={60}
+                  color={isHealthMode ? Colors.warning : Colors.primary}
+                />
+              </View>
+
+              <Text style={styles.productName}>
+                {scannedProduct?.name}
+              </Text>
+              <Text style={styles.productBrand}>
+                {scannedProduct?.brand}
+              </Text>
+
+              <View style={styles.nutritionGrid}>
+                <View style={styles.nutritionItem}>
+                  <Text style={styles.nutritionValue}>{scannedProduct?.calories}</Text>
+                  <Text style={styles.nutritionLabel}>CALORIES</Text>
+                </View>
+                <View style={styles.nutritionDivider} />
+                <View style={styles.nutritionItem}>
+                  <Text style={styles.nutritionValue}>{scannedProduct?.protein}g</Text>
+                  <Text style={styles.nutritionLabel}>PROTEIN</Text>
+                </View>
+                <View style={styles.nutritionDivider} />
+                <View style={styles.nutritionItem}>
+                  <Text style={styles.nutritionValue}>{scannedProduct?.carbs}g</Text>
+                  <Text style={styles.nutritionLabel}>CARBS</Text>
+                </View>
+              </View>
+
+              {isHealthMode ? (
+                <>
+                  {healthLoading ? (
+                    <View style={styles.healthLoadingBox}>
+                      <ActivityIndicator color={Colors.primary} />
+                      <Text style={styles.healthLoadingText}>Analyzing label…</Text>
+                    </View>
+                  ) : healthCheck ? (
+                    <View style={styles.healthBox}>
+                      <View style={styles.verdictRow}>
+                        <Text style={styles.verdictLabel}>Verdict</Text>
+                        <Text
+                          style={[
+                            styles.verdictValue,
+                            healthCheck.verdict === 'good'
+                              ? styles.verdictGood
+                              : healthCheck.verdict === 'avoid'
+                                ? styles.verdictAvoid
+                                : styles.verdictCaution,
+                          ]}
+                        >
+                          {healthCheck.verdict.toUpperCase()}
+                        </Text>
+                      </View>
+
+                      {!!healthCheck.verdict_reason && (
+                        <Text style={styles.verdictReason}>{healthCheck.verdict_reason}</Text>
+                      )}
+
+                      {!!healthCheck.summary && (
+                        <Text style={styles.healthSummary}>{healthCheck.summary}</Text>
+                      )}
+
+                      {healthCheck.red_flags?.length ? (
+                        <View style={styles.flagsBox}>
+                          <Text style={styles.flagsTitle}>Red Flags</Text>
+                          {healthCheck.red_flags.slice(0, 6).map((f, idx) => (
+                            <View key={idx} style={styles.flagRow}>
+                              <View
+                                style={[
+                                  styles.flagDot,
+                                  f.severity === 'high'
+                                    ? styles.flagDotHigh
+                                    : f.severity === 'low'
+                                      ? styles.flagDotLow
+                                      : styles.flagDotMedium,
+                                ]}
+                              />
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.flagTitle}>{f.title}</Text>
+                                <Text style={styles.flagReason}>{f.reason}</Text>
+
+                                {!!f.what_it_is && (
+                                  <Text style={styles.flagDetail}><Text style={styles.flagDetailLabel}>What it is: </Text>{f.what_it_is}</Text>
+                                )}
+                                {!!f.why_it_matters && (
+                                  <Text style={styles.flagDetail}><Text style={styles.flagDetailLabel}>Why it matters: </Text>{f.why_it_matters}</Text>
+                                )}
+                                {!!f.evidence && (
+                                  <Text style={styles.flagDetail}><Text style={styles.flagDetailLabel}>Evidence: </Text>{f.evidence}</Text>
+                                )}
+                                {!!f.suggestion && (
+                                  <Text style={styles.flagDetail}><Text style={styles.flagDetailLabel}>Try instead: </Text>{f.suggestion}</Text>
+                                )}
+                              </View>
+                            </View>
+                          ))}
+                        </View>
+                      ) : null}
+
+                      <Text style={styles.disclaimerText}>
+                        Not medical advice. Always read the label and consider your needs.
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.nextStepText}>No analysis available.</Text>
+                  )}
+
+                </>
+              ) : modalStep === 1 ? (
+                <>
+                  <Text style={styles.nextStepText}>
+                    Product identified! Ready to set your portion?
+                  </Text>
+
+                  <View style={styles.modalButtons}>
+                    <DuoButton
+                      title="Next"
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
+                        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                        setModalStep(2);
+                      }}
+                      color={Colors.primary}
+                      size="large"
+                      style={{ width: '100%' }}
+                    />
+                    <TouchableOpacity
+                      style={styles.cancelLink}
+                      onPress={resetScanning}
+                    >
+                      <Text style={styles.cancelLinkText}>SCAN AGAIN</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <View style={styles.modalButtons}>
+                    <View style={styles.portionRow}>
+                      <View style={styles.portionInputContainer}>
+                        <TextInput
+                          ref={qtyInputRef}
+                          value={portionQty}
+                          onChangeText={setPortionQty}
+                          placeholder="100"
+                          placeholderTextColor={Colors.textLight}
+                          keyboardType="numeric"
+                          style={styles.portionInput}
+                        />
+                        <TouchableOpacity
+                          style={[styles.voiceMicButton, isRecording && styles.voiceMicButtonActive]}
+                          onPress={() => {
+                            if (isRecording) stopVoiceAndFill();
+                            else startVoice();
+                          }}
+                          disabled={voiceLoading}
+                        >
+                          {voiceLoading ? (
+                            <ActivityIndicator size="small" color={Colors.primary} />
+                          ) : (
+                            <Ionicons
+                              name={isRecording ? 'stop-circle' : 'mic'}
+                              size={22}
+                              color={isRecording ? Colors.error : Colors.primary}
+                            />
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.unitToggle}>
+                        <TouchableOpacity
+                          style={[styles.unitOption, portionUnit === 'g' && styles.unitOptionActive]}
+                          onPress={() => {
+                            Haptics.selectionAsync().catch(() => { });
+                            setPortionUnit('g');
+                          }}
+                        >
+                          <Text style={[styles.unitText, portionUnit === 'g' && styles.unitTextActive]}>g</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.unitOption, portionUnit === 'oz' && styles.unitOptionActive]}
+                          onPress={() => {
+                            Haptics.selectionAsync().catch(() => { });
+                            setPortionUnit('oz');
+                          }}
+                        >
+                          <Text style={[styles.unitText, portionUnit === 'oz' && styles.unitTextActive]}>oz</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    <DuoButton
+                      title="Log Meal"
+                      onPress={logMealFromBarcode}
+                      disabled={isLoggingMeal}
+                      loading={isLoggingMeal}
+                      color={Colors.primary}
+                      size="large"
+                      style={{ width: '100%' }}
+                    />
+
+                    <TouchableOpacity
+                      style={styles.cancelLink}
+                      onPress={() => {
+                        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                        setModalStep(1);
+                      }}
+                    >
+                      <Text style={styles.cancelLinkText}>BACK</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+
+            </ScrollView>
+
+            {isHealthMode ? (
+              <View style={styles.modalButtons}>
+                <DuoButton
+                  title="Scan Again"
+                  onPress={resetScanning}
+                  color={Colors.primary}
+                  size="large"
+                  style={{ width: '100%' }}
+                />
+              </View>
+            ) : null}
+          </AnimatedCard>
+        </View>
+      </Modal>
+
+      {/* Label Photo Modal - for missing or incomplete data */}
+      <Modal
+        visible={showContributionModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={resetScanning}
+      >
+        <View style={styles.modalOverlay}>
+          <AnimatedCard type="pop" style={styles.contributionCard}>
+            <TouchableOpacity
+              style={styles.resultCloseButton}
+              onPress={resetScanning}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="close" size={22} color={Colors.text} />
+            </TouchableOpacity>
+
+            <View style={styles.contributionContent}>
+              <View style={styles.contributionIconWrap}>
+                <Ionicons name="heart" size={56} color={Colors.primary} />
+              </View>
+
+              <Text style={styles.contributionTitle}>
+                Help Us Help Everyone
+              </Text>
+
+              <Text style={styles.contributionSubtitle}>
+                {contributionNeedsFront ? 'This product is not in our database yet' : 'We need label details to add this product'}
+              </Text>
+
+              <Text style={styles.contributionText}>
+                By sharing a photo of the label, you help make the world a healthier place for everyone
+              </Text>
+
+              <View style={styles.contributionInstructions}>
+                <Text style={styles.contribInstructionTitle}>What to capture:</Text>
+                {contributionNeedsFront ? (
+                  <View style={styles.contribInstructionRow}>
+                    <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+                    <Text style={styles.contribInstructionText}>Front of the pack (product name)</Text>
+                  </View>
+                ) : null}
+                <View style={styles.contribInstructionRow}>
+                  <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+                  <Text style={styles.contribInstructionText}>Nutrition Facts label</Text>
+                </View>
+                <View style={styles.contribInstructionRow}>
+                  <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+                  <Text style={styles.contribInstructionText}>Ingredients list</Text>
+                </View>
+                <Text style={styles.contribInstructionHint}>
+                  {contributionNeedsFront
+                    ? 'We’ll ask for 2 photos: front of pack + the label (nutrition/ingredients).'
+                    : 'Take the label (nutrition/ingredients). If both fit in one photo, that’s fine.'}
+                </Text>
+              </View>
+
+              <View style={styles.contributionButtons}>
+                <DuoButton
+                  title={(isSubmittingLabels || isProcessingLabel) ? 'Analyzing...' : (contributionNeedsFront ? 'Take Photos' : 'Take Photo')}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                    processLabelPhoto(contributionBarcode);
+                  }}
+                  disabled={isSubmittingLabels || isProcessingLabel}
+                  loading={isSubmittingLabels || isProcessingLabel}
+                  color={Colors.primary}
+                  size="large"
+                  style={{ width: '100%' }}
+                  leftIcon={<Ionicons name="camera" size={20} color={Colors.white} />}
+                />
+
+                <TouchableOpacity
+                  style={styles.cancelLink}
+                  onPress={resetScanning}
+                >
+                  <Text style={styles.cancelLinkText}>SCAN AGAIN</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </AnimatedCard>
         </View>
-
-        {/* Result Modal */}
-        <Modal
-          visible={showResultModal}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setShowResultModal(false)}
-        >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.modalOverlay}>
-              <AnimatedCard type="pop" style={styles.resultCard}>
-                <View style={styles.successIconWrap}>
-                  <Ionicons name="checkmark-circle" size={60} color={Colors.primary} />
-                </View>
-                
-                <Text style={styles.productName}>
-                  {scannedProduct?.name}
-                </Text>
-                <Text style={styles.productBrand}>
-                  {scannedProduct?.brand}
-                </Text>
-                
-                <View style={styles.nutritionGrid}>
-                  <View style={styles.nutritionItem}>
-                    <Text style={styles.nutritionValue}>{scannedProduct?.calories}</Text>
-                    <Text style={styles.nutritionLabel}>CALORIES</Text>
-                  </View>
-                  <View style={styles.nutritionDivider} />
-                  <View style={styles.nutritionItem}>
-                    <Text style={styles.nutritionValue}>{scannedProduct?.protein}g</Text>
-                    <Text style={styles.nutritionLabel}>PROTEIN</Text>
-                  </View>
-                  <View style={styles.nutritionDivider} />
-                  <View style={styles.nutritionItem}>
-                    <Text style={styles.nutritionValue}>{scannedProduct?.carbs}g</Text>
-                    <Text style={styles.nutritionLabel}>CARBS</Text>
-                  </View>
-                </View>
-
-                {modalStep === 1 ? (
-                  <>
-                    <Text style={styles.nextStepText}>
-                      Product identified! Ready to set your portion?
-                    </Text>
-
-                    <View style={styles.modalButtons}>
-                      <DuoButton
-                        title="Next"
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                          setModalStep(2);
-                        }}
-                        color={Colors.primary}
-                        size="large"
-                        style={{ width: '100%' }}
-                      />
-                      <TouchableOpacity 
-                        style={styles.cancelLink}
-                        onPress={() => {
-                          setShowResultModal(false);
-                          setScanned(false);
-                        }}
-                      >
-                        <Text style={styles.cancelLinkText}>SCAN AGAIN</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <View style={styles.modalButtons}>
-                      <View style={styles.portionRow}>
-                        <View style={styles.portionInputContainer}>
-                          <TextInput
-                            ref={qtyInputRef}
-                            value={portionQty}
-                            onChangeText={setPortionQty}
-                            placeholder="100"
-                            placeholderTextColor={Colors.textLight}
-                            keyboardType="numeric"
-                            style={styles.portionInput}
-                          />
-                          <TouchableOpacity
-                            style={[
-                              styles.voiceMicButton,
-                              isRecording && styles.voiceMicButtonActive
-                            ]}
-                            onPress={() => {
-                              if (isRecording) stopVoiceAndFill();
-                              else startVoice();
-                            }}
-                            disabled={voiceLoading}
-                          >
-                            {voiceLoading ? (
-                              <ActivityIndicator size="small" color={Colors.primary} />
-                            ) : (
-                              <Ionicons 
-                                name={isRecording ? "stop-circle" : "mic"} 
-                                size={22} 
-                                color={isRecording ? Colors.error : Colors.primary} 
-                              />
-                            )}
-                          </TouchableOpacity>
-                        </View>
-                        <View style={styles.unitToggle}>
-                          <TouchableOpacity
-                            style={[styles.unitOption, portionUnit === 'g' && styles.unitOptionActive]}
-                            onPress={() => {
-                              Haptics.selectionAsync().catch(() => {});
-                              setPortionUnit('g');
-                            }}
-                          >
-                            <Text style={[styles.unitText, portionUnit === 'g' && styles.unitTextActive]}>g</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[styles.unitOption, portionUnit === 'oz' && styles.unitOptionActive]}
-                            onPress={() => {
-                              Haptics.selectionAsync().catch(() => {});
-                              setPortionUnit('oz');
-                            }}
-                          >
-                            <Text style={[styles.unitText, portionUnit === 'oz' && styles.unitTextActive]}>oz</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-
-                      <DuoButton
-                        title={`Log Meal`}
-                        onPress={logMealFromBarcode}
-                        disabled={isLoggingMeal}
-                        loading={isLoggingMeal}
-                        color={Colors.primary}
-                        size="large"
-                        style={{ width: '100%' }}
-                      />
-
-                      <TouchableOpacity 
-                        style={styles.cancelLink}
-                        onPress={() => {
-                          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                          setModalStep(1);
-                        }}
-                      >
-                        <Text style={styles.cancelLinkText}>BACK</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                )}
-              </AnimatedCard>
-            </View>
-          </TouchableWithoutFeedback>
-        </Modal>
-      </CameraView>
-    </SafeAreaView>
+      </Modal>
+    </SafeAreaView >
   );
 }
 
@@ -496,6 +875,44 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.black,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  processingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  processingCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+  },
+  processingTitle: {
+    marginTop: 12,
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+    textAlign: 'center',
+  },
+  processingSubtitle: {
+    marginTop: 6,
+    fontSize: 13,
+    color: Colors.textLight,
+    textAlign: 'center',
+  },
+  cameraOffPlaceholder: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: Colors.black,
   },
   camera: {
     flex: 1,
@@ -629,10 +1046,34 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     padding: 32,
     width: '100%',
+    height: '80%',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: Colors.border,
     borderBottomWidth: 12,
+  },
+  resultCloseButton: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    zIndex: 5,
+  },
+  resultScroll: {
+    width: '100%',
+    flex: 1,
+  },
+  resultScrollContent: {
+    alignItems: 'center',
+    paddingBottom: 40,
+    paddingTop: 10,
   },
   successIconWrap: {
     marginBottom: 24,
@@ -696,6 +1137,128 @@ const styles = StyleSheet.create({
     marginTop: 6,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  healthLoadingBox: {
+    width: '100%',
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 6,
+    marginBottom: 20,
+  },
+  healthLoadingText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  healthBox: {
+    width: '100%',
+    marginBottom: 18,
+  },
+  verdictRow: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  verdictLabel: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  verdictValue: {
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  verdictReason: {
+    width: '100%',
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.text,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  verdictGood: { color: Colors.success },
+  verdictCaution: { color: Colors.warning },
+  verdictAvoid: { color: Colors.error },
+  healthSummary: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  flagsBox: {
+    width: '100%',
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 6,
+    marginBottom: 12,
+  },
+  flagsTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: Colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 12,
+  },
+  flagRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 12,
+  },
+  flagDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginTop: 4,
+  },
+  flagDotHigh: { backgroundColor: Colors.error },
+  flagDotMedium: { backgroundColor: Colors.warning },
+  flagDotLow: { backgroundColor: Colors.success },
+  flagTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  flagReason: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    lineHeight: 16,
+  },
+  flagDetail: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    lineHeight: 16,
+    marginTop: 6,
+  },
+  flagDetailLabel: {
+    fontWeight: '900',
+    color: Colors.text,
+  },
+  disclaimerText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    opacity: 0.8,
   },
   nutritionDivider: {
     width: 2,
@@ -837,5 +1400,99 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     fontWeight: '800',
     textAlign: 'center',
+  },
+  // Contribution Modal styles
+  contributionCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 36,
+    padding: 32,
+    width: '100%',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 12,
+  },
+  contributionContent: {
+    width: '100%',
+    alignItems: 'center',
+    paddingTop: 10,
+  },
+  contributionIconWrap: {
+    marginBottom: 24,
+    backgroundColor: Colors.primary + '15',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contributionTitle: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: Colors.text,
+    textAlign: 'center',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  contributionSubtitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  contributionText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 20,
+    paddingHorizontal: 8,
+  },
+  contributionInstructions: {
+    width: '100%',
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 6,
+  },
+  contribInstructionTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: Colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+  },
+  contribInstructionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  contribInstructionText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  contribInstructionHint: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    fontStyle: 'italic',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  contributionButtons: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 4,
   },
 });

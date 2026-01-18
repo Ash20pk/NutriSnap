@@ -12,7 +12,7 @@ import {
   Platform,
   Image,
 } from 'react-native';
-import { Colors } from '../../constants/Colors';
+import { Colors, Spacing, Radius } from '../../constants/Colors';
 import { useUser } from '../../context/UserContext';
 import { useAuth } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -270,6 +270,9 @@ export default function ProfileScreen() {
               behavior={Platform.OS === 'ios' ? 'padding' : undefined}
               style={styles.modalSheet}
             >
+              {/* Drag Handle */}
+              <View style={styles.modalDragHandle} />
+
               <View style={styles.modalHeader}>
                 <TouchableOpacity
                   onPress={() => {
@@ -277,79 +280,36 @@ export default function ProfileScreen() {
                     setEditVisible(false);
                   }}
                   style={styles.modalCloseBtn}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Ionicons name="close" size={24} color={Colors.textSecondary} />
+                  <Ionicons name="close" size={24} color={Colors.text} />
                 </TouchableOpacity>
                 <Text style={styles.modalTitle}>Edit Profile</Text>
-                <TouchableOpacity
-                  disabled={savingProfile}
-                  onPress={async () => {
-                    if (!user) return;
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                    const candidate = (editUsernameDraft || '').trim().toLowerCase();
-                    if (candidate && !/^[a-z0-9_]{3,20}$/.test(candidate)) {
-                      Alert.alert('Invalid username', 'Use 3-20 characters: letters, numbers, underscores.');
-                      return;
-                    }
-                    try {
-                      setSavingProfile(true);
-                      const updatePayload: any = { bio: editBioDraft.trim() };
-                      
-                      const promises: Promise<any>[] = [userApi.updateMyProfile(updatePayload)];
-                      if (candidate && candidate !== user.username) {
-                        promises.push(socialApi.setMyUsername(candidate));
-                      }
-
-                      const results = await Promise.all(promises);
-                      const profileRes = results[0];
-                      const usernameRes = results.length > 1 ? results[1] : null;
-
-                      await setUser({ 
-                        ...user, 
-                        username: usernameRes ? usernameRes.username : user.username, 
-                        bio: profileRes.bio ?? editBioDraft.trim() 
-                      });
-                      
-                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-                      setEditVisible(false);
-                    } catch (e: any) {
-                      const status = e?.response?.status;
-                      const detail = e?.response?.data?.detail;
-                      if (status === 409) {
-                        Alert.alert('Username taken', 'That username is already taken. Try another.');
-                      } else {
-                        Alert.alert('Error', detail || 'Failed to save profile');
-                      }
-                    } finally {
-                      setSavingProfile(false);
-                    }
-                  }}
-                  style={[styles.modalSaveBtn, savingProfile && { opacity: 0.5 }]}
-                >
-                  <Text style={styles.modalSaveText}>{savingProfile ? 'Saving...' : 'Save'}</Text>
-                </TouchableOpacity>
+                <View style={{ width: 40 }} />
               </View>
 
               <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
                 <View style={styles.modalContent}>
                   <View style={styles.modalAvatarSection}>
-                    <View style={styles.avatarLarge}>
-                      {!avatarImageFailed && resolvedAvatarUrl ? (
-                        <Image
-                          source={{ uri: resolvedAvatarUrl }}
-                          style={{ width: '100%', height: '100%', borderRadius: 36 }}
-                        />
-                      ) : (
-                        <Text style={styles.avatarTextLarge}>{user?.name?.[0]?.toUpperCase() || 'U'}</Text>
-                      )}
+                    <View style={styles.avatarEditContainer}>
+                      <View style={styles.avatarLarge}>
+                        {!avatarImageFailed && resolvedAvatarUrl ? (
+                          <Image
+                            source={{ uri: resolvedAvatarUrl }}
+                            style={{ width: '100%', height: '100%', borderRadius: Radius.xxxxl }}
+                          />
+                        ) : (
+                          <Text style={styles.avatarTextLarge}>{user?.name?.[0]?.toUpperCase() || 'U'}</Text>
+                        )}
+                      </View>
+                      <TouchableOpacity
+                        style={styles.avatarEditBadge}
+                        onPress={() => Alert.alert('Coming soon', 'Profile photo uploading will be added next.')}
+                      >
+                        <Ionicons name="camera" size={18} color={Colors.white} />
+                      </TouchableOpacity>
                     </View>
-                    <TouchableOpacity
-                      style={styles.changePhotoBtn}
-                      onPress={() => Alert.alert('Coming soon', 'Profile photo uploading will be added next.')}
-                    >
-                      <Ionicons name="camera" size={16} color={Colors.primary} />
-                      <Text style={styles.changePhotoText}>Change Photo</Text>
-                    </TouchableOpacity>
+                    <Text style={styles.changePhotoHint}>Tap to change photo</Text>
                   </View>
 
                   <View style={styles.inputGroup}>
@@ -365,6 +325,7 @@ export default function ProfileScreen() {
                         autoCapitalize="none"
                         autoCorrect={false}
                         maxLength={20}
+                        selectionColor={Colors.primary}
                       />
                     </View>
                     <Text style={styles.inputHint}>3-20 characters (letters, numbers, underscores)</Text>
@@ -382,10 +343,61 @@ export default function ProfileScreen() {
                         multiline
                         numberOfLines={4}
                         maxLength={160}
+                        selectionColor={Colors.primary}
                       />
                     </View>
                     <Text style={styles.charCount}>{editBioDraft.length}/160</Text>
                   </View>
+
+                  <DuoButton
+                    title={savingProfile ? 'Saving...' : 'Save Changes'}
+                    onPress={async () => {
+                      if (!user) return;
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                      const candidate = (editUsernameDraft || '').trim().toLowerCase();
+                      if (candidate && !/^[a-z0-9_]{3,20}$/.test(candidate)) {
+                        Alert.alert('Invalid username', 'Use 3-20 characters: letters, numbers, underscores.');
+                        return;
+                      }
+                      try {
+                        setSavingProfile(true);
+                        const updatePayload: any = { bio: editBioDraft.trim() };
+
+                        const promises: Promise<any>[] = [userApi.updateMyProfile(updatePayload)];
+                        if (candidate && candidate !== user.username) {
+                          promises.push(socialApi.setMyUsername(candidate));
+                        }
+
+                        const results = await Promise.all(promises);
+                        const profileRes = results[0];
+                        const usernameRes = results.length > 1 ? results[1] : null;
+
+                        await setUser({
+                          ...user,
+                          username: usernameRes ? usernameRes.username : user.username,
+                          bio: profileRes.bio ?? editBioDraft.trim()
+                        });
+
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+                        setEditVisible(false);
+                      } catch (e: any) {
+                        const status = e?.response?.status;
+                        const detail = e?.response?.data?.detail;
+                        if (status === 409) {
+                          Alert.alert('Username taken', 'That username is already taken. Try another.');
+                        } else {
+                          Alert.alert('Error', detail || 'Failed to save profile');
+                        }
+                      } finally {
+                        setSavingProfile(false);
+                      }
+                    }}
+                    disabled={savingProfile}
+                    loading={savingProfile}
+                    color={Colors.primary}
+                    size="large"
+                    style={{ marginTop: Spacing.sm }}
+                  />
                 </View>
                 <View style={{ height: 40 }} />
               </ScrollView>
@@ -542,27 +554,27 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   contentContainer: {
-    paddingHorizontal: 24,
-    paddingBottom: 20,
+    paddingHorizontal: Spacing.xxl,
+    paddingBottom: Spacing.xl,
   },
   headerCentered: {
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: Spacing.sm + 2,
   },
   avatarContainerLarge: {
     position: 'relative',
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
   },
   avatarLarge: {
     width: 100,
     height: 100,
-    borderRadius: 36,
+    borderRadius: Radius.xxxxl,
     backgroundColor: Colors.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: Colors.border,
-    borderBottomWidth: 10,
+    borderBottomWidth: Spacing.sm + 2,
     overflow: 'hidden',
   },
   avatarTextLarge: {
@@ -573,11 +585,11 @@ const styles = StyleSheet.create({
   editBadgeLarge: {
     position: 'absolute',
     right: -6,
-    bottom: 4,
+    bottom: Spacing.xs,
     backgroundColor: Colors.primary,
-    width: 32,
-    height: 32,
-    borderRadius: 12,
+    width: Spacing.xxxl,
+    height: Spacing.xxxl,
+    borderRadius: Radius.md,
     borderWidth: 3,
     borderColor: Colors.white,
     alignItems: 'center',
@@ -604,22 +616,22 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     textTransform: 'uppercase',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
   },
   usernameTextMutedLarge: {
     fontSize: 14,
     fontWeight: '800',
     color: Colors.textSecondary,
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
     opacity: 0.6,
   },
   socialStatsRowCentered: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 32,
-    marginBottom: 20,
+    gap: Spacing.xxxl,
+    marginBottom: Spacing.xl,
     width: '100%',
   },
   statItemCentered: {
@@ -646,9 +658,9 @@ const styles = StyleSheet.create({
   bioSection: {
     width: '100%',
     backgroundColor: Colors.backgroundSecondary,
-    padding: 16,
-    borderRadius: 20,
-    marginBottom: 16,
+    padding: Spacing.lg,
+    borderRadius: Radius.xxl,
+    marginBottom: Spacing.lg,
     borderWidth: 1,
     borderColor: Colors.border,
   },
@@ -659,70 +671,86 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 22,
   },
-  modalCloseBtn: {
+  modalDragHandle: {
     width: 40,
-    height: 40,
-    borderRadius: 12,
+    height: 4,
+    backgroundColor: Colors.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  modalCloseBtn: {
+    width: Radius.round,
+    height: Radius.round,
+    borderRadius: Radius.xxl,
     backgroundColor: Colors.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  modalSaveBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  modalSaveText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: Colors.white,
-    textTransform: 'uppercase',
+    borderWidth: 2,
+    borderColor: Colors.border,
   },
   modalScroll: {
     flex: 1,
   },
   modalAvatarSection: {
     alignItems: 'center',
-    marginVertical: 24,
-    gap: 16,
+    marginBottom: Spacing.xxl,
   },
-  changePhotoBtn: {
-    flexDirection: 'row',
+  avatarEditContainer: {
+    position: 'relative',
+    marginBottom: Spacing.sm,
+  },
+  avatarEditBadge: {
+    position: 'absolute',
+    right: -4,
+    bottom: 4,
+    backgroundColor: Colors.primary,
+    width: 36,
+    height: 36,
+    borderRadius: Radius.md,
+    borderWidth: 3,
+    borderColor: Colors.white,
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: Colors.white,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: Colors.border,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  changePhotoHint: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textSecondary,
   },
   inputGroup: {
-    marginBottom: 24,
+    marginBottom: Spacing.xxl,
   },
   inputLabel: {
     fontSize: 14,
     fontWeight: '900',
     color: Colors.text,
     textTransform: 'uppercase',
-    marginBottom: 8,
-    marginLeft: 4,
+    marginBottom: Spacing.sm,
+    marginLeft: Spacing.xs,
+    letterSpacing: 0.5,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.white,
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     borderWidth: 2,
     borderColor: Colors.border,
-    paddingHorizontal: 16,
+    borderBottomWidth: 4,
+    paddingHorizontal: Spacing.lg,
   },
   inputPrefix: {
     fontSize: 16,
     fontWeight: '900',
-    color: Colors.textSecondary,
-    marginRight: 4,
+    color: Colors.primary,
+    marginRight: Spacing.xs,
   },
   textInput: {
     flex: 1,
@@ -734,16 +762,17 @@ const styles = StyleSheet.create({
   inputHint: {
     fontSize: 12,
     color: Colors.textSecondary,
-    marginTop: 8,
-    marginLeft: 4,
+    marginTop: Spacing.sm,
+    marginLeft: Spacing.xs,
     fontWeight: '600',
   },
   bioInputWrapper: {
     alignItems: 'flex-start',
-    paddingTop: 12,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
   },
   bioTextInput: {
-    height: 120,
+    height: 100,
     textAlignVertical: 'top',
     paddingTop: 0,
   },
@@ -751,135 +780,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textSecondary,
     textAlign: 'right',
-    marginTop: 4,
+    marginTop: Spacing.xs,
     fontWeight: '700',
-  },
-  profileCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 32,
-    padding: 24,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderBottomWidth: 8,
-    marginBottom: 24,
-    marginTop: 8,
-  },
-  avatarWrap: {
-    marginBottom: 16,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
-    backgroundColor: Colors.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: Colors.border,
-  },
-  avatarText: {
-    fontSize: 32,
-    fontWeight: '900',
-    color: Colors.text,
-  },
-  userName: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: Colors.text,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  usernameText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: Colors.primary,
-    textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  usernameTextMuted: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: Colors.textSecondary,
-    opacity: 0.8,
-    marginBottom: 6,
-    textTransform: 'uppercase',
-  },
-  userBio: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    fontWeight: '700',
-    lineHeight: 20,
-    marginBottom: 20,
-    paddingHorizontal: 10,
-  },
-  editProfileBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: Colors.primary + '12',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 18,
-    borderWidth: 2,
-    borderColor: Colors.primary + '25',
-    marginBottom: 18,
-  },
-  editProfileBtnText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: Colors.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  socialStatsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 30,
-    width: '100%',
-  },
-  socialStatItem: {
-    alignItems: 'center',
-  },
-  socialStatValue: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: Colors.text,
-  },
-  socialStatLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    marginTop: 2,
-  },
-  socialStatDivider: {
-    width: 2,
-    height: 30,
-    backgroundColor: Colors.border,
-    opacity: 0.5,
   },
   levelCard: {
     backgroundColor: Colors.white,
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: Radius.xxxl,
+    padding: Spacing.xl,
     borderWidth: 2,
     borderColor: Colors.border,
-    borderBottomWidth: 8,
-    marginBottom: 8,
+    borderBottomWidth: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   levelHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    marginBottom: 16,
+    gap: Spacing.lg,
+    marginBottom: Spacing.lg,
   },
   levelBadge: {
     width: 64,
     height: 64,
-    borderRadius: 32,
+    borderRadius: Radius.xxxxl,
     backgroundColor: Colors.warning,
     alignItems: 'center',
     justifyContent: 'center',
@@ -924,14 +846,14 @@ const styles = StyleSheet.create({
   statsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 24,
+    gap: Spacing.md,
+    marginBottom: Spacing.xxl,
   },
   statCard: {
     width: '48%',
     backgroundColor: Colors.white,
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: Radius.xxl,
+    padding: Spacing.lg,
     alignItems: 'center',
     borderWidth: 2,
     borderColor: Colors.border,
@@ -951,142 +873,41 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: Colors.text,
-    marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  atSymbol: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: Colors.text,
-    marginRight: 8,
+    marginBottom: Spacing.xxl,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: 'rgba(13, 8, 8, 0.5)',
     justifyContent: 'flex-end',
   },
   modalSheet: {
     backgroundColor: Colors.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: 20,
+    borderTopLeftRadius: Radius.xxxxl,
+    borderTopRightRadius: Radius.xxxxl,
+    paddingBottom: Spacing.xl,
     borderWidth: 2,
     borderColor: Colors.border,
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 12,
+    paddingHorizontal: Spacing.xxl,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.md,
   },
   modalTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '900',
     color: Colors.text,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  modalCancel: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: Colors.textSecondary,
-  },
-  modalSave: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: Colors.primary,
+    letterSpacing: 1,
   },
   modalContent: {
-    paddingHorizontal: 18,
-    paddingBottom: 16,
-  },
-  modalAvatarRow: {
-    alignItems: 'center',
-    marginBottom: 18,
-    gap: 10,
-  },
-  modalAvatar: {
-    width: 84,
-    height: 84,
-    borderRadius: 26,
-    backgroundColor: Colors.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderBottomWidth: 6,
-  },
-  modalAvatarText: {
-    fontSize: 34,
-    fontWeight: '900',
-    color: Colors.text,
-  },
-  changePhotoText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: Colors.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  fieldBlock: {
-    marginBottom: 16,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: Colors.text,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  fieldHint: {
-    marginTop: 8,
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.textSecondary,
-  },
-  fieldRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderBottomWidth: 4,
-  },
-  fieldInput: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '800',
-    color: Colors.text,
-    backgroundColor: Colors.white,
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderBottomWidth: 4,
-  },
-  bioInput: {
-    minHeight: 96,
-    textAlignVertical: 'top',
-  },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    paddingHorizontal: Spacing.xxl,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.lg,
   },
   badgeCount: {
     fontSize: 14,
@@ -1096,18 +917,18 @@ const styles = StyleSheet.create({
   badgesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: Spacing.md,
   },
   badgeCard: {
     width: '48%',
     backgroundColor: Colors.white,
-    borderRadius: 24,
+    borderRadius: Radius.xxxl,
     borderWidth: 2,
     borderColor: Colors.border,
-    padding: 14,
+    padding: Spacing.lg - 2,
     flexDirection: 'column',
     alignItems: 'center',
-    gap: 10,
+    gap: Spacing.sm + 2,
     borderBottomWidth: 6,
   },
   badgeCardLocked: {
@@ -1117,13 +938,13 @@ const styles = StyleSheet.create({
   badgeIconWrap: {
     width: 56,
     height: 56,
-    borderRadius: 20,
+    borderRadius: Radius.xxl,
     backgroundColor: Colors.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: Colors.border,
-    marginBottom: 4,
+    marginBottom: Spacing.xs,
   },
   badgeTextWrap: {
     alignItems: 'center',
@@ -1146,13 +967,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: Spacing.sm,
     backgroundColor: Colors.white,
     borderWidth: 2,
     borderColor: Colors.error,
-    borderRadius: 16,
-    padding: 18,
-    marginTop: 8,
+    borderRadius: Radius.xl,
+    padding: Spacing.lg + 2,
+    marginTop: Spacing.sm,
     borderBottomWidth: 6,
   },
   logoutText: {

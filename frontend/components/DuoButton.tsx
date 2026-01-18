@@ -39,6 +39,29 @@ export default function DuoButton({
   size = 'medium',
 }: DuoButtonProps) {
   const animatedValue = React.useRef(new Animated.Value(0)).current;
+  const [dots, setDots] = React.useState('');
+
+  React.useEffect(() => {
+    if (!loading) {
+      setDots('');
+      return;
+    }
+
+    let mounted = true;
+    const states = ['', '.', '..', '...'];
+    let i = 0;
+    setDots(states[i]);
+
+    const id = setInterval(() => {
+      i = (i + 1) % states.length;
+      if (mounted) setDots(states[i]);
+    }, 350);
+
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
+  }, [loading]);
 
   const finalShadowColor = shadowColor || (color === Colors.primary ? Colors.primaryDark : Colors.shadowSubtle);
 
@@ -104,10 +127,12 @@ export default function DuoButton({
           ]}
         >
           <View style={styles.contentRow}>
-            <View style={styles.leftIconSlot}>{loading ? null : leftIcon}</View>
+            <View style={styles.leftIconSlot}>
+              {loading ? null : leftIcon}
+            </View>
             <View style={styles.textColumn}>
               <Text style={[styles.text, { fontSize }, textStyle]}>
-                {loading ? '...' : title}
+                {loading ? `${title}${dots}` : title}
               </Text>
               {subtitle && !loading && (
                 <Text style={styles.subtitle}>{subtitle}</Text>

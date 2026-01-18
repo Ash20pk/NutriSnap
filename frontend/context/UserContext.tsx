@@ -1,6 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
+import XpPopUp from '../components/XpPopUp';
+
+interface XpState {
+  showPopup: boolean;
+  amount: number;
+}
 
 interface UserProfile {
   id: string;
@@ -27,6 +33,8 @@ interface UserContextType {
   setUser: (user: UserProfile | null) => void;
   logout: () => void;
   isLoading: boolean;
+  // XP management
+  showXpPopup: (amount: number) => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -35,6 +43,15 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUserState] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { user: authUser, isLoading: authLoading } = useAuth();
+  const [xpState, setXpState] = useState<XpState>({ showPopup: false, amount: 0 });
+
+  const showXpPopup = useCallback((amount: number) => {
+    setXpState({ showPopup: true, amount });
+  }, []);
+
+  const dismissXpPopup = useCallback(() => {
+    setXpState({ showPopup: false, amount: 0 });
+  }, []);
 
   useEffect(() => {
     if (authLoading) return;
@@ -89,8 +106,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <UserContext.Provider value={{ user, setUser, logout, isLoading }}>
+    <UserContext.Provider value={{ user, setUser, logout, isLoading, showXpPopup }}>
       {children}
+      {xpState.showPopup && (
+        <XpPopUp xp={xpState.amount} onComplete={dismissXpPopup} />
+      )}
     </UserContext.Provider>
   );
 };

@@ -293,7 +293,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
 
             <View style={styles.streakBadge}>
-              <Ionicons name="flame" size={20} color={Colors.accent} />
+              <Ionicons name="flame" size={20} color={Colors.highLevels} />
               <Text style={styles.streakText}>{questStats?.current_streak ?? 0}</Text>
             </View>
           </View>
@@ -398,7 +398,7 @@ export default function HomeScreen() {
         <AnimatedCard delay={200} type="slide" style={styles.section}>
           <SectionTitle title="Today's Calories" />
           <AppCard style={styles.standardCard} padding={0}>
-            <View style={[styles.caloriesContent, { padding: 20 }]}>
+            <View style={[styles.caloriesContent, { padding: 10 }]}>
               <View style={styles.caloriesHeader}>
                 <View>
                   <Text style={styles.caloriesValue}>
@@ -798,13 +798,13 @@ const styles = StyleSheet.create({
   },
   caloriesFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     paddingTop: 8,
   },
   caloriesStat: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
     backgroundColor: Colors.backgroundSecondary,
     paddingHorizontal: 12,
     paddingVertical: 8,

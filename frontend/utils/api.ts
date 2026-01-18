@@ -45,16 +45,51 @@ export interface OnboardingData {
 export interface Food {
   id?: string;
   name: string;
+  brand?: string | null;
+  barcode?: string | null;
   calories_per_100g?: number;
   protein_per_100g?: number;
   carbs_per_100g?: number;
   fat_per_100g?: number;
+  fiber_g_per_100g?: number;
+  sugar_g_per_100g?: number;
+  sodium_mg_per_100g?: number;
+  image_url?: string | null;
+  ingredients?: string | null;
   serving_size?: number;
   serving_unit?: string;
   category?: string;
   is_vegetarian?: boolean;
   quantity?: number;
   unit?: string;
+}
+
+export type FoodHealthVerdict = 'good' | 'caution' | 'avoid';
+
+export interface FoodHealthFlag {
+  title: string;
+  severity: 'low' | 'medium' | 'high';
+  reason: string;
+  what_it_is?: string | null;
+  why_it_matters?: string | null;
+  evidence?: string | null;
+  suggestion?: string | null;
+}
+
+export interface FoodHealthCheckResult {
+  barcode: string;
+  name: string;
+  brand?: string | null;
+  verdict: FoodHealthVerdict;
+  summary: string;
+  verdict_reason?: string;
+  red_flags: FoodHealthFlag[];
+  positives: string[];
+}
+
+export interface FoodLabelSubmissionResponse {
+  submission_id: string;
+  status: string;
 }
 
 export interface FoodWithServing extends Food {
@@ -322,28 +357,40 @@ api.interceptors.response.use(
       console.log('[API Response]', {
         status: response.status,
         url: response.config.url,
-        data: response.data,
       });
     }
     return response;
   },
   async (error) => {
-    const status = error.response?.status;
-    const requestUrl = `${error.config?.baseURL ?? ''}${error.config?.url ?? ''}`;
+    const status = error?.response?.status;
+
+    // Handle auth errors - redirect to login
+    if (status === 401) {
+      supabase.auth.signOut().catch(console.error);
+      router.replace('/auth');
+      return Promise.reject(error);
+    }
+
+    const requestUrl = error?.config?.url || '';
     const isExpectedMissingProfile =
       status === 404 && (error.config?.url === '/user/me' || requestUrl.endsWith('/api/user/me'));
 
-    if (__DEV__ && !isExpectedMissingProfile) {
+    const isExpectedBarcodeNotFound =
+      status === 404 &&
+      (requestUrl.includes('/foods/barcode/') || requestUrl.includes('/api/foods/barcode/'));
+
+    if (__DEV__ && !isExpectedMissingProfile && !isExpectedBarcodeNotFound) {
       console.error('[API Response Error]', {
         message: error.message,
         code: error.code,
         status,
-        data: error.response?.data,
         url: requestUrl,
+        data: error.response?.data,
       });
     }
 
-    if (status === 401) {
+    // Some auth flows may return forbidden; ensure we reset client auth state.
+    if (status === 403) {
       try {
         await supabase.auth.signOut();
       } catch {
@@ -360,6 +407,7 @@ api.interceptors.response.use(
         // ignore
       }
     }
+
     return Promise.reject(error);
   }
 );
@@ -396,8 +444,50 @@ export const foodApi = {
     });
     return response.data;
   },
-  getByBarcode: async (barcode: string): Promise<{ food: Food; cached: boolean }> => {
-    const response = await api.get(`/foods/barcode/${encodeURIComponent(barcode)}`);
+  getByBarcode: async (
+    barcode: string,
+    includeHealthCheck: boolean = false
+  ): Promise<{ food: Food; cached: boolean; needs_contribution?: boolean; health_check?: FoodHealthCheckResult }> => {
+    const response = await api.get(`/foods/barcode/${encodeURIComponent(barcode)}`, {
+      params: { include_health_check: includeHealthCheck },
+    });
+    return response.data;
+  },
+  submitLabelSubmission: async (
+    barcode: string,
+    userId: string,
+    imagesBase64: string[],
+    notes?: string
+  ): Promise<FoodLabelSubmissionResponse> => {
+    const response = await api.post('/foods/label-submissions', {
+      user_id: userId,
+      barcode,
+      images_base64: imagesBase64,
+      notes: notes ?? null,
+    });
+    return response.data;
+  },
+  healthCheck: async (barcode: string, userId: string): Promise<FoodHealthCheckResult> => {
+    const response = await api.post('/foods/health-check', {
+      user_id: userId,
+      barcode,
+    });
+    return response.data;
+  },
+  processLabelImage: async (
+    barcode: string,
+    userId: string,
+    imageBase64: string,
+    frontImageBase64?: string
+  ): Promise<{ food: Food; health_check: FoodHealthCheckResult }> => {
+    const response = await api.post('/foods/process-label', {
+      user_id: userId,
+      barcode,
+      image_base64: imageBase64,
+      front_image_base64: frontImageBase64 ?? null,
+    }, {
+      timeout: 60000, // 60s timeout for AI processing
+    });
     return response.data;
   },
   getCategories: async (): Promise<{ categories: string[] }> => {

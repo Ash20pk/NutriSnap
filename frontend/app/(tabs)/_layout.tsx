@@ -1,7 +1,8 @@
-import { Tabs } from 'expo-router';
+import { Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
-import { View, Platform, StyleSheet } from 'react-native';
+import { View, Platform, StyleSheet, Pressable } from 'react-native';
+import * as Haptics from 'expo-haptics';
 
 export default function TabsLayout() {
   return (
@@ -81,6 +82,22 @@ export default function TabsLayout() {
         name="log"
         options={{
           title: '',
+          tabBarButton: (props) => (
+            <Pressable
+              accessibilityRole={props.accessibilityRole}
+              accessibilityState={props.accessibilityState}
+              accessibilityLabel={props.accessibilityLabel}
+              testID={props.testID}
+              onPress={props.onPress}
+              onLongPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                router.push('/barcode?mode=health');
+              }}
+              style={props.style}
+            >
+              {props.children}
+            </Pressable>
+          ),
           tabBarIcon: ({ focused }) => (
             <View style={styles.centerButtonContainer}>
               <View style={[styles.centerButton, focused && styles.centerButtonActive]}>
@@ -175,7 +192,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
-    borderColor: Colors.white,
+    borderColor: 'rgba(0,0,0,0.25)',
     borderBottomWidth: 10,
     borderBottomColor: 'rgba(0,0,0,0.25)',
     shadowColor: Colors.primary,

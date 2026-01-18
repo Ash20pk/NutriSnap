@@ -45,6 +45,10 @@ SEED_USDA_ON_STARTUP = os.environ.get("SEED_USDA_ON_STARTUP", "false").strip().l
 USDA_BOOTSTRAP_TERMS = [t.strip() for t in os.environ.get("USDA_BOOTSTRAP_TERMS", "rice,egg,chicken breast,banana,apple,milk,bread,oats").split(",") if t.strip()]
 USDA_BOOTSTRAP_PER_TERM = int(os.environ.get("USDA_BOOTSTRAP_PER_TERM", "10"))
 
+SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+SUPABASE_STORAGE_BUCKET = os.environ.get("SUPABASE_STORAGE_BUCKET", "food-labels").strip() or "food-labels"
+SUPABASE_STORAGE_PUBLIC = os.environ.get("SUPABASE_STORAGE_PUBLIC", "true").strip().lower() in ("1", "true", "yes")
+
 # USDA Rate Limiting: 1,000 req/hour = 900 req/hour with safety margin
 USDA_RATE_LIMIT_PER_HOUR = 900
 USDA_RATE_LIMIT_WINDOW = 3600  # 1 hour in seconds
@@ -179,9 +183,23 @@ async def _ensure_schema(conn: asyncpg.Connection):
           ON foods (barcode)
           WHERE barcode IS NOT NULL;
 
-        CREATE INDEX IF NOT EXISTS idx_foods_name_category ON foods (lower(name), category);
-        CREATE INDEX IF NOT EXISTS idx_foods_category ON foods (category);
-        CREATE INDEX IF NOT EXISTS idx_foods_veg ON foods (is_vegetarian);
+        -- Cache for NutriLens /foods/health-check results (AI cost saver)
+        CREATE TABLE IF NOT EXISTS food_health_check_cache (
+            barcode text PRIMARY KEY,
+            response_json jsonb NOT NULL,
+            created_at timestamptz NOT NULL DEFAULT now(),
+            updated_at timestamptz NOT NULL DEFAULT now(),
+            expires_at timestamptz NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_food_health_check_cache_expires_at
+          ON food_health_check_cache (expires_at);
+
+        CREATE INDEX IF NOT EXISTS idx_foods_name_lower ON foods (lower(name));
+        CREATE INDEX IF NOT EXISTS idx_foods_brand_lower ON foods (lower(brand));
+        CREATE INDEX IF NOT EXISTS idx_foods_last_used_at ON foods (last_used_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_foods_last_synced_at ON foods (last_synced_at ASC);
+        CREATE INDEX IF NOT EXISTS idx_foods_sync_status ON foods (sync_status);
 
         CREATE TABLE IF NOT EXISTS meals (
             id uuid PRIMARY KEY,
@@ -617,12 +635,142 @@ async def _fetch_openfoodfacts(barcode: str) -> Dict[str, Any] | None:
     code = (barcode or "").strip()
     if not code:
         return None
-    url = f"https://world.openfoodfacts.org/api/v2/product/{code}.json"
     async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.get(url)
-        if r.status_code != 200:
+        # Prefer v2 API (richer fields) but fall back to v0 which sometimes has better coverage.
+        url_v2 = f"https://world.openfoodfacts.org/api/v2/product/{code}.json"
+        r = await client.get(url_v2)
+        if r.status_code == 200:
+            try:
+                data = r.json()
+                if isinstance(data, dict) and data.get("product"):
+                    return data
+            except Exception:
+                pass
+
+        url_v0 = f"https://world.openfoodfacts.org/api/v0/product/{code}.json"
+        r0 = await client.get(url_v0)
+        if r0.status_code != 200:
             return None
-        return r.json()
+        try:
+            data0 = r0.json()
+            if isinstance(data0, dict) and int(data0.get("status") or 0) == 1 and data0.get("product"):
+                return data0
+        except Exception:
+            return None
+        return None
+
+
+def _normalize_barcode(raw: str) -> str:
+    # Keep only digits; scanners sometimes include spaces or symbology prefixes.
+    return re.sub(r"\D", "", (raw or "").strip())
+
+
+def _barcode_variants(raw: str) -> List[str]:
+    code = _normalize_barcode(raw)
+    if not code:
+        return []
+
+    # Try common representations:
+    # - exact digits
+    # - strip leading zeros (some sources store without)
+    # - if UPC-A (12 digits), try EAN-13 by prefixing a leading 0
+    variants: List[str] = []
+    variants.append(code)
+
+    stripped = code.lstrip("0")
+    if stripped and stripped != code:
+        variants.append(stripped)
+
+    if len(code) == 12:
+        variants.append("0" + code)
+
+    # De-duplicate while preserving order
+    seen: set[str] = set()
+    out: List[str] = []
+    for v in variants:
+        if v and v not in seen:
+            seen.add(v)
+            out.append(v)
+    return out
+
+
+def _is_food_data_incomplete(food: Dict[str, Any]) -> bool:
+    """Check if food data is incomplete and needs user contribution.
+
+    Data is considered incomplete if:
+    - All macronutrients are zero/null AND
+    - No ingredients text is available
+
+    If we have at least some nutrition OR ingredients, we can work with it.
+    """
+    calories = float(food.get("calories_per_100g") or 0)
+    protein = float(food.get("protein_per_100g") or 0)
+    carbs = float(food.get("carbs_per_100g") or 0)
+    fat = float(food.get("fat_per_100g") or 0)
+    ingredients = (food.get("ingredients") or "").strip()
+
+    all_macros_zero = calories == 0 and protein == 0 and carbs == 0 and fat == 0
+    no_ingredients = not ingredients
+
+    return all_macros_zero and no_ingredients
+
+
+def _openfoodfacts_best_name(product: Dict[str, Any], fallback_code: str) -> str:
+    name_candidates = [
+        product.get("product_name"),
+        product.get("product_name_en"),
+        product.get("product_name_hi"),
+        product.get("product_name_fr"),
+        product.get("generic_name"),
+        product.get("generic_name_en"),
+        product.get("abbreviated_product_name"),
+        product.get("product_name_without_brand"),
+    ]
+
+    for c in name_candidates:
+        if not c:
+            continue
+        s = str(c).strip()
+        if s:
+            return s
+
+    keywords = product.get("_keywords")
+    if isinstance(keywords, list):
+        stop = {
+            "biscuit",
+            "biscuits",
+            "cookie",
+            "cookies",
+            "cracker",
+            "crackers",
+            "snack",
+            "snacks",
+            "food",
+            "packaged",
+        }
+        words = [str(x).strip() for x in keywords if str(x).strip()]
+        best = [w for w in words if w.lower() not in stop]
+        if best:
+            return best[0].strip().title()
+
+    return f"Barcode {fallback_code}"
+
+
+def _is_barcode_data_incomplete(barcode_data: Dict[str, Any]) -> bool:
+    """Check if barcode data is incomplete and needs user contribution.
+
+    Same logic as _is_food_data_incomplete but for barcode records.
+    """
+    calories = float(barcode_data.get("calories_per_100g") or 0)
+    protein = float(barcode_data.get("protein_per_100g") or 0)
+    carbs = float(barcode_data.get("carbs_per_100g") or 0)
+    fat = float(barcode_data.get("fat_per_100g") or 0)
+    ingredients = (barcode_data.get("ingredients") or "").strip()
+
+    all_macros_zero = calories == 0 and protein == 0 and carbs == 0 and fat == 0
+    no_ingredients = not ingredients
+
+    return all_macros_zero and no_ingredients
 
 
 async def _fetch_usda_food(external_id: str) -> Dict[str, Any] | None:
@@ -1083,6 +1231,97 @@ class PortionInferResponse(BaseModel):
     transcript: str
     quantity: Optional[float] = None
     unit: Optional[str] = None  # 'g' | 'oz'
+
+
+class FoodHealthCheckRequest(BaseModel):
+    user_id: str
+    barcode: str
+
+
+class FoodLabelSubmissionRequest(BaseModel):
+    user_id: str
+    barcode: str
+    images_base64: List[str]
+    notes: str | None = None
+
+
+class FoodLabelSubmissionResponse(BaseModel):
+    submission_id: str
+    status: str
+
+
+class ProcessLabelRequest(BaseModel):
+    user_id: str
+    barcode: str
+    image_base64: str
+    front_image_base64: Optional[str] = None
+
+
+async def _upload_supabase_storage_object(bucket: str, object_path: str, content_type: str, data: bytes) -> None:
+    if not SUPABASE_URL:
+        raise RuntimeError("SUPABASE_URL is not set")
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY is not set")
+
+    url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/{bucket}/{object_path.lstrip('/')}"
+    headers = {
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Content-Type": content_type,
+        "x-upsert": "true",
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(url, headers=headers, content=data)
+        if r.status_code not in (200, 201):
+            raise RuntimeError(f"Supabase Storage upload failed ({r.status_code}): {r.text}")
+
+
+async def _supabase_storage_object_url(bucket: str, object_path: str) -> str:
+    if not SUPABASE_URL:
+        raise RuntimeError("SUPABASE_URL is not set")
+
+    object_path = object_path.lstrip("/")
+    if SUPABASE_STORAGE_PUBLIC:
+        return f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/public/{bucket}/{object_path}"
+
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY is not set")
+
+    url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/sign/{bucket}/{object_path}"
+    headers = {
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(url, headers=headers, json={"expiresIn": 31536000})
+        if r.status_code != 200:
+            raise RuntimeError(f"Supabase Storage sign failed ({r.status_code}): {r.text}")
+        signed = (r.json() or {}).get("signedURL")
+        if not signed:
+            raise RuntimeError("Supabase Storage sign returned empty signedURL")
+        return f"{SUPABASE_URL.rstrip('/')}{signed}"
+
+
+class FoodHealthFlag(BaseModel):
+    title: str
+    severity: str  # 'low' | 'medium' | 'high'
+    reason: str
+    what_it_is: Optional[str] = None
+    why_it_matters: Optional[str] = None
+    evidence: Optional[str] = None
+    suggestion: Optional[str] = None
+
+
+class FoodHealthCheckResponse(BaseModel):
+    barcode: str
+    name: str
+    brand: Optional[str] = None
+    verdict: str  # 'good' | 'caution' | 'avoid'
+    summary: str
+    verdict_reason: str = ""
+    red_flags: List[FoodHealthFlag] = []
+    positives: List[str] = []
 
 class FoodPresenceResponse(BaseModel):
     has_food: bool
@@ -2137,43 +2376,271 @@ async def get_categories():
     return {"categories": [str(r["category"]) for r in rows]}
 
 
+async def _save_barcode_async(pool, barcode_data: Dict[str, Any]):
+    """Save barcode data to barcodes table in background (non-blocking)."""
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO barcodes (
+                    barcode, product_name, brand, image_url,
+                    calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g,
+                    fiber_g_per_100g, sugar_g_per_100g, sodium_mg_per_100g,
+                    ingredients, source, source_updated_at, verified
+                ) VALUES (
+                    $1, $2, $3, $4,
+                    $5, $6, $7, $8,
+                    $9, $10, $11,
+                    $12, 'openfoodfacts', now(), false
+                )
+                ON CONFLICT (barcode) DO UPDATE SET
+                    product_name = EXCLUDED.product_name,
+                    brand = EXCLUDED.brand,
+                    image_url = EXCLUDED.image_url,
+                    calories_per_100g = EXCLUDED.calories_per_100g,
+                    protein_per_100g = EXCLUDED.protein_per_100g,
+                    carbs_per_100g = EXCLUDED.carbs_per_100g,
+                    fat_per_100g = EXCLUDED.fat_per_100g,
+                    fiber_g_per_100g = EXCLUDED.fiber_g_per_100g,
+                    sugar_g_per_100g = EXCLUDED.sugar_g_per_100g,
+                    sodium_mg_per_100g = EXCLUDED.sodium_mg_per_100g,
+                    ingredients = EXCLUDED.ingredients,
+                    source_updated_at = now()
+                """,
+                barcode_data["barcode"],
+                barcode_data["name"],
+                barcode_data["brand"],
+                barcode_data["image_url"],
+                barcode_data["calories_per_100g"],
+                barcode_data["protein_per_100g"],
+                barcode_data["carbs_per_100g"],
+                barcode_data["fat_per_100g"],
+                barcode_data["fiber_g_per_100g"],
+                barcode_data["sugar_g_per_100g"],
+                barcode_data["sodium_mg_per_100g"],
+                barcode_data["ingredients"],
+            )
+    except Exception as e:
+        print(f"[Async] Failed to save barcode {barcode_data.get('barcode')}: {e}")
+
+
+async def _generate_health_check_for_barcode(barcode: str, food_data: Dict[str, Any]) -> Dict[str, Any] | None:
+    """Generate AI health check for barcode and cache it."""
+    if openai_client is None:
+        return None
+
+    try:
+        health_prompt = {
+            "barcode": barcode,
+            "name": food_data.get("name") or food_data.get("product_name") or "",
+            "brand": food_data.get("brand") or "(unknown)",
+            "nutrition_per_100g": {
+                "calories": float(food_data.get("calories_per_100g") or 0),
+                "protein_g": float(food_data.get("protein_per_100g") or 0),
+                "carbs_g": float(food_data.get("carbs_per_100g") or 0),
+                "fat_g": float(food_data.get("fat_per_100g") or 0),
+                "fiber_g": float(food_data.get("fiber_g_per_100g") or 0),
+                "sugar_g": float(food_data.get("sugar_g_per_100g") or 0),
+                "sodium_mg": float(food_data.get("sodium_mg_per_100g") or 0),
+            },
+            "ingredients": food_data.get("ingredients") or "(not available)",
+        }
+
+        system_prompt = """You are NutriLens, a consumer-friendly nutrition label explainer.
+Given a product's nutrition data and ingredients, provide a health analysis.
+
+Return a JSON object:
+{
+  "verdict": "good" | "caution" | "avoid",
+  "verdict_reason": "Brief 1-sentence explanation of the verdict",
+  "summary": "2-3 sentence overview of the product's health profile",
+  "red_flags": [
+    {
+      "title": "Issue name",
+      "severity": "low" | "medium" | "high",
+      "reason": "Brief explanation",
+      "what_it_is": "Plain language explanation",
+      "why_it_matters": "Health impact",
+      "suggestion": "Healthier alternative"
+    }
+  ],
+  "positives": ["Good aspect 1", "Good aspect 2"]
+}
+
+Focus on: added sugars, high sodium, ultra-processed additives, refined oils, artificial ingredients.
+Limit red_flags to 6 most important. Return ONLY valid JSON."""
+
+        health_response = await openai_client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": json.dumps(health_prompt)},
+            ],
+            max_tokens=1500,
+            temperature=0.2,
+        )
+
+        health_text = (health_response.choices[0].message.content or "").strip()
+        if health_text.startswith("```"):
+            health_text = health_text.split("```")[1]
+            if health_text.startswith("json"):
+                health_text = health_text[4:]
+            health_text = health_text.strip()
+
+        health_data = json.loads(health_text)
+
+        # Build response matching FoodHealthCheckResponse structure
+        red_flags = []
+        for f in (health_data.get("red_flags") or [])[:6]:
+            red_flags.append({
+                "title": str(f.get("title") or "Issue"),
+                "severity": str(f.get("severity") or "medium"),
+                "reason": str(f.get("reason") or ""),
+                "what_it_is": f.get("what_it_is"),
+                "why_it_matters": f.get("why_it_matters"),
+                "evidence": f.get("evidence"),
+                "suggestion": f.get("suggestion"),
+            })
+
+        result = {
+            "barcode": barcode,
+            "name": food_data.get("name") or food_data.get("product_name") or "",
+            "brand": food_data.get("brand"),
+            "verdict": health_data.get("verdict") or "caution",
+            "summary": health_data.get("summary") or "",
+            "verdict_reason": health_data.get("verdict_reason") or "",
+            "red_flags": red_flags,
+            "positives": (health_data.get("positives") or [])[:6],
+        }
+
+        # Cache the result
+        pool = _require_pool()
+        expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO food_health_check_cache (barcode, response_json, expires_at)
+                VALUES ($1, $2::jsonb, $3)
+                ON CONFLICT (barcode) DO UPDATE
+                SET response_json = EXCLUDED.response_json,
+                    expires_at = EXCLUDED.expires_at,
+                    updated_at = now()
+                """,
+                barcode,
+                json.dumps(result),
+                expires_at,
+            )
+
+        return result
+    except Exception as e:
+        print(f"Health check generation failed for {barcode}: {e}")
+        return None
+
+
 @api_router.get("/foods/barcode/{barcode}")
-async def get_food_by_barcode(barcode: str, uid: str = Depends(get_current_uid)):
+async def get_food_by_barcode(
+    barcode: str,
+    uid: str = Depends(get_current_uid),
+    include_health_check: bool = False,
+):
     """Lookup a packaged food by barcode.
 
     Flow:
-    - Check local foods cache (foods.barcode)
-    - If missing, fetch from OpenFoodFacts and upsert into foods
+    1. Check food_health_check_cache first (if include_health_check=true)
+    2. Check barcodes table for nutrition data
+    3. If not found, fetch from OpenFoodFacts
+    4. Generate health check if needed (async cache to barcodes table)
     """
-    code = (barcode or "").strip()
-    if not code:
+    variants = _barcode_variants(barcode)
+    if not variants:
         raise HTTPException(status_code=400, detail="Missing barcode")
 
+    code = variants[0]
     pool = _require_pool()
+
+    cached_health_check: Dict[str, Any] | None = None
+    food_data: Dict[str, Any] | None = None
+    from_cache = False
+
     async with pool.acquire() as conn:
+        # Step 1: Check health check cache first (if requested)
+        if include_health_check:
+            cache_row = await conn.fetchrow(
+                """
+                SELECT response_json, expires_at
+                FROM food_health_check_cache
+                WHERE barcode = ANY($1::text[])
+                  AND expires_at > now()
+                LIMIT 1
+                """,
+                variants,
+            )
+            if cache_row and cache_row["response_json"]:
+                raw = cache_row["response_json"]
+                try:
+                    if isinstance(raw, dict):
+                        cached_health_check = raw
+                    elif isinstance(raw, str):
+                        cached_health_check = json.loads(raw)
+                    else:
+                        # asyncpg jsonb may come back as a mapping-like proxy; avoid dict() on sequences.
+                        cached_health_check = json.loads(json.dumps(raw))
+                except Exception:
+                    cached_health_check = None
+                from_cache = bool(cached_health_check)
+
+        # Step 2: Check barcodes table
         row = await conn.fetchrow(
             """
-            SELECT id, name, brand, barcode, category,
+            SELECT barcode, product_name, brand,
                    calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g,
-                   source, external_id, verified
-            FROM foods
-            WHERE barcode = $1
+                   fiber_g_per_100g, sugar_g_per_100g, sodium_mg_per_100g,
+                   image_url, ingredients, source, verified
+            FROM barcodes
+            WHERE barcode = ANY($1::text[])
             LIMIT 1
             """,
-            code,
+            variants,
         )
-        if row:
-            out = dict(row)
-            out["id"] = str(out["id"])
-            return {"food": out, "cached": True}
 
-        payload = await _fetch_openfoodfacts(code)
-        product = (payload or {}).get("product")
-        if not product:
+        if row:
+            food_data = {
+                "id": row["barcode"],
+                "name": row["product_name"],
+                "brand": row["brand"],
+                "barcode": row["barcode"],
+                "category": "packaged",
+                "calories_per_100g": float(row["calories_per_100g"] or 0),
+                "protein_per_100g": float(row["protein_per_100g"] or 0),
+                "carbs_per_100g": float(row["carbs_per_100g"] or 0),
+                "fat_per_100g": float(row["fat_per_100g"] or 0),
+                "fiber_g_per_100g": float(row["fiber_g_per_100g"] or 0) if row["fiber_g_per_100g"] else None,
+                "sugar_g_per_100g": float(row["sugar_g_per_100g"] or 0) if row["sugar_g_per_100g"] else None,
+                "sodium_mg_per_100g": float(row["sodium_mg_per_100g"] or 0) if row["sodium_mg_per_100g"] else None,
+                "image_url": row["image_url"],
+                "ingredients": row["ingredients"],
+                "source": row["source"],
+                "verified": row["verified"],
+            }
+
+    # Step 3: If not in barcodes table, fetch from OpenFoodFacts
+    if not food_data:
+        payload: Dict[str, Any] | None = None
+        product: Dict[str, Any] | None = None
+        used_code: str | None = None
+
+        for candidate in variants:
+            payload = await _fetch_openfoodfacts(candidate)
+            product = (payload or {}).get("product")
+            if product:
+                used_code = candidate
+                break
+
+        if not product or not used_code:
             raise HTTPException(status_code=404, detail="Barcode not found")
 
         nutriments = product.get("nutriments") or {}
-        name = (product.get("product_name") or product.get("product_name_en") or "").strip() or f"Barcode {code}"
+        name = _openfoodfacts_best_name(product, used_code)
         brand = (product.get("brands") or "").strip() or None
         image_url = (product.get("image_url") or "").strip() or None
         ingredients = (product.get("ingredients_text") or product.get("ingredients_text_en") or "").strip() or None
@@ -2182,74 +2649,852 @@ async def get_food_by_barcode(barcode: str, uid: str = Depends(get_current_uid))
         protein_per_100g = float(_to_float(nutriments.get("proteins_100g")) or 0)
         carbs_per_100g = float(_to_float(nutriments.get("carbohydrates_100g")) or 0)
         fat_per_100g = float(_to_float(nutriments.get("fat_100g")) or 0)
+        fiber_g_per_100g = float(_to_float(nutriments.get("fiber_100g")) or 0) if nutriments.get("fiber_100g") else None
+        sugar_g_per_100g = float(_to_float(nutriments.get("sugars_100g")) or 0) if nutriments.get("sugars_100g") else None
+        sodium_mg_per_100g = float(_to_float(nutriments.get("sodium_100g")) or 0) * 1000 if nutriments.get("sodium_100g") else None
 
-        # Atomic upsert (requires unique index on foods.barcode; ensured via migration 016)
-        food_id = uuid.uuid4()
+        food_data = {
+            "id": used_code,
+            "name": name,
+            "brand": brand,
+            "barcode": used_code,
+            "category": "packaged",
+            "calories_per_100g": calories_per_100g,
+            "protein_per_100g": protein_per_100g,
+            "carbs_per_100g": carbs_per_100g,
+            "fat_per_100g": fat_per_100g,
+            "fiber_g_per_100g": fiber_g_per_100g,
+            "sugar_g_per_100g": sugar_g_per_100g,
+            "sodium_mg_per_100g": sodium_mg_per_100g,
+            "image_url": image_url,
+            "ingredients": ingredients,
+            "source": "openfoodfacts",
+            "verified": False,
+        }
+
+        # Save to barcodes table asynchronously (non-blocking)
+        asyncio.create_task(_save_barcode_async(pool, food_data))
+
+    # Check if data is incomplete
+    needs_contribution = _is_barcode_data_incomplete(food_data)
+
+    # Step 4: Generate health check if requested and not cached
+    health_check = cached_health_check
+    if include_health_check and not cached_health_check and not needs_contribution:
+        health_check = await _generate_health_check_for_barcode(food_data["barcode"], food_data)
+
+    result = {
+        "food": food_data,
+        "cached": from_cache,
+        "needs_contribution": needs_contribution,
+    }
+
+    if include_health_check:
+        result["health_check"] = health_check
+
+    return result
+
+
+@api_router.post("/foods/label-submissions", response_model=FoodLabelSubmissionResponse)
+async def submit_food_label(payload: FoodLabelSubmissionRequest, uid: str = Depends(get_current_uid)):
+    """Allow users to contribute nutrition/ingredients label photos when barcode lookup fails."""
+    _require_user_match(uid, payload.user_id)
+
+    barcode = _normalize_barcode(payload.barcode)
+    if not barcode:
+        raise HTTPException(status_code=400, detail="Missing barcode")
+
+    images = [str(x).strip() for x in (payload.images_base64 or []) if str(x).strip()]
+    if not images:
+        raise HTTPException(status_code=400, detail="Missing images")
+
+    pool = _require_pool()
+    submission_id = uuid.uuid4()
+    async with pool.acquire() as conn:
         await conn.execute(
             """
-            INSERT INTO foods (
-                id, name, category,
-                calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g,
-                is_vegetarian,
-                source, external_id, brand, barcode, image_url, ingredients,
-                verified, last_used_at, last_synced_at, sync_status
-            ) VALUES (
-                $1,$2,$3,
-                $4,$5,$6,$7,
-                $8,
-                $9,$10,$11,$12,$13,$14,
-                $15, now(), now(), 'cached'
-            )
-            ON CONFLICT (barcode) WHERE barcode IS NOT NULL
-            DO UPDATE SET
-                name = EXCLUDED.name,
-                brand = EXCLUDED.brand,
-                category = EXCLUDED.category,
-                calories_per_100g = EXCLUDED.calories_per_100g,
-                protein_per_100g = EXCLUDED.protein_per_100g,
-                carbs_per_100g = EXCLUDED.carbs_per_100g,
-                fat_per_100g = EXCLUDED.fat_per_100g,
-                image_url = EXCLUDED.image_url,
-                ingredients = EXCLUDED.ingredients,
-                source = EXCLUDED.source,
-                external_id = EXCLUDED.external_id,
-                last_synced_at = now(),
-                sync_status = 'cached'
+            INSERT INTO food_label_submissions (id, user_id, barcode, images_base64, notes, status)
+            VALUES ($1, $2::uuid, $3, $4::jsonb, $5, 'pending')
             """,
-            food_id,
+            submission_id,
+            payload.user_id,
+            barcode,
+            json.dumps(images),
+            (payload.notes or None),
+        )
+
+    return FoodLabelSubmissionResponse(submission_id=str(submission_id), status="pending")
+
+
+@api_router.post("/foods/process-label")
+async def process_label_image(payload: ProcessLabelRequest, uid: str = Depends(get_current_uid)):
+    """Process a nutrition label image with AI to extract data and perform health check.
+
+    Flow:
+    1. Send image to GPT-4 Vision to extract nutrition data
+    2. Save extracted food to database (for review)
+    3. Run health check analysis on extracted data
+    4. Return both food and health check results
+    """
+    _require_user_match(uid, payload.user_id)
+
+    if openai_client is None:
+        raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not set")
+
+    barcode = _normalize_barcode(payload.barcode)
+    if not barcode:
+        raise HTTPException(status_code=400, detail="Missing barcode")
+
+    image_b64 = (payload.image_base64 or "").strip()
+    if not image_b64:
+        raise HTTPException(status_code=400, detail="Missing image")
+
+    front_b64 = (payload.front_image_base64 or "").strip() or None
+
+    pool = _require_pool()
+
+    # Step 1: Extract nutrition data from image using GPT-4 Vision
+    extraction_prompt = """Analyze this nutrition label image and extract the following information.
+Return a JSON object with these fields:
+
+{
+  "name": "Product name if visible, otherwise describe the product",
+  "brand": "Brand name if visible, otherwise null",
+  "serving_size_g": 100,
+  "calories_per_100g": number,
+  "protein_per_100g": number (in grams),
+  "carbs_per_100g": number (in grams),
+  "fat_per_100g": number (in grams),
+  "fiber_g_per_100g": number or null,
+  "sugar_g_per_100g": number or null,
+  "sodium_mg_per_100g": number or null,
+  "ingredients": "Full ingredients list text if visible, otherwise null"
+}
+
+IMPORTANT:
+- If the label shows values per serving, convert to per 100g
+- If any value is not visible or unclear, use 0 for required fields or null for optional
+- Extract the full ingredients list exactly as written
+- Return ONLY valid JSON, no other text"""
+
+    try:
+        vision_response = await openai_client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": extraction_prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{image_b64}",
+                                "detail": "high",
+                            },
+                        },
+                    ],
+                }
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=1500,
+            temperature=0.1,
+        )
+
+        raw_text = (vision_response.choices[0].message.content or "").strip()
+        # Clean up markdown code blocks if present
+        if raw_text.startswith("```"):
+            raw_text = raw_text.split("```")[1]
+            if raw_text.startswith("json"):
+                raw_text = raw_text[4:]
+            raw_text = raw_text.strip()
+
+        try:
+            extracted = json.loads(raw_text)
+        except json.JSONDecodeError:
+            # Fallback: attempt to parse the first JSON object embedded in the response.
+            start = raw_text.find("{")
+            end = raw_text.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                try:
+                    extracted = json.loads(raw_text[start : end + 1])
+                except json.JSONDecodeError:
+                    repair_prompt = (
+                        "You are a strict JSON repair tool. "
+                        "Convert the following text into a single valid JSON object. "
+                        "Return ONLY JSON, no markdown or extra text."
+                    )
+
+                    repair_response = await openai_client.chat.completions.create(
+                        model=OPENAI_MODEL,
+                        messages=[
+                            {"role": "user", "content": repair_prompt + "\n\n" + (raw_text[start : end + 1] or "")}
+                        ],
+                        response_format={"type": "json_object"},
+                        max_tokens=1500,
+                        temperature=0.0,
+                    )
+                    repair_text = (repair_response.choices[0].message.content or "").strip()
+                    extracted = json.loads(repair_text)
+            else:
+                repair_prompt = (
+                    "You are a strict JSON repair tool. "
+                    "Convert the following text into a single valid JSON object. "
+                    "Return ONLY JSON, no markdown or extra text."
+                )
+
+                repair_response = await openai_client.chat.completions.create(
+                    model=OPENAI_MODEL,
+                    messages=[{"role": "user", "content": repair_prompt + "\n\n" + (raw_text or "")}],
+                    response_format={"type": "json_object"},
+                    max_tokens=1500,
+                    temperature=0.0,
+                )
+                repair_text = (repair_response.choices[0].message.content or "").strip()
+                extracted = json.loads(repair_text)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=422, detail=f"Failed to parse AI response: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI extraction failed: {str(e)}")
+
+    # If barcode already exists in our barcodes table, prefer its name/brand.
+    # We'll still use the label photo to extract missing ingredients/nutrition.
+    existing_barcode: Dict[str, Any] | None = None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT barcode, product_name, brand,
+                   calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g,
+                   fiber_g_per_100g, sugar_g_per_100g, sodium_mg_per_100g,
+                   ingredients
+            FROM barcodes
+            WHERE barcode = $1
+            LIMIT 1
+            """,
+            barcode,
+        )
+        if row:
+            existing_barcode = dict(row)
+
+    # Validate extracted data
+    extracted_name = str(extracted.get("name") or "").strip() or None
+    extracted_brand = extracted.get("brand")
+    if extracted_brand is not None:
+        extracted_brand = str(extracted_brand).strip() or None
+
+    extracted_calories = float(extracted.get("calories_per_100g") or 0)
+    extracted_protein = float(extracted.get("protein_per_100g") or 0)
+    extracted_carbs = float(extracted.get("carbs_per_100g") or 0)
+    extracted_fat = float(extracted.get("fat_per_100g") or 0)
+    extracted_fiber = float(extracted.get("fiber_g_per_100g") or 0) if extracted.get("fiber_g_per_100g") else None
+    extracted_sugar = float(extracted.get("sugar_g_per_100g") or 0) if extracted.get("sugar_g_per_100g") else None
+    extracted_sodium = float(extracted.get("sodium_mg_per_100g") or 0) if extracted.get("sodium_mg_per_100g") else None
+    extracted_ingredients = extracted.get("ingredients")
+    if extracted_ingredients is not None:
+        extracted_ingredients = str(extracted_ingredients).strip() or None
+
+    name = (
+        (existing_barcode or {}).get("product_name")
+        or extracted_name
+        or f"Barcode {barcode}"
+    )
+    brand = (existing_barcode or {}).get("brand") or extracted_brand
+
+    def _prefer_extracted_numeric(extracted_val: float, existing_val: Any) -> float:
+        if float(extracted_val or 0) > 0:
+            return float(extracted_val)
+        return float(existing_val or 0)
+
+    calories_per_100g = _prefer_extracted_numeric(extracted_calories, (existing_barcode or {}).get("calories_per_100g"))
+    protein_per_100g = _prefer_extracted_numeric(extracted_protein, (existing_barcode or {}).get("protein_per_100g"))
+    carbs_per_100g = _prefer_extracted_numeric(extracted_carbs, (existing_barcode or {}).get("carbs_per_100g"))
+    fat_per_100g = _prefer_extracted_numeric(extracted_fat, (existing_barcode or {}).get("fat_per_100g"))
+
+    fiber_g_per_100g = extracted_fiber if extracted_fiber is not None else (existing_barcode or {}).get("fiber_g_per_100g")
+    sugar_g_per_100g = extracted_sugar if extracted_sugar is not None else (existing_barcode or {}).get("sugar_g_per_100g")
+    sodium_mg_per_100g = extracted_sodium if extracted_sodium is not None else (existing_barcode or {}).get("sodium_mg_per_100g")
+
+    ingredients = extracted_ingredients or (existing_barcode or {}).get("ingredients")
+
+    review_id = uuid.uuid4()
+
+    label_url: str | None = None
+    front_url: str | None = None
+    try:
+        now_key = datetime.now(timezone.utc).strftime("%Y%m%d")
+        label_path = f"label_reviews/{barcode}/{now_key}/{review_id}_label.jpg"
+        label_bytes = base64.b64decode(_normalize_base64_image(image_b64))
+        await _upload_supabase_storage_object(SUPABASE_STORAGE_BUCKET, label_path, "image/jpeg", label_bytes)
+        label_url = await _supabase_storage_object_url(SUPABASE_STORAGE_BUCKET, label_path)
+
+        if front_b64:
+            front_path = f"label_reviews/{barcode}/{now_key}/{review_id}_front.jpg"
+            front_bytes = base64.b64decode(_normalize_base64_image(front_b64))
+            await _upload_supabase_storage_object(SUPABASE_STORAGE_BUCKET, front_path, "image/jpeg", front_bytes)
+            front_url = await _supabase_storage_object_url(SUPABASE_STORAGE_BUCKET, front_path)
+    except Exception as e:
+        logger.error(f"[LABEL_REVIEW_STORAGE] Upload failed: {type(e).__name__}: {str(e)}")
+
+    review_notes_payload = {
+        "label_image_url": label_url,
+        "front_image_url": front_url,
+    }
+    review_notes = json.dumps(review_notes_payload)
+
+    # Step 2: Generate health check first (before saving, so we can store it with the review)
+    health_check_result = None
+    try:
+        health_prompt = {
+            "barcode": barcode,
+            "name": name,
+            "brand": brand or "(unknown)",
+            "nutrition_per_100g": {
+                "calories": calories_per_100g,
+                "protein_g": protein_per_100g,
+                "carbs_g": carbs_per_100g,
+                "fat_g": fat_per_100g,
+                "fiber_g": fiber_g_per_100g or 0,
+                "sugar_g": sugar_g_per_100g or 0,
+                "sodium_mg": sodium_mg_per_100g or 0,
+            },
+            "ingredients": ingredients or "(not available)",
+        }
+
+        system_prompt = """You are NutriLens, a consumer-friendly nutrition label explainer.
+Given a product's nutrition data and ingredients, provide a health analysis.
+
+Return a JSON object:
+{
+  "verdict": "good" | "caution" | "avoid",
+  "verdict_reason": "Brief 1-sentence explanation of the verdict",
+  "summary": "2-3 sentence overview of the product's health profile",
+  "red_flags": [
+    {
+      "title": "Issue name",
+      "severity": "low" | "medium" | "high",
+      "reason": "Brief explanation",
+      "what_it_is": "Plain language explanation of the ingredient/issue",
+      "why_it_matters": "Health impact",
+      "suggestion": "Healthier alternative"
+    }
+  ],
+  "positives": ["Good aspect 1", "Good aspect 2"]
+}
+
+Focus on: added sugars, high sodium, ultra-processed additives, refined oils, artificial ingredients.
+Limit red_flags to 6 most important. Return ONLY valid JSON."""
+
+        health_response = await openai_client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": json.dumps(health_prompt)},
+            ],
+            max_tokens=1500,
+            temperature=0.2,
+        )
+
+        health_text = (health_response.choices[0].message.content or "").strip()
+        if health_text.startswith("```"):
+            health_text = health_text.split("```")[1]
+            if health_text.startswith("json"):
+                health_text = health_text[4:]
+            health_text = health_text.strip()
+
+        health_data = json.loads(health_text)
+
+        # Build response
+        red_flags = []
+        for f in (health_data.get("red_flags") or [])[:6]:
+            red_flags.append(FoodHealthFlag(
+                title=str(f.get("title") or "Issue"),
+                severity=str(f.get("severity") or "medium"),
+                reason=str(f.get("reason") or ""),
+                what_it_is=f.get("what_it_is"),
+                why_it_matters=f.get("why_it_matters"),
+                evidence=f.get("evidence"),
+                suggestion=f.get("suggestion"),
+            ))
+
+        health_check_result = FoodHealthCheckResponse(
+            barcode=barcode,
+            name=name,
+            brand=brand,
+            verdict=health_data.get("verdict") or "caution",
+            summary=health_data.get("summary") or "",
+            verdict_reason=health_data.get("verdict_reason") or "",
+            red_flags=red_flags,
+            positives=(health_data.get("positives") or [])[:6],
+        )
+    except Exception as e:
+        # Health check is optional, don't fail the whole request
+        print(f"Health check generation failed: {e}")
+        health_data = None
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO food_label_reviews (
+                id, barcode, submitted_by,
+                product_name, brand,
+                calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g,
+                fiber_g_per_100g, sugar_g_per_100g, sodium_mg_per_100g,
+                ingredients, health_check_json, review_notes, status
+            ) VALUES (
+                $1, $2, $3::uuid,
+                $4, $5,
+                $6, $7, $8, $9,
+                $10, $11, $12,
+                $13, $14::jsonb, $15, 'pending'
+            )
+            """,
+            review_id,
+            barcode,
+            payload.user_id,
             name,
-            "packaged",
+            brand,
             calories_per_100g,
             protein_per_100g,
             carbs_per_100g,
             fat_per_100g,
-            True,
-            "openfoodfacts",
-            code,
-            brand,
-            code,
-            image_url,
+            fiber_g_per_100g,
+            sugar_g_per_100g,
+            sodium_mg_per_100g,
             ingredients,
-            False,
+            json.dumps(health_check_result.model_dump()) if health_check_result else None,
+            review_notes,
         )
 
-        saved = await conn.fetchrow(
+    # Build food data object to return (not saved to foods table yet - pending review)
+    food_data = {
+        "id": str(review_id),
+        "name": name,
+        "brand": brand,
+        "barcode": barcode,
+        "category": "packaged",
+        "calories_per_100g": calories_per_100g,
+        "protein_per_100g": protein_per_100g,
+        "carbs_per_100g": carbs_per_100g,
+        "fat_per_100g": fat_per_100g,
+        "fiber_g_per_100g": fiber_g_per_100g,
+        "sugar_g_per_100g": sugar_g_per_100g,
+        "sodium_mg_per_100g": sodium_mg_per_100g,
+        "ingredients": ingredients,
+        "image_url": None,
+        "source": "user_label",
+        "verified": False,
+        "pending_review": True,
+    }
+
+    return {
+        "food": food_data,
+        "health_check": health_check_result.model_dump() if health_check_result else None,
+    }
+
+
+class ApproveLabelReviewRequest(BaseModel):
+    review_id: str
+    action: str  # "approve" or "reject"
+    notes: str | None = None
+
+
+@api_router.post("/admin/label-reviews/action")
+async def approve_label_review(
+    payload: ApproveLabelReviewRequest,
+    admin_key: str = Header(None, alias="X-Admin-Key"),
+):
+    """Admin endpoint to approve or reject a label review.
+
+    When approved:
+    - Data is copied to the foods table
+    - Health check is cached in food_health_check_cache
+    """
+    # Verify admin key
+    if not ADMIN_SYNC_KEY or admin_key != ADMIN_SYNC_KEY:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    if payload.action not in ("approve", "reject"):
+        raise HTTPException(status_code=400, detail="Action must be 'approve' or 'reject'")
+
+    pool = _require_pool()
+
+    async with pool.acquire() as conn:
+        # Fetch the review
+        review = await conn.fetchrow(
             """
-            SELECT id, name, brand, barcode, category,
+            SELECT id, barcode, product_name, brand,
                    calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g,
-                   source, external_id, verified
-            FROM foods
-            WHERE barcode = $1
-            LIMIT 1
+                   fiber_g_per_100g, sugar_g_per_100g, sodium_mg_per_100g,
+                   ingredients, health_check_json, status
+            FROM food_label_reviews
+            WHERE id = $1
             """,
-            code,
+            uuid.UUID(payload.review_id),
         )
-        if not saved:
-            raise HTTPException(status_code=500, detail="Failed to cache barcode")
 
-        out = dict(saved)
-        out["id"] = str(out["id"])
-        return {"food": out, "cached": False}
+        if not review:
+            raise HTTPException(status_code=404, detail="Review not found")
+
+        if review["status"] != "pending":
+            raise HTTPException(status_code=400, detail=f"Review already {review['status']}")
+
+        if payload.action == "reject":
+            # Just mark as rejected
+            await conn.execute(
+                """
+                UPDATE food_label_reviews
+                SET status = 'rejected', review_notes = $1, reviewed_at = now()
+                WHERE id = $2
+                """,
+                payload.notes,
+                uuid.UUID(payload.review_id),
+            )
+            return {"status": "rejected", "review_id": payload.review_id}
+
+        # Approve: Save to barcodes table
+        barcode = review["barcode"]
+
+        # Upsert into barcodes table
+        await conn.execute(
+            """
+            INSERT INTO barcodes (
+                barcode, product_name, brand,
+                calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g,
+                fiber_g_per_100g, sugar_g_per_100g, sodium_mg_per_100g,
+                ingredients, source, verified
+            ) VALUES (
+                $1, $2, $3,
+                $4, $5, $6, $7,
+                $8, $9, $10,
+                $11, 'user_contribution', true
+            )
+            ON CONFLICT (barcode) DO UPDATE SET
+                product_name = EXCLUDED.product_name,
+                brand = EXCLUDED.brand,
+                calories_per_100g = EXCLUDED.calories_per_100g,
+                protein_per_100g = EXCLUDED.protein_per_100g,
+                carbs_per_100g = EXCLUDED.carbs_per_100g,
+                fat_per_100g = EXCLUDED.fat_per_100g,
+                fiber_g_per_100g = EXCLUDED.fiber_g_per_100g,
+                sugar_g_per_100g = EXCLUDED.sugar_g_per_100g,
+                sodium_mg_per_100g = EXCLUDED.sodium_mg_per_100g,
+                ingredients = EXCLUDED.ingredients,
+                source = 'user_contribution',
+                verified = true
+            """,
+            barcode,
+            review["product_name"],
+            review["brand"],
+            review["calories_per_100g"],
+            review["protein_per_100g"],
+            review["carbs_per_100g"],
+            review["fat_per_100g"],
+            review["fiber_g_per_100g"],
+            review["sugar_g_per_100g"],
+            review["sodium_mg_per_100g"],
+            review["ingredients"],
+        )
+
+        # Cache health check if available
+        if review["health_check_json"]:
+            expires_at = datetime.now(timezone.utc) + timedelta(days=365)  # 1 year for user contributions
+            await conn.execute(
+                """
+                INSERT INTO food_health_check_cache (barcode, response_json, expires_at)
+                VALUES ($1, $2::jsonb, $3)
+                ON CONFLICT (barcode) DO UPDATE
+                SET response_json = EXCLUDED.response_json,
+                    expires_at = EXCLUDED.expires_at,
+                    updated_at = now()
+                """,
+                barcode,
+                json.dumps(review["health_check_json"]) if isinstance(review["health_check_json"], dict) else review["health_check_json"],
+                expires_at,
+            )
+
+        # Mark review as approved
+        await conn.execute(
+            """
+            UPDATE food_label_reviews
+            SET status = 'approved', review_notes = $1, reviewed_at = now()
+            WHERE id = $2
+            """,
+            payload.notes,
+            uuid.UUID(payload.review_id),
+        )
+
+    return {
+        "status": "approved",
+        "review_id": payload.review_id,
+        "barcode": barcode,
+    }
+
+
+@api_router.get("/admin/label-reviews")
+async def list_label_reviews(
+    status: str = "pending",
+    limit: int = 50,
+    admin_key: str = Header(None, alias="X-Admin-Key"),
+):
+    """Admin endpoint to list label reviews for approval."""
+    if not ADMIN_SYNC_KEY or admin_key != ADMIN_SYNC_KEY:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    pool = _require_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, barcode, product_name, brand,
+                   calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g,
+                   ingredients, health_check_json, status, created_at
+            FROM food_label_reviews
+            WHERE status = $1
+            ORDER BY created_at DESC
+            LIMIT $2
+            """,
+            status,
+            limit,
+        )
+
+    return {
+        "reviews": [
+            {
+                "id": str(r["id"]),
+                "barcode": r["barcode"],
+                "product_name": r["product_name"],
+                "brand": r["brand"],
+                "calories_per_100g": r["calories_per_100g"],
+                "protein_per_100g": r["protein_per_100g"],
+                "carbs_per_100g": r["carbs_per_100g"],
+                "fat_per_100g": r["fat_per_100g"],
+                "ingredients": r["ingredients"],
+                "health_check": r["health_check_json"],
+                "status": r["status"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+            for r in rows
+        ],
+        "count": len(rows),
+    }
+
+
+@api_router.post("/foods/health-check", response_model=FoodHealthCheckResponse)
+async def food_health_check(payload: FoodHealthCheckRequest, uid: str = Depends(get_current_uid)):
+    """AI health check for a packaged food by barcode.
+
+    Returns a simple verdict and the most important red flags people typically who don't read the labels.
+    This is not medical advice.
+    """
+    try:
+        _require_user_match(uid, payload.user_id)
+
+        if openai_client is None:
+            raise RuntimeError("OPENAI_API_KEY is not set")
+
+        variants = _barcode_variants(payload.barcode)
+        if not variants:
+            raise HTTPException(status_code=400, detail="Missing barcode")
+
+        code = variants[0]
+
+        pool = _require_pool()
+
+        # 1) Fetch product + attempt cache hit (do not hold DB conn during OpenAI call)
+        product: Dict[str, Any] | None = None
+        cache_barcode: str = ""
+        prompt: Dict[str, Any] | None = None
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT name, brand, barcode,
+                       calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g,
+                       fiber_g_per_100g, sugar_g_per_100g, sodium_mg_per_100g,
+                       ingredients, image_url
+                FROM foods
+                WHERE barcode = ANY($1::text[])
+                LIMIT 1
+                """,
+                variants,
+            )
+
+            if not row:
+                raise HTTPException(status_code=404, detail="Product not found. Scan the barcode first.")
+
+            product = dict(row)
+            cache_barcode = (product.get("barcode") or code or "").strip()
+
+            if cache_barcode:
+                cached = await conn.fetchrow(
+                    """
+                    SELECT response_json
+                    FROM food_health_check_cache
+                    WHERE barcode = $1
+                      AND expires_at > now()
+                      AND (expires_at::date > now()::date)
+                    LIMIT 1
+                    """,
+                    cache_barcode,
+                )
+                if cached and cached.get("response_json"):
+                    try:
+                        return FoodHealthCheckResponse(**dict(cached["response_json"]))
+                    except Exception:
+                        # If cached payload shape drifted, ignore cache and recompute.
+                        pass
+
+            ingredients = (product.get("ingredients") or "").strip()
+            if not ingredients:
+                ingredients = "(ingredients not available)"
+
+            prompt = {
+                "barcode": product.get("barcode") or code,
+                "name": product.get("name") or f"Barcode {code}",
+                "brand": product.get("brand"),
+                "per_100g": {
+                    "calories_kcal": float(product.get("calories_per_100g") or 0),
+                    "protein_g": float(product.get("protein_per_100g") or 0),
+                    "carbs_g": float(product.get("carbs_per_100g") or 0),
+                    "fat_g": float(product.get("fat_per_100g") or 0),
+                    "fiber_g": float(product.get("fiber_g_per_100g") or 0),
+                    "sugar_g": float(product.get("sugar_g_per_100g") or 0),
+                    "sodium_mg": float(product.get("sodium_mg_per_100g") or 0),
+                },
+                "ingredients": ingredients,
+            }
+
+            per_100g = prompt.get("per_100g") or {}
+            has_any_nutrition = any(float(per_100g.get(k) or 0) > 0 for k in per_100g.keys())
+            has_real_ingredients = ingredients != "(ingredients not available)"
+            if (not has_any_nutrition) and (not has_real_ingredients):
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "needs_contribution",
+                        "message": "Product found but label/nutrition data is missing. Ask user to contribute photos.",
+                        "barcode": prompt.get("barcode") or code,
+                    },
+                )
+
+        response = await openai_client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are NutriLens, a consumer-friendly nutrition label explainer. "
+                        "Given a packaged food's ingredients and per-100g nutrients, decide if it's GOOD, CAUTION, or AVOID. "
+                        "Explain clearly and specifically using evidence from the label. "
+                        "Focus on common marketing traps: added sugars, high sodium, ultra-processed additives, refined oils, "
+                        "misleading 'healthy' positioning, and low protein/fiber where relevant. "
+                        "Do NOT give medical advice. Avoid scary language; be factual. "
+                        "Return ONLY valid JSON with this shape: "
+                        "{\n"
+                        "  \"verdict\": \"good|caution|avoid\",\n"
+                        "  \"summary\": \"1-2 sentence consumer summary\",\n"
+                        "  \"verdict_reason\": \"Short explanation of why this verdict\",\n"
+                        "  \"red_flags\": [\n"
+                        "    {\n"
+                        "      \"title\": \"string\",\n"
+                        "      \"severity\": \"low|medium|high\",\n"
+                        "      \"reason\": \"one-line reason\",\n"
+                        "      \"what_it_is\": \"what this ingredient/nutrient means in plain language\",\n"
+                        "      \"why_it_matters\": \"why it matters for health (general, non-medical)\",\n"
+                        "      \"evidence\": \"e.g., ingredient names found or sugar/sodium per 100g\",\n"
+                        "      \"suggestion\": \"what to choose instead / what to look for\"\n"
+                        "    }\n"
+                        "  ],\n"
+                        "  \"positives\": [\"1-6 short positives\"]\n"
+                        "}"
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(prompt),
+                },
+            ],
+            temperature=0.2,
+            response_format={"type": "json_object"},
+        )
+
+        content = response.choices[0].message.content if response.choices else ""
+        parsed: Dict[str, Any] = json.loads(content or "{}")
+
+        verdict = (parsed.get("verdict") or "caution").strip().lower()
+        if verdict not in {"good", "caution", "avoid"}:
+            verdict = "caution"
+
+        verdict_reason = str(parsed.get("verdict_reason") or "").strip()
+
+        flags_in = parsed.get("red_flags") or []
+        red_flags: List[FoodHealthFlag] = []
+        if isinstance(flags_in, list):
+            for f in flags_in[:8]:
+                if not isinstance(f, dict):
+                    continue
+                title = str(f.get("title") or "").strip()
+                reason = str(f.get("reason") or "").strip()
+                severity = str(f.get("severity") or "medium").strip().lower()
+                if severity not in {"low", "medium", "high"}:
+                    severity = "medium"
+                what_it_is = str(f.get("what_it_is") or "").strip() or None
+                why_it_matters = str(f.get("why_it_matters") or "").strip() or None
+                evidence = str(f.get("evidence") or "").strip() or None
+                suggestion = str(f.get("suggestion") or "").strip() or None
+
+                if title and reason:
+                    red_flags.append(
+                        FoodHealthFlag(
+                            title=title,
+                            severity=severity,
+                            reason=reason,
+                            what_it_is=what_it_is,
+                            why_it_matters=why_it_matters,
+                            evidence=evidence,
+                            suggestion=suggestion,
+                        )
+                    )
+
+        positives_in = parsed.get("positives") or []
+        positives: List[str] = []
+        if isinstance(positives_in, list):
+            positives = [str(x).strip() for x in positives_in if str(x).strip()][:6]
+
+        if not product or not prompt:
+            raise HTTPException(status_code=500, detail="Failed to prepare analysis input")
+
+        result = FoodHealthCheckResponse(
+            barcode=product.get("barcode") or code,
+            name=product.get("name") or f"Barcode {code}",
+            brand=product.get("brand"),
+            verdict=verdict,
+            summary=str(parsed.get("summary") or "").strip() or "",
+            verdict_reason=verdict_reason,
+            red_flags=red_flags,
+            positives=positives,
+        )
+
+        # 3) Cache result for 30 days
+        if cache_barcode:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO food_health_check_cache (barcode, response_json, created_at, updated_at, expires_at)
+                    VALUES ($1, $2::jsonb, now(), now(), now() + interval '30 days')
+                    ON CONFLICT (barcode)
+                    DO UPDATE SET
+                        response_json = EXCLUDED.response_json,
+                        updated_at = now(),
+                        expires_at = EXCLUDED.expires_at
+                    """,
+                    cache_barcode,
+                    json.dumps(result.model_dump()),
+                )
+
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[FOOD_HEALTH_CHECK] Error: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ===== Meal Logging =====
 

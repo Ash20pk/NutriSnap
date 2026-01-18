@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
-import { useFont } from '@shopify/react-native-skia';
+import { useFont, Text as SkText } from '@shopify/react-native-skia';
 import { Bar, CartesianChart } from 'victory-native';
 import { Colors, Spacing, Radius } from '../constants/Colors';
 
@@ -21,6 +21,7 @@ type Props = {
   spacing?: number;
   labelWidth?: number;
   showValuesAsTopLabel?: boolean;
+  tickCount?: number;
 };
 
 export default function StandardBarChart({
@@ -31,6 +32,8 @@ export default function StandardBarChart({
   barWidth = 22,
   spacing = 24,
   labelWidth = 40,
+  showValuesAsTopLabel,
+  tickCount,
 }: Props) {
   const font = useFont(require('../assets/fonts/SpaceMono-Regular.ttf'), 10);
   const safeData = data.length > 0 ? data : [{ label: '', value: 0 }];
@@ -39,6 +42,7 @@ export default function StandardBarChart({
   // Follow victory-native-xl reference pattern: domainPadding controls gaps.
   const domainPadding = Math.max(18, Math.round(spacing * 1.5));
   const innerPadding = 0.33;
+  const effectiveTickCount = tickCount ?? (safeData.length <= 12 ? safeData.length : 5);
 
   const chartData = safeData.map((d) => ({
     label: d.label,
@@ -54,11 +58,11 @@ export default function StandardBarChart({
           xKey="label"
           yKeys={['value']}
           padding={5}
-          domainPadding={{ left: domainPadding, right: domainPadding, top: 18 }}
+          domainPadding={{ left: domainPadding, right: domainPadding, top: 24 }}
           domain={{ y: [0, maxValue] }}
           axisOptions={{
             font,
-            tickCount: 5,
+            tickCount: effectiveTickCount,
             lineColor: Colors.border,
             labelColor: Colors.textSecondary,
             formatXLabel: (label) => String(label),
@@ -68,18 +72,35 @@ export default function StandardBarChart({
         >
           {({ points, chartBounds }) => {
             return points.value.map((p, i) => {
+              const valStr = String(Math.round(chartData[i]?.value || 0));
+              const textWidth = font?.getTextWidth(valStr) ?? 0;
+              const pX = p?.x ?? 0;
+              const pY = p?.y ?? 0;
+              const textX = pX - textWidth / 2;
+              const textY = pY - 6;
+
               return (
-                <Bar
-                  key={i}
-                  points={[p]}
-                  chartBounds={chartBounds}
-                  color={chartData[i]?.color ?? Colors.primary}
-                  barWidth={barWidth}
-                  barCount={points.value.length}
-                  innerPadding={innerPadding}
-                  roundedCorners={{ topLeft: Radius.sm, topRight: Radius.sm }}
-                  animate={{ type: 'spring' }}
-                />
+                <React.Fragment key={i}>
+                  <Bar
+                    points={[p]}
+                    chartBounds={chartBounds}
+                    color={chartData[i]?.color ?? Colors.primary}
+                    barWidth={barWidth}
+                    barCount={points.value.length}
+                    innerPadding={innerPadding}
+                    roundedCorners={{ topLeft: Radius.sm, topRight: Radius.sm }}
+                    animate={{ type: 'spring' }}
+                  />
+                  {showValuesAsTopLabel && font && (
+                    <SkText
+                      font={font}
+                      x={textX}
+                      y={textY}
+                      text={valStr}
+                      color={Colors.textSecondary}
+                    />
+                  )}
+                </React.Fragment>
               );
             });
           }}

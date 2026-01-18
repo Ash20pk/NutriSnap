@@ -24,7 +24,6 @@ import { Audio } from 'expo-av';
 
 import DuoButton from '../../components/DuoButton';
 import AnimatedCard from '../../components/AnimatedCard';
-import XpPopUp from '../../components/XpPopUp';
 import LoadingState from '../../components/LoadingState';
 
 export default function LogScreen() {
@@ -49,8 +48,6 @@ export default function LogScreen() {
   const [configUnit, setConfigUnit] = useState<'g' | 'oz'>('g');
   const [mealNotes, setMealNotes] = useState('');
   const [manualParseLoading, setManualParseLoading] = useState(false);
-  const [showXp, setShowXp] = useState(false);
-  const [earnedXp, setEarnedXp] = useState(0);
 
   useEffect(() => {
     const openMode = typeof params?.openMode === 'string' ? params.openMode : '';
@@ -327,10 +324,6 @@ export default function LogScreen() {
         logging_method: logMethod || 'manual',
         notes: usedVoice ? undefined : (mealNotes || '').trim() || undefined,
       });
-
-      const xp = (selectedFoods.length * 10) + 10;
-      setEarnedXp(xp);
-      setShowXp(true);
 
       setSelectedFoods([]);
       setShowModal(false);
@@ -766,9 +759,6 @@ export default function LogScreen() {
         </Modal>
 
         <View style={{ height: 100 }} />
-        {showXp && (
-          <XpPopUp xp={earnedXp} onComplete={() => setShowXp(false)} />
-        )}
       </ScrollView>
     </View>
   );
