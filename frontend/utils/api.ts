@@ -10,7 +10,8 @@ export interface UserProfile {
   id: string;
   name: string;
   email?: string;
-  age: number;
+  age: number;  // Calculated from date_of_birth
+  date_of_birth?: string;  // ISO format YYYY-MM-DD
   gender: string;
   height: number;
   weight: number;
@@ -28,17 +29,31 @@ export interface UserProfile {
   following_count?: number;
   created_at?: string;
   onboarding_completed: boolean;
+  last_weight_check?: string;
+  weight_check_due?: boolean;
 }
 
 export interface OnboardingData {
   name: string;
-  age: number;
+  date_of_birth: string;  // ISO format YYYY-MM-DD
   gender: string;
-  height?: number;
-  weight?: number;
+  height: number;
+  weight: number;
   goal: string;
   activity_level: string;
-  dietary_preference?: string;
+  dietary_preference: string;
+}
+
+export interface WeightCheckData {
+  weight: number;
+  notes?: string;
+}
+
+export interface WeightHistoryEntry {
+  id: string;
+  weight: number;
+  recorded_at: string;
+  notes?: string;
 }
 
 // Food types
@@ -157,6 +172,20 @@ export interface VoiceToMealResult {
   transcript: string;
   foods: FoodWithServing[];
   meal_type?: string;
+  needs_clarification?: boolean;
+  follow_up_question?: string;
+  options?: Array<{
+    food_id: string;
+    name: string;
+    category?: string | null;
+    calories_per_100g?: number;
+    protein_per_100g?: number;
+    carbs_per_100g?: number;
+    fat_per_100g?: number;
+    score?: number;
+  }>;
+  requested_food_name?: string;
+  requested_quantity_grams?: number;
 }
 
 // Recipe types
@@ -224,6 +253,20 @@ export interface ApiQuestStats {
   quests_completed?: number;
 }
 
+export interface ApiStreakCalendarDay {
+  date: string;
+  was_active: boolean;
+  logged_food: boolean;
+  last_active_at: string | null;
+  last_logged_food_at: string | null;
+}
+
+export interface ApiStreakCalendar {
+  start_date: string;
+  end_date: string;
+  days: ApiStreakCalendarDay[];
+}
+
 export interface ApiLeaderboardEntry {
   rank: number;
   user_id: string;
@@ -276,6 +319,8 @@ export interface AnalyticsData {
   bio_alerts: BioAlert[] | unknown[];
   red_flags: string[] | unknown[];
   cached: boolean;
+  inactive?: boolean;
+  refreshing?: boolean;
   stale?: boolean;
   last_refreshed_at?: string;
   expires_at?: string;
@@ -434,6 +479,14 @@ export const userApi = {
     const response = await api.put(`/user/${userId}/goals`, { goal, activity_level: activityLevel });
     return response.data;
   },
+  recordWeightCheck: async (data: WeightCheckData): Promise<UserProfile> => {
+    const response = await api.post('/user/me/weight-check', data);
+    return response.data;
+  },
+  getWeightHistory: async (limit: number = 12): Promise<WeightHistoryEntry[]> => {
+    const response = await api.get('/user/me/weight-history', { params: { limit } });
+    return response.data;
+  },
 };
 
 // Food API
@@ -477,15 +530,22 @@ export const foodApi = {
   processLabelImage: async (
     barcode: string,
     userId: string,
-    imageBase64: string,
+    imageBase64: string | string[],
     frontImageBase64?: string
   ): Promise<{ food: Food; health_check: FoodHealthCheckResult }> => {
-    const response = await api.post('/foods/process-label', {
+    const payload: any = {
       user_id: userId,
       barcode,
-      image_base64: imageBase64,
       front_image_base64: frontImageBase64 ?? null,
-    }, {
+    };
+
+    if (Array.isArray(imageBase64)) {
+      payload.images_base64 = imageBase64;
+    } else {
+      payload.image_base64 = imageBase64;
+    }
+
+    const response = await api.post('/foods/process-label', payload, {
       timeout: 60000, // 60s timeout for AI processing
     });
     return response.data;
@@ -597,22 +657,52 @@ export const mealApi = {
 
 // Analytics API
 export const analyticsApi = {
-  getAnalytics: async (userId: string, timeRange: 'week' | 'month' | 'year' = 'week'): Promise<AnalyticsData> => {
+  getAnalytics: async (userId: string, timeRange: 'daily' | 'week' | 'month' | 'year' = 'week'): Promise<AnalyticsData> => {
     const response = await api.get(`/analytics/${userId}?time_range=${timeRange}`);
     return response.data;
   },
   getAnalyticsBundle: async (
     userId: string,
-    timeRange: 'week' | 'month' | 'year' = 'week',
+    timeRange: 'week' | 'month' = 'week',
     timezoneOffset?: number
-  ): Promise<{ time_range: string; days: number; history: { meals: Meal[]; count: number }; ai: AnalyticsData }> => {
+  ): Promise<{
+    time_range?: string;
+    days?: number;
+    history: { meals: Meal[]; count: number };
+    ai: AnalyticsData;
+    daily_highlights?: any;
+    daily_ai?: AnalyticsData;
+    micronutrient_targets?: any;
+    cached?: boolean;
+    stale?: boolean;
+  }> => {
     const tz = typeof timezoneOffset === 'number' ? timezoneOffset : -new Date().getTimezoneOffset();
-    const response = await api.get(
-      `/analytics/${userId}/bundle?time_range=${timeRange}&timezone_offset=${tz}`
-    );
-    return response.data;
+    const response = await api.get(`/analytics/${userId}/bundle?time_range=${timeRange}&timezone_offset=${tz}&include_daily_ai=true`);
+
+    const data: any = response.data || {};
+
+    // New backend shape (modular): { meals, analytics, daily_highlights, daily_ai, micronutrient_targets, cached }
+    if (Array.isArray(data.meals) || data.analytics) {
+      const meals: Meal[] = Array.isArray(data.meals) ? data.meals : [];
+      const analytics: AnalyticsData = (data.analytics || {}) as AnalyticsData;
+
+      return {
+        time_range: data.time_range ?? timeRange,
+        days: data.days,
+        history: { meals, count: typeof data.count === 'number' ? data.count : meals.length },
+        ai: analytics,
+        daily_highlights: data.daily_highlights,
+        daily_ai: data.daily_ai,
+        micronutrient_targets: data.micronutrient_targets,
+        cached: data.cached,
+        stale: data.stale,
+      };
+    }
+
+    // Legacy shape (server.py / older bundle): { history, ai }
+    return data;
   },
-  refreshAnalytics: async (userId: string, timeRange: 'week' | 'month' | 'year' = 'week'): Promise<AnalyticsData> => {
+  refreshAnalytics: async (userId: string, timeRange: 'daily' | 'week' | 'month' | 'year' = 'week'): Promise<AnalyticsData> => {
     const response = await api.post(`/analytics/${userId}/refresh?time_range=${timeRange}`);
     return response.data;
   },
@@ -675,6 +765,10 @@ export const questApi = {
   },
   getStats: async (userId: string): Promise<ApiQuestStats> => {
     const response = await api.get(`/quests/${userId}/stats`);
+    return response.data;
+  },
+  getStreakCalendar: async (userId: string, days: number = 90): Promise<ApiStreakCalendar> => {
+    const response = await api.get(`/quests/${userId}/streak-calendar?days=${days}`);
     return response.data;
   },
   checkBadges: async (userId: string): Promise<ApiBadgeCheckResult> => {

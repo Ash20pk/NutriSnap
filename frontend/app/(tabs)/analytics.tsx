@@ -17,7 +17,6 @@ import { mealApi, analyticsApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
 import PageHeader from '../../components/PageHeader';
 import AnimatedCard from '../../components/AnimatedCard';
 import StandardBarChart from '../../components/StandardBarChart';
@@ -229,8 +228,9 @@ interface ApiBioImpact {
 export default function AnalyticsScreen() {
   const { user } = useUser();
   const [loading, setLoading] = useState(false);
-  const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('week');
+  const [timeRange, setTimeRange] = useState<'week' | 'month'>('week');
   const [weeklyData, setWeeklyData] = useState<any[]>([]);
+  const [periodMealCount, setPeriodMealCount] = useState(0);
   const [macroDistribution, setMacroDistribution] = useState<any[]>([]);
   const [mealTypeBreakdown, setMealTypeBreakdown] = useState<any>({});
   const [averages, setAverages] = useState<any>({});
@@ -283,6 +283,25 @@ export default function AnalyticsScreen() {
     },
   });
 
+  const resetAiSections = useCallback(() => {
+    setAiAnalysis(null);
+    setBioImpact({
+      energy: 0,
+      recovery: 0,
+      focus: 0,
+      stability: 0,
+      antioxidants: 0,
+      digestion: 0,
+      organEffects: {
+        heart: 0,
+        liver: 0,
+        kidney: 0,
+        brain: 0,
+        skin: 0,
+      },
+    });
+  }, []);
+
   const processTopFoods = useCallback((meals: any[]) => {
     const foodCounts: any = {};
     const ingredientCounts: any = {};
@@ -320,7 +339,6 @@ export default function AnalyticsScreen() {
 
   const processWeeklyData = useCallback((meals: any[]) => {
     const dayTotals: any = {};
-    const monthsInYear = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
     let chartData: any[] = [];
 
@@ -352,22 +370,23 @@ export default function AnalyticsScreen() {
         },
       }));
     } else if (timeRange === 'month') {
-      // 30 days grouped by week (Week on Week)
-      const weekTotals: number[] = [0, 0, 0, 0];
+      // 30 days grouped into 5 buckets (last bucket may be partial)
+      const weekTotals: number[] = [0, 0, 0, 0, 0];
       const now = new Date();
 
       meals.forEach((meal: any) => {
         const mealDate = new Date(meal.timestamp);
         const diffDays = Math.floor((now.getTime() - mealDate.getTime()) / (1000 * 60 * 60 * 24));
 
-        if (diffDays < 7) weekTotals[3] += meal.total_calories;
-        else if (diffDays < 14) weekTotals[2] += meal.total_calories;
-        else if (diffDays < 21) weekTotals[1] += meal.total_calories;
-        else if (diffDays < 28) weekTotals[0] += meal.total_calories;
+        if (diffDays < 7) weekTotals[4] += meal.total_calories;
+        else if (diffDays < 14) weekTotals[3] += meal.total_calories;
+        else if (diffDays < 21) weekTotals[2] += meal.total_calories;
+        else if (diffDays < 28) weekTotals[1] += meal.total_calories;
+        else if (diffDays < 30) weekTotals[0] += meal.total_calories;
       });
 
       chartData = weekTotals.map((total, i) => ({
-        label: `Week ${i + 1}`,
+        label: i === 0 ? 'Days 29-30' : `Week ${i}`,
         value: total,
         frontColor: Colors.primary,
         gradientColor: Colors.primaryLight,
@@ -377,26 +396,6 @@ export default function AnalyticsScreen() {
           fontSize: 10,
           fontWeight: '900',
           width: 60,
-          textAlign: 'center',
-        },
-      }));
-    } else {
-      // Annual view by month (Jan, Feb, etc.)
-      meals.forEach((meal: any) => {
-        const month = format(new Date(meal.timestamp), 'MMM');
-        dayTotals[month] = (dayTotals[month] || 0) + meal.total_calories;
-      });
-      chartData = monthsInYear.map((month) => ({
-        label: month,
-        value: dayTotals[month] || 0,
-        frontColor: Colors.primary,
-        gradientColor: Colors.primaryLight,
-        showGradient: true,
-        labelTextStyle: {
-          color: Colors.textSecondary,
-          fontSize: 10,
-          fontWeight: '900',
-          width: 45,
           textAlign: 'center',
         },
       }));
@@ -623,39 +622,54 @@ export default function AnalyticsScreen() {
           timestamp: m?.timestamp ?? m?.created_at ?? m?.createdAt,
         }));
 
+        setPeriodMealCount(bundle?.history?.count ?? meals.length);
+
         processWeeklyData(meals);
         processMacroDistribution(meals);
         processMealTypeBreakdown(meals);
         processTopFoods(meals);
         calculateAverages(meals);
 
-        const aiData = bundle?.ai || {};
-        setAiAnalysis(aiData);
-
-        if (aiData.bio_impact && typeof aiData.bio_impact === 'object') {
-          const bio = aiData.bio_impact as ApiBioImpact;
-          setBioImpact({
-            energy: bio.energy ?? 0,
-            recovery: bio.recovery ?? 0,
-            focus: bio.focus ?? 0,
-            stability: bio.stability ?? 0,
-            antioxidants: bio.antioxidants ?? 0,
-            digestion: bio.digestion ?? 0,
-            organEffects: {
-              heart: bio.organ_effects?.heart ?? 0,
-              liver: bio.organ_effects?.liver ?? 0,
-              kidney: bio.organ_effects?.kidney ?? 0,
-              brain: bio.organ_effects?.brain ?? 0,
-              skin: bio.organ_effects?.skin ?? 0,
-            },
+        // If analytics cache is stale, trigger a refresh in the background
+        if ((bundle as any)?.stale && meals.length > 0) {
+          console.log('[Analytics] Cache is stale, triggering background refresh...');
+          analyticsApi.refreshAnalytics(user.id, timeRange).catch((err) => {
+            console.warn('[Analytics] Background refresh failed:', err);
           });
+        }
+
+        const aiData = (bundle as any)?.daily_ai || (bundle as any)?.ai || {};
+        const isInactive = !!(aiData as any)?.inactive || (bundle?.history?.count ?? 0) === 0;
+        if (isInactive) {
+          resetAiSections();
+        } else {
+          setAiAnalysis(aiData);
+          if (aiData.bio_impact && typeof aiData.bio_impact === 'object') {
+            const bio = aiData.bio_impact as ApiBioImpact;
+            setBioImpact({
+              energy: bio.energy ?? 0,
+              recovery: bio.recovery ?? 0,
+              focus: bio.focus ?? 0,
+              stability: bio.stability ?? 0,
+              antioxidants: bio.antioxidants ?? 0,
+              digestion: bio.digestion ?? 0,
+              organEffects: {
+                heart: bio.organ_effects?.heart ?? 0,
+                liver: bio.organ_effects?.liver ?? 0,
+                kidney: bio.organ_effects?.kidney ?? 0,
+                brain: bio.organ_effects?.brain ?? 0,
+                skin: bio.organ_effects?.skin ?? 0,
+              },
+            });
+          } else {
+            resetAiSections();
+          }
         }
       } catch (err) {
         console.warn('[Analytics] Bundle fetch failed, falling back to legacy flow:', err);
         // Fallback to the previous 2-request flow if bundle is not available
         let days = 7;
         if (timeRange === 'month') days = 30;
-        else if (timeRange === 'year') days = 365;
 
         const history = await mealApi.getHistory(user.id, days);
         const meals = (history?.meals || []).map((m: any) => ({
@@ -668,6 +682,8 @@ export default function AnalyticsScreen() {
           timestamp: m?.timestamp ?? m?.created_at ?? m?.createdAt,
         }));
 
+        setPeriodMealCount(history?.count ?? meals.length);
+
         processWeeklyData(meals);
         processMacroDistribution(meals);
         processMealTypeBreakdown(meals);
@@ -675,25 +691,31 @@ export default function AnalyticsScreen() {
         calculateAverages(meals);
 
         const aiData = await analyticsApi.getAnalytics(user.id, timeRange);
-        setAiAnalysis(aiData);
-
-        if (aiData.bio_impact && typeof aiData.bio_impact === 'object') {
-          const bio = aiData.bio_impact as ApiBioImpact;
-          setBioImpact({
-            energy: bio.energy ?? 0,
-            recovery: bio.recovery ?? 0,
-            focus: bio.focus ?? 0,
-            stability: bio.stability ?? 0,
-            antioxidants: bio.antioxidants ?? 0,
-            digestion: bio.digestion ?? 0,
-            organEffects: {
-              heart: bio.organ_effects?.heart ?? 0,
-              liver: bio.organ_effects?.liver ?? 0,
-              kidney: bio.organ_effects?.kidney ?? 0,
-              brain: bio.organ_effects?.brain ?? 0,
-              skin: bio.organ_effects?.skin ?? 0,
-            },
-          });
+        const isInactive = !!(aiData as any)?.inactive || meals.length === 0;
+        if (isInactive) {
+          resetAiSections();
+        } else {
+          setAiAnalysis(aiData);
+          if (aiData.bio_impact && typeof aiData.bio_impact === 'object') {
+            const bio = aiData.bio_impact as ApiBioImpact;
+            setBioImpact({
+              energy: bio.energy ?? 0,
+              recovery: bio.recovery ?? 0,
+              focus: bio.focus ?? 0,
+              stability: bio.stability ?? 0,
+              antioxidants: bio.antioxidants ?? 0,
+              digestion: bio.digestion ?? 0,
+              organEffects: {
+                heart: bio.organ_effects?.heart ?? 0,
+                liver: bio.organ_effects?.liver ?? 0,
+                kidney: bio.organ_effects?.kidney ?? 0,
+                brain: bio.organ_effects?.brain ?? 0,
+                skin: bio.organ_effects?.skin ?? 0,
+              },
+            });
+          } else {
+            resetAiSections();
+          }
         }
       }
     } catch (error) {
@@ -701,7 +723,7 @@ export default function AnalyticsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [user, timeRange, processWeeklyData, processMacroDistribution, processMealTypeBreakdown, calculateAverages, processTopFoods]);
+  }, [user, timeRange, processWeeklyData, processMacroDistribution, processMealTypeBreakdown, calculateAverages, processTopFoods, resetAiSections]);
 
   useEffect(() => {
     if (user) {
@@ -710,6 +732,7 @@ export default function AnalyticsScreen() {
   }, [user, timeRange, fetchAnalytics]);
 
   const hasAnyMacros = macroDistribution.some(item => item.value > 1);
+  const isInactivePeriod = periodMealCount === 0;
 
   return (
     <View style={styles.container}>
@@ -766,25 +789,6 @@ export default function AnalyticsScreen() {
               ]}
             >
               Month
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.timeRangeButton,
-              timeRange === 'year' && styles.timeRangeButtonActive,
-            ]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
-              setTimeRange('year');
-            }}
-          >
-            <Text
-              style={[
-                styles.timeRangeText,
-                timeRange === 'year' && styles.timeRangeTextActive,
-              ]}
-            >
-              Year
             </Text>
           </TouchableOpacity>
         </View>
@@ -1104,88 +1108,104 @@ export default function AnalyticsScreen() {
 
         <AnimatedCard delay={500} type="slide" style={styles.section}>
           <SectionTitle title="Health Insights" />
-          <View style={styles.healthInsightsCard}>
-            <View style={styles.organGrid}>
-              {[
-                { label: 'Heart', key: 'heart', score: bioImpact.organEffects.heart, icon: 'heart', color: Colors.error },
-                { label: 'Liver', key: 'liver', score: bioImpact.organEffects.liver, icon: 'shield-checkmark', color: Colors.success },
-                { label: 'Kidney', key: 'kidney', score: bioImpact.organEffects.kidney, icon: 'water', color: Colors.info },
-                { label: 'Brain', key: 'brain', score: bioImpact.organEffects.brain, icon: 'flash', color: Colors.warning },
-                { label: 'Skin', key: 'skin', score: bioImpact.organEffects.skin, icon: 'sparkles', color: Colors.primary },
-              ].map((organ, index) => (
-                <View key={index} style={styles.organItem}>
-                  <View style={[styles.organIconContainer, { backgroundColor: organ.color + '15' }]}>
-                    <Ionicons name={organ.icon as any} size={20} color={organ.color} />
-                  </View>
-                  <View style={styles.organInfo}>
-                    <View style={styles.organHeader}>
-                      <Text style={styles.organLabel}>{organ.label}</Text>
-                      <Text style={[styles.organScore, { color: organ.score < 50 ? Colors.error : (organ.score < 80 ? Colors.warning : Colors.success) }]}>
-                        {organ.score}%
-                      </Text>
+          {isInactivePeriod ? (
+            <EmptyState
+              icon="analytics-outline"
+              title="No meals logged"
+              titleStyle={styles.emptyFoodsText}
+            />
+          ) : (
+            <View style={styles.healthInsightsCard}>
+              <View style={styles.organGrid}>
+                {[
+                  { label: 'Heart', key: 'heart', score: bioImpact.organEffects.heart, icon: 'heart', color: Colors.error },
+                  { label: 'Liver', key: 'liver', score: bioImpact.organEffects.liver, icon: 'shield-checkmark', color: Colors.success },
+                  { label: 'Kidney', key: 'kidney', score: bioImpact.organEffects.kidney, icon: 'water', color: Colors.info },
+                  { label: 'Brain', key: 'brain', score: bioImpact.organEffects.brain, icon: 'flash', color: Colors.warning },
+                  { label: 'Skin', key: 'skin', score: bioImpact.organEffects.skin, icon: 'sparkles', color: Colors.primary },
+                ].map((organ, index) => (
+                  <View key={index} style={styles.organItem}>
+                    <View style={[styles.organIconContainer, { backgroundColor: organ.color + '15' }]}>
+                      <Ionicons name={organ.icon as any} size={20} color={organ.color} />
                     </View>
-                    <View style={styles.organProgressBg}>
-                      <View
-                        style={[
-                          styles.organProgressFill,
-                          {
-                            width: `${organ.score}%`,
-                            backgroundColor: organ.score < 50 ? Colors.error : (organ.score < 80 ? Colors.warning : Colors.success)
-                          }
-                        ]}
-                      />
+                    <View style={styles.organInfo}>
+                      <View style={styles.organHeader}>
+                        <Text style={styles.organLabel}>{organ.label}</Text>
+                        <Text style={[styles.organScore, { color: organ.score < 50 ? Colors.error : (organ.score < 80 ? Colors.warning : Colors.success) }]}>
+                          {organ.score}%
+                        </Text>
+                      </View>
+                      <View style={styles.organProgressBg}>
+                        <View
+                          style={[
+                            styles.organProgressFill,
+                            {
+                              width: `${organ.score}%`,
+                              backgroundColor: organ.score < 50 ? Colors.error : (organ.score < 80 ? Colors.warning : Colors.success)
+                            }
+                          ]}
+                        />
+                      </View>
+                      {aiAnalysis?.health_insights?.[organ.key] && (
+                        <Text style={styles.organInsightText} numberOfLines={2} ellipsizeMode="tail">
+                          {aiAnalysis.health_insights[organ.key]}
+                        </Text>
+                      )}
                     </View>
-                    {aiAnalysis?.health_insights?.[organ.key] && (
-                      <Text style={styles.organInsightText} numberOfLines={2} ellipsizeMode="tail">
-                        {aiAnalysis.health_insights[organ.key]}
-                      </Text>
-                    )}
                   </View>
-                </View>
-              ))}
+                ))}
+              </View>
             </View>
-          </View>
+          )}
         </AnimatedCard>
 
         <AnimatedCard delay={550} type="slide" style={styles.section}>
           <SectionTitle title="Biological Impact" />
-          <View style={styles.healthInsightsCard}>
-            <View style={styles.organGrid}>
-              {[
-                { label: 'Energy Levels', value: bioImpact.energy, icon: 'flash', color: Colors.warning },
-                { label: 'Muscle Recovery', value: bioImpact.recovery, icon: 'barbell', color: Colors.error },
-                { label: 'Mental Focus', value: bioImpact.focus, icon: 'eye', color: Colors.info },
-                { label: 'Sugar Stability', value: bioImpact.stability, icon: 'pulse', color: Colors.success },
-                { label: 'Antioxidant Load', value: bioImpact.antioxidants, icon: 'leaf', color: Colors.primary },
-                { label: 'Digestive Ease', value: bioImpact.digestion, icon: 'water', color: Colors.info },
-              ].map((item, index) => (
-                <View key={index} style={styles.organItem}>
-                  <View style={[styles.organIconContainer, { backgroundColor: item.color + '15' }]}>
-                    <Ionicons name={item.icon as any} size={20} color={item.color} />
-                  </View>
-                  <View style={styles.organInfo}>
-                    <View style={styles.organHeader}>
-                      <Text style={styles.organLabel}>{item.label}</Text>
-                      <Text style={[styles.organScore, { color: item.color }]}>
-                        {item.value}%
-                      </Text>
+          {isInactivePeriod ? (
+            <EmptyState
+              icon="analytics-outline"
+              title="No meals logged"
+              titleStyle={styles.emptyFoodsText}
+            />
+          ) : (
+            <View style={styles.healthInsightsCard}>
+              <View style={styles.organGrid}>
+                {[
+                  { label: 'Energy Levels', value: bioImpact.energy, icon: 'flash', color: Colors.warning },
+                  { label: 'Muscle Recovery', value: bioImpact.recovery, icon: 'barbell', color: Colors.error },
+                  { label: 'Mental Focus', value: bioImpact.focus, icon: 'eye', color: Colors.info },
+                  { label: 'Sugar Stability', value: bioImpact.stability, icon: 'pulse', color: Colors.success },
+                  { label: 'Antioxidant Load', value: bioImpact.antioxidants, icon: 'leaf', color: Colors.primary },
+                  { label: 'Digestive Ease', value: bioImpact.digestion, icon: 'water', color: Colors.info },
+                ].map((item, index) => (
+                  <View key={index} style={styles.organItem}>
+                    <View style={[styles.organIconContainer, { backgroundColor: item.color + '15' }]}>
+                      <Ionicons name={item.icon as any} size={20} color={item.color} />
                     </View>
-                    <View style={styles.organProgressBg}>
-                      <View
-                        style={[
-                          styles.organProgressFill,
-                          {
-                            width: `${item.value}%`,
-                            backgroundColor: item.color
-                          }
-                        ]}
-                      />
+                    <View style={styles.organInfo}>
+                      <View style={styles.organHeader}>
+                        <Text style={styles.organLabel}>{item.label}</Text>
+                        <Text style={[styles.organScore, { color: item.color }]}>
+                          {item.value}%
+                        </Text>
+                      </View>
+                      <View style={styles.organProgressBg}>
+                        <View
+                          style={[
+                            styles.organProgressFill,
+                            {
+                              width: `${item.value}%`,
+                              backgroundColor: item.color
+                            }
+                          ]}
+                        />
+                      </View>
                     </View>
                   </View>
-                </View>
-              ))}
+                ))}
+              </View>
             </View>
-          </View>
+          )}
         </AnimatedCard>
 
         {(() => {
@@ -1194,7 +1214,7 @@ export default function AnalyticsScreen() {
             ...(aiAnalysis?.red_flags || []).map((f: any) => ({ ...f, type: 'flag' })),
           ];
 
-          if (highlights.length === 0) return null;
+          if (isInactivePeriod || highlights.length === 0) return null;
 
           const getSeverityValue = (item: any) => {
             const status = item.type === 'alert' ? item.status : item.severity;

@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Build NutriSnap - an AI-powered nutrition tracking mobile app with coin calibration for accurate portion sizes, comprehensive Indian food database, and multiple logging methods (photo, voice, manual)."
+user_problem_statement: "Build Loggr - an AI-powered nutrition tracking mobile app with coin calibration for accurate portion sizes, comprehensive Indian food database, and multiple logging methods (photo, voice, manual)."
 
 backend:
   - task: "User Onboarding API"
@@ -307,6 +307,6 @@ test_plan:
 
 agent_communication:
     - agent: "main"
-      message: "NutriSnap MVP implementation complete. Backend has 7 API endpoints, 25 Indian foods in database, OpenAI integration for AI features. Frontend has complete user journey: onboarding → dashboard → meal logging (photo/manual/voice) → history → profile. Ready for comprehensive backend testing. Frontend UI testing should be done separately after backend validation."
+      message: "Loggr MVP implementation complete. Backend has 7 API endpoints, 25 Indian foods in database, OpenAI integration for AI features. Frontend has complete user journey: onboarding → dashboard → meal logging (photo/manual/voice) → history → profile. Ready for comprehensive backend testing. Frontend UI testing should be done separately after backend validation."
     - agent: "testing"
       message: "Backend testing completed. CRITICAL ISSUE: OpenAI API key 'sk-emergent-1296706658d9dBc9a6' is INVALID/MOCKED - not a valid OpenAI format. All AI features (photo analysis, voice logging) fail with 401 Unauthorized. Fixed meal history MongoDB serialization issue. Core APIs (user management, food search, meal logging, stats) working correctly with accurate BMR calculations and macro splits."

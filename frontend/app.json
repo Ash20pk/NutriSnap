@@ -1,33 +1,36 @@
 {
   "expo": {
-    "name": "NutriSnap",
+    "name": "Loggr",
     "slug": "nutrisnap",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "nutrisnap",
+    "scheme": "loggr",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "bundleIdentifier": "com.ash20pk.loggr",
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "NutriSnap needs access to your camera to take photos of your meals for AI-powered food recognition and portion tracking.",
-        "NSPhotoLibraryUsageDescription": "NutriSnap needs access to your photo library to select meal photos.",
-        "NSMicrophoneUsageDescription": "NutriSnap needs access to your microphone for voice meal logging."
+        "NSCameraUsageDescription": "Loggr needs access to your camera to take photos of your meals for AI-powered food recognition and portion tracking.",
+        "NSPhotoLibraryUsageDescription": "Loggr needs access to your photo library to select meal photos.",
+        "NSMicrophoneUsageDescription": "Loggr needs access to your microphone for voice meal logging.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/foreground.png",
         "backgroundColor": "#2F593E"
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "RECORD_AUDIO"
-      ]
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.ash20pk.loggr"
     },
     "web": {
       "bundler": "metro",
@@ -47,7 +50,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-image.png",
+          "image": "./assets/images/splash.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#2F593E"
@@ -56,18 +59,24 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow NutriSnap to access your camera for meal photo logging."
+          "cameraPermission": "Allow Loggr to access your camera for meal photo logging."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow NutriSnap to access your photos."
+          "photosPermission": "Allow Loggr to access your photos."
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c81eaf45-57e0-49c1-b331-7817d85e9d11"
+      }
     }
   }
 }

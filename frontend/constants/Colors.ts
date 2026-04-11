@@ -1,4 +1,4 @@
-// NutriSnap Color Palette - Exact colors from user
+// Loggr Color Palette - Exact colors from user
 
 export const Colors = {
   // Main colors

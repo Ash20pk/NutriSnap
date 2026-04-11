@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,10 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  // ActivityIndicator,
   Alert,
+  Modal,
+  FlatList,
+  Dimensions,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -19,18 +21,45 @@ import { useUser } from '../context/UserContext';
 import { Ionicons } from '@expo/vector-icons';
 import PageHeader from '../components/PageHeader';
 import AnimatedCard from '../components/AnimatedCard';
-
 import DuoButton from '../components/DuoButton';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const ITEM_HEIGHT = 50;
+
+// Generate arrays for DOB picker
+const currentYear = new Date().getFullYear();
+const years = Array.from({ length: 100 }, (_, i) => currentYear - 10 - i); // 10 to 110 years ago
+const months = [
+  { value: 1, label: 'January' },
+  { value: 2, label: 'February' },
+  { value: 3, label: 'March' },
+  { value: 4, label: 'April' },
+  { value: 5, label: 'May' },
+  { value: 6, label: 'June' },
+  { value: 7, label: 'July' },
+  { value: 8, label: 'August' },
+  { value: 9, label: 'September' },
+  { value: 10, label: 'October' },
+  { value: 11, label: 'November' },
+  { value: 12, label: 'December' },
+];
+
+const getDaysInMonth = (year: number, month: number) => {
+  return new Date(year, month, 0).getDate();
+};
 
 export default function Onboarding() {
   const router = useRouter();
   const { setUser } = useUser();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  
+  const [showDOBPicker, setShowDOBPicker] = useState(false);
+
   const [formData, setFormData] = useState({
     name: '',
-    age: '',
+    dobYear: currentYear - 25,
+    dobMonth: 1,
+    dobDay: 1,
     gender: 'male',
     height: '',
     weight: '',
@@ -40,34 +69,50 @@ export default function Onboarding() {
   });
 
   const goals = [
-    { id: 'lose_weight', label: 'Lose Weight', icon: 'trending-down' },
-    { id: 'gain_muscle', label: 'Gain Muscle', icon: 'fitness' },
-    { id: 'maintain', label: 'Maintain', icon: 'checkmark-circle' },
-    { id: 'general_health', label: 'General Health', icon: 'heart' },
+    { id: 'lose_weight', label: 'Lose Weight', icon: 'flame', emoji: '🔥', desc: 'Burn fat & get lean' },
+    { id: 'gain_muscle', label: 'Build Muscle', icon: 'barbell', emoji: '💪', desc: 'Grow stronger' },
+    { id: 'maintain', label: 'Stay Fit', icon: 'checkmark-circle', emoji: '✨', desc: 'Keep the balance' },
+    { id: 'general_health', label: 'Be Healthy', icon: 'heart', emoji: '❤️', desc: 'Feel your best' },
   ];
 
   const activityLevels = [
-    { id: 'sedentary', label: 'Sedentary', desc: 'Little to no exercise' },
-    { id: 'light', label: 'Light', desc: '1-3 days/week' },
-    { id: 'moderate', label: 'Moderate', desc: '3-5 days/week' },
-    { id: 'active', label: 'Active', desc: '5-6 days/week' },
-    { id: 'very_active', label: 'Very Active', desc: 'Daily exercise' },
+    { id: 'sedentary', label: 'Couch Mode', desc: 'Mostly sitting', emoji: '🛋️' },
+    { id: 'light', label: 'Easy Going', desc: 'Light walks, 1-2x/week', emoji: '🚶' },
+    { id: 'moderate', label: 'Active', desc: 'Regular exercise, 3-5x/week', emoji: '🏃' },
+    { id: 'active', label: 'Athlete', desc: 'Hard training, 5-6x/week', emoji: '🏋️' },
+    { id: 'very_active', label: 'Beast Mode', desc: 'Intense daily workouts', emoji: '🦾' },
   ];
 
   const dietaryPreferences = [
-    { id: 'vegetarian', label: 'Vegetarian', icon: 'leaf' },
-    { id: 'vegan', label: 'Vegan', icon: 'leaf-outline' },
-    { id: 'non_veg', label: 'Non-Vegetarian', icon: 'restaurant' },
-    { id: 'no_restriction', label: 'No Restriction', icon: 'fast-food' },
+    { id: 'vegetarian', label: 'Vegetarian', icon: 'leaf', emoji: '🥬', desc: 'No meat' },
+    { id: 'vegan', label: 'Vegan', icon: 'leaf-outline', emoji: '🌱', desc: 'Plant power' },
+    { id: 'non_veg', label: 'Non-Veg', icon: 'restaurant', emoji: '🍖', desc: 'Everything goes' },
+    { id: 'no_restriction', label: 'Flexible', icon: 'fast-food', emoji: '🍽️', desc: 'I eat it all' },
   ];
 
+  const calculateAge = () => {
+    const today = new Date();
+    const birthDate = new Date(formData.dobYear, formData.dobMonth - 1, formData.dobDay);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  const formatDOB = () => {
+    const month = months.find(m => m.value === formData.dobMonth)?.label || '';
+    return `${month} ${formData.dobDay}, ${formData.dobYear}`;
+  };
+
   const handleNext = () => {
-    if (step === 1 && (!formData.name || !formData.age)) {
-      Alert.alert('Missing Info', 'Please fill in all fields');
+    if (step === 1 && !formData.name) {
+      Alert.alert('Hey there!', "What's your name? We'd love to know!");
       return;
     }
     if (step === 2 && (!formData.height || !formData.weight)) {
-      Alert.alert('Missing Info', 'Please enter your height and weight');
+      Alert.alert('Almost there!', 'We need your measurements to create your plan');
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -82,9 +127,12 @@ export default function Onboarding() {
     setLoading(true);
     let didSucceed = false;
     try {
+      // Format DOB as ISO string
+      const dobString = `${formData.dobYear}-${String(formData.dobMonth).padStart(2, '0')}-${String(formData.dobDay).padStart(2, '0')}`;
+
       const userData = {
         name: formData.name,
-        age: parseInt(formData.age),
+        date_of_birth: dobString,
         gender: formData.gender,
         height: parseFloat(formData.height),
         weight: parseFloat(formData.weight),
@@ -92,14 +140,14 @@ export default function Onboarding() {
         activity_level: formData.activity_level,
         dietary_preference: formData.dietary_preference,
       };
-      
+
       const response = await userApi.onboard(userData);
       await setUser(response);
       didSucceed = true;
       router.replace('/(tabs)/home');
     } catch (error) {
       console.error('Onboarding error:', error);
-      Alert.alert('Error', 'Failed to complete onboarding. Please try again.');
+      Alert.alert('Oops!', 'Something went wrong. Let\'s try again!');
     } finally {
       Haptics.notificationAsync(
         didSucceed ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Error
@@ -112,26 +160,108 @@ export default function Onboarding() {
     switch (step) {
       case 1:
         return {
-          title: 'Tell us about you',
-          subtitle: 'This helps us personalize your plan.',
+          title: "Let's get to know you!",
+          subtitle: 'Your journey to better health starts here',
+          emoji: '👋',
         };
       case 2:
         return {
-          title: 'Your measurements',
-          subtitle: 'We’ll calculate your daily targets.',
+          title: 'Your body, your stats',
+          subtitle: "We'll calculate your perfect daily targets",
+          emoji: '📊',
         };
       case 3:
         return {
-          title: 'Set your goal',
-          subtitle: 'Pick what you want to optimize for.',
+          title: "What's your mission?",
+          subtitle: 'Pick your superpower goal',
+          emoji: '🎯',
         };
       default:
         return {
-          title: 'Diet preference',
-          subtitle: 'So we can suggest better foods.',
+          title: 'How do you eat?',
+          subtitle: "We'll personalize your food suggestions",
+          emoji: '🍽️',
         };
     }
   })();
+
+  // DOB Picker Components
+  const WheelPicker = ({
+    data,
+    selectedValue,
+    onValueChange,
+    renderLabel
+  }: {
+    data: any[],
+    selectedValue: any,
+    onValueChange: (value: any) => void,
+    renderLabel: (item: any) => string
+  }) => {
+    const flatListRef = useRef<FlatList>(null);
+    const selectedIndex = data.findIndex(item =>
+      typeof item === 'object' ? item.value === selectedValue : item === selectedValue
+    );
+
+    const onScrollEnd = useCallback((event: any) => {
+      const offsetY = event.nativeEvent.contentOffset.y;
+      const index = Math.round(offsetY / ITEM_HEIGHT);
+      const clampedIndex = Math.max(0, Math.min(index, data.length - 1));
+      const item = data[clampedIndex];
+      const value = typeof item === 'object' ? item.value : item;
+      if (value !== selectedValue) {
+        Haptics.selectionAsync().catch(() => {});
+        onValueChange(value);
+      }
+    }, [data, selectedValue, onValueChange]);
+
+    return (
+      <View style={styles.wheelContainer}>
+        <View style={styles.wheelHighlight} />
+        <FlatList
+          ref={flatListRef}
+          data={data}
+          keyExtractor={(item, index) => index.toString()}
+          renderItem={({ item, index }) => {
+            const value = typeof item === 'object' ? item.value : item;
+            const isSelected = value === selectedValue;
+            return (
+              <View style={styles.wheelItem}>
+                <Text style={[
+                  styles.wheelItemText,
+                  isSelected && styles.wheelItemTextSelected
+                ]}>
+                  {renderLabel(item)}
+                </Text>
+              </View>
+            );
+          }}
+          showsVerticalScrollIndicator={false}
+          snapToInterval={ITEM_HEIGHT}
+          decelerationRate="fast"
+          onMomentumScrollEnd={onScrollEnd}
+          contentContainerStyle={{
+            paddingVertical: ITEM_HEIGHT * 2,
+          }}
+          initialScrollIndex={selectedIndex >= 0 ? selectedIndex : 0}
+          getItemLayout={(_, index) => ({
+            length: ITEM_HEIGHT,
+            offset: ITEM_HEIGHT * index,
+            index,
+          })}
+        />
+      </View>
+    );
+  };
+
+  const daysInSelectedMonth = getDaysInMonth(formData.dobYear, formData.dobMonth);
+  const days = Array.from({ length: daysInSelectedMonth }, (_, i) => i + 1);
+
+  // Adjust day if current selection is invalid
+  React.useEffect(() => {
+    if (formData.dobDay > daysInSelectedMonth) {
+      setFormData(prev => ({ ...prev, dobDay: daysInSelectedMonth }));
+    }
+  }, [formData.dobMonth, formData.dobYear, daysInSelectedMonth]);
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -141,7 +271,7 @@ export default function Onboarding() {
           subtitle={stepMeta.subtitle}
           rightComponent={
             <View style={styles.stepPill}>
-              <Text style={styles.stepPillText}>Step {step} of 4</Text>
+              <Text style={styles.stepPillText}>{step}/4</Text>
             </View>
           }
         />
@@ -156,71 +286,58 @@ export default function Onboarding() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-
           {step === 1 && (
             <AnimatedCard type="pop" delay={100} style={styles.stepContainer}>
               <View style={styles.fieldCard}>
-                <Text style={styles.fieldLabel}>Name</Text>
+                <Text style={styles.fieldLabel}>What should we call you?</Text>
                 <TextInput
                   style={styles.fieldInput}
-                  placeholder="Your name"
+                  placeholder="Your awesome name"
                   placeholderTextColor={Colors.textLight}
                   value={formData.name}
                   onChangeText={(text) => setFormData({ ...formData, name: text })}
+                  autoFocus
                 />
               </View>
 
-              <View style={styles.fieldRow}>
-                <View style={[styles.fieldCard, { flex: 1 }]}>
-                  <Text style={styles.fieldLabel}>Age</Text>
-                  <TextInput
-                    style={styles.fieldInput}
-                    placeholder="18"
-                    placeholderTextColor={Colors.textLight}
-                    value={formData.age}
-                    onChangeText={(text) => setFormData({ ...formData, age: text })}
-                    keyboardType="numeric"
-                  />
+              <TouchableOpacity
+                style={styles.fieldCard}
+                onPress={() => setShowDOBPicker(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.fieldLabel}>When were you born?</Text>
+                <View style={styles.dobDisplayRow}>
+                  <Text style={styles.fieldInput}>{formatDOB()}</Text>
+                  <View style={styles.ageChip}>
+                    <Text style={styles.ageChipText}>{calculateAge()} years old</Text>
+                  </View>
                 </View>
-              </View>
+              </TouchableOpacity>
 
-              <Text style={styles.sectionLabel}>Gender</Text>
+              <Text style={styles.sectionLabel}>I am...</Text>
               <View style={styles.genderContainer}>
                 <TouchableOpacity
-                  style={[styles.choiceCard, formData.gender === 'male' && styles.choiceCardActive]}
+                  style={[styles.genderCard, formData.gender === 'male' && styles.genderCardActive]}
                   onPress={() => {
                     Haptics.selectionAsync().catch(() => {});
                     setFormData({ ...formData, gender: 'male' });
                   }}
                 >
-                  <Ionicons
-                    name="male"
-                    size={22}
-                    color={formData.gender === 'male' ? Colors.primary : Colors.text}
-                  />
-                  <Text style={[styles.choiceCardText, formData.gender === 'male' && styles.choiceCardTextActive]}>
+                  <Text style={styles.genderEmoji}>👨</Text>
+                  <Text style={[styles.genderText, formData.gender === 'male' && styles.genderTextActive]}>
                     Male
                   </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.choiceCard, formData.gender === 'female' && styles.choiceCardActive]}
+                  style={[styles.genderCard, formData.gender === 'female' && styles.genderCardActive]}
                   onPress={() => {
                     Haptics.selectionAsync().catch(() => {});
                     setFormData({ ...formData, gender: 'female' });
                   }}
                 >
-                  <Ionicons
-                    name="female"
-                    size={22}
-                    color={formData.gender === 'female' ? Colors.primary : Colors.text}
-                  />
-                  <Text
-                    style={[
-                      styles.choiceCardText,
-                      formData.gender === 'female' && styles.choiceCardTextActive,
-                    ]}
-                  >
+                  <Text style={styles.genderEmoji}>👩</Text>
+                  <Text style={[styles.genderText, formData.gender === 'female' && styles.genderTextActive]}>
                     Female
                   </Text>
                 </TouchableOpacity>
@@ -230,87 +347,92 @@ export default function Onboarding() {
 
           {step === 2 && (
             <AnimatedCard type="pop" delay={100} style={styles.stepContainer}>
-              <View style={styles.fieldRow}>
-                <View style={[styles.fieldCard, { flex: 1 }]}>
-                  <Text style={styles.fieldLabel}>Height (cm)</Text>
-                  <TextInput
-                    style={styles.fieldInput}
-                    placeholder="170"
-                    placeholderTextColor={Colors.textLight}
-                    value={formData.height}
-                    onChangeText={(text) => setFormData({ ...formData, height: text })}
-                    keyboardType="numeric"
-                  />
+              <View style={styles.measurementRow}>
+                <View style={[styles.measurementCard, { flex: 1 }]}>
+                  <Text style={styles.measurementEmoji}>📏</Text>
+                  <Text style={styles.fieldLabel}>Height</Text>
+                  <View style={styles.inputWithUnit}>
+                    <TextInput
+                      style={styles.measurementInput}
+                      placeholder="170"
+                      placeholderTextColor={Colors.textLight}
+                      value={formData.height}
+                      onChangeText={(text) => setFormData({ ...formData, height: text })}
+                      keyboardType="numeric"
+                    />
+                    <Text style={styles.unitText}>cm</Text>
+                  </View>
                 </View>
 
-                <View style={[styles.fieldCard, { flex: 1 }]}>
-                  <Text style={styles.fieldLabel}>Weight (kg)</Text>
-                  <TextInput
-                    style={styles.fieldInput}
-                    placeholder="70"
-                    placeholderTextColor={Colors.textLight}
-                    value={formData.weight}
-                    onChangeText={(text) => setFormData({ ...formData, weight: text })}
-                    keyboardType="numeric"
-                  />
+                <View style={[styles.measurementCard, { flex: 1 }]}>
+                  <Text style={styles.measurementEmoji}>⚖️</Text>
+                  <Text style={styles.fieldLabel}>Weight</Text>
+                  <View style={styles.inputWithUnit}>
+                    <TextInput
+                      style={styles.measurementInput}
+                      placeholder="70"
+                      placeholderTextColor={Colors.textLight}
+                      value={formData.weight}
+                      onChangeText={(text) => setFormData({ ...formData, weight: text })}
+                      keyboardType="numeric"
+                    />
+                    <Text style={styles.unitText}>kg</Text>
+                  </View>
                 </View>
               </View>
 
-              <View style={styles.microTip}>
-                <Ionicons name="sparkles" size={18} color={Colors.primary} />
-                <Text style={styles.microTipText}>You can adjust these later in Profile.</Text>
+              <View style={styles.funTip}>
+                <Text style={styles.funTipEmoji}>💡</Text>
+                <Text style={styles.funTipText}>
+                  We'll remind you to check your weight monthly to keep your targets accurate!
+                </Text>
               </View>
             </AnimatedCard>
           )}
 
           {step === 3 && (
             <AnimatedCard type="pop" delay={100} style={styles.stepContainer}>
-              <Text style={styles.sectionLabel}>Goal</Text>
-              <View style={styles.optionsGrid}>
+              <View style={styles.goalsGrid}>
                 {goals.map((goal) => (
                   <TouchableOpacity
                     key={goal.id}
-                    style={[styles.optionCard, formData.goal === goal.id && styles.optionCardActive]}
+                    style={[styles.goalCard, formData.goal === goal.id && styles.goalCardActive]}
                     onPress={() => {
                       Haptics.selectionAsync().catch(() => {});
                       setFormData({ ...formData, goal: goal.id });
                     }}
                   >
-                    <Ionicons
-                      name={goal.icon as any}
-                      size={26}
-                      color={formData.goal === goal.id ? Colors.primary : Colors.primaryLight}
-                    />
-                    <Text style={[styles.optionLabel, formData.goal === goal.id && styles.optionLabelActive]}>
+                    <Text style={styles.goalEmoji}>{goal.emoji}</Text>
+                    <Text style={[styles.goalLabel, formData.goal === goal.id && styles.goalLabelActive]}>
                       {goal.label}
                     </Text>
+                    <Text style={styles.goalDesc}>{goal.desc}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <Text style={styles.sectionLabel}>Activity level</Text>
+              <Text style={styles.sectionLabel}>How active are you?</Text>
               {activityLevels.map((level) => (
                 <TouchableOpacity
                   key={level.id}
-                  style={[styles.listOption, formData.activity_level === level.id && styles.listOptionActive]}
+                  style={[styles.activityCard, formData.activity_level === level.id && styles.activityCardActive]}
                   onPress={() => {
                     Haptics.selectionAsync().catch(() => {});
                     setFormData({ ...formData, activity_level: level.id });
                   }}
                 >
-                  <View style={styles.listOptionContent}>
-                    <Text
-                      style={[
-                        styles.listOptionLabel,
-                        formData.activity_level === level.id && styles.listOptionLabelActive,
-                      ]}
-                    >
+                  <Text style={styles.activityEmoji}>{level.emoji}</Text>
+                  <View style={styles.activityContent}>
+                    <Text style={[
+                      styles.activityLabel,
+                      formData.activity_level === level.id && styles.activityLabelActive
+                    ]}>
                       {level.label}
                     </Text>
-                    <Text style={styles.listOptionDesc}>{level.desc}</Text>
+                    <Text style={styles.activityDesc}>{level.desc}</Text>
                   </View>
                   {formData.activity_level === level.id && (
-                    <Ionicons name="checkmark-circle" size={22} color={Colors.primary} />
+                    <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
                   )}
                 </TouchableOpacity>
               ))}
@@ -319,45 +441,41 @@ export default function Onboarding() {
 
           {step === 4 && (
             <AnimatedCard type="pop" delay={100} style={styles.stepContainer}>
-              <Text style={styles.sectionLabel}>Preference</Text>
-              <View style={styles.optionsGrid}>
+              <View style={styles.dietGrid}>
                 {dietaryPreferences.map((pref) => (
                   <TouchableOpacity
                     key={pref.id}
                     style={[
-                      styles.optionCard,
-                      formData.dietary_preference === pref.id && styles.optionCardActive,
+                      styles.dietCard,
+                      formData.dietary_preference === pref.id && styles.dietCardActive,
                     ]}
                     onPress={() => {
                       Haptics.selectionAsync().catch(() => {});
                       setFormData({ ...formData, dietary_preference: pref.id });
                     }}
                   >
-                    <Ionicons
-                      name={pref.icon as any}
-                      size={26}
-                      color={formData.dietary_preference === pref.id ? Colors.primary : Colors.primaryLight}
-                    />
-                    <Text
-                      style={[
-                        styles.optionLabel,
-                        formData.dietary_preference === pref.id && styles.optionLabelActive,
-                      ]}
-                    >
+                    <Text style={styles.dietEmoji}>{pref.emoji}</Text>
+                    <Text style={[
+                      styles.dietLabel,
+                      formData.dietary_preference === pref.id && styles.dietLabelActive
+                    ]}>
                       {pref.label}
                     </Text>
+                    <Text style={styles.dietDesc}>{pref.desc}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <View style={styles.tipCard}>
-                <Ionicons name="information-circle" size={20} color={Colors.primary} />
-                <Text style={styles.tipText}>Place a coin next to your food for accurate portion tracking.</Text>
+              <View style={styles.finalTip}>
+                <Text style={styles.finalTipEmoji}>🎉</Text>
+                <Text style={styles.finalTipTitle}>You're all set!</Text>
+                <Text style={styles.finalTipText}>
+                  Hit finish and let's start your health journey together
+                </Text>
               </View>
             </AnimatedCard>
           )}
-
-          </ScrollView>
+        </ScrollView>
 
         <View style={styles.bottomBar}>
           <DuoButton
@@ -375,7 +493,7 @@ export default function Onboarding() {
           />
 
           <DuoButton
-            title={step === 4 ? 'Finish' : 'Continue'}
+            title={step === 4 ? "Let's Go!" : 'Next'}
             onPress={handleNext}
             disabled={loading}
             loading={loading}
@@ -385,6 +503,72 @@ export default function Onboarding() {
           />
         </View>
       </View>
+
+      {/* DOB Picker Modal */}
+      <Modal
+        visible={showDOBPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowDOBPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>When's your birthday?</Text>
+              <Text style={styles.modalSubtitle}>Scroll to select</Text>
+            </View>
+
+            <View style={styles.pickersRow}>
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Month</Text>
+                <WheelPicker
+                  data={months}
+                  selectedValue={formData.dobMonth}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, dobMonth: value }))}
+                  renderLabel={(item) => item.label.substring(0, 3)}
+                />
+              </View>
+
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Day</Text>
+                <WheelPicker
+                  data={days}
+                  selectedValue={formData.dobDay}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, dobDay: value }))}
+                  renderLabel={(item) => String(item)}
+                />
+              </View>
+
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Year</Text>
+                <WheelPicker
+                  data={years}
+                  selectedValue={formData.dobYear}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, dobYear: value }))}
+                  renderLabel={(item) => String(item)}
+                />
+              </View>
+            </View>
+
+            <View style={styles.agePreview}>
+              <Text style={styles.agePreviewText}>
+                You'll be <Text style={styles.agePreviewBold}>{calculateAge()} years old</Text>
+              </Text>
+            </View>
+
+            <DuoButton
+              title="Done"
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                setShowDOBPicker(false);
+              }}
+              color={Colors.primary}
+              style={{ marginTop: 16 }}
+              size="large"
+            />
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -403,27 +587,24 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 24,
+    paddingTop: 16,
     paddingBottom: 140,
   },
   stepPill: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
+    backgroundColor: Colors.primary,
   },
   stepPillText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: Colors.text,
-    letterSpacing: 0.2,
+    fontSize: 14,
+    fontWeight: '900',
+    color: Colors.white,
   },
   progressTrack: {
     marginTop: 8,
     marginBottom: 10,
-    height: 12,
+    height: 8,
     borderRadius: 10,
     backgroundColor: Colors.borderLight,
     overflow: 'hidden',
@@ -443,177 +624,290 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: Colors.text,
     marginBottom: 12,
+    marginTop: 8,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  fieldRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
+
+  // Field Cards
   fieldCard: {
     backgroundColor: Colors.white,
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: 2,
     borderColor: Colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     marginBottom: 16,
-    borderBottomWidth: 6,
+    borderBottomWidth: 5,
   },
   fieldLabel: {
     fontSize: 13,
-    fontWeight: '900',
+    fontWeight: '800',
     color: Colors.textSecondary,
     marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
   },
   fieldInput: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '900',
     color: Colors.text,
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
+  dobDisplayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  ageChip: {
+    backgroundColor: Colors.primaryLight,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  ageChipText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+
+  // Gender Cards
   genderContainer: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 8,
   },
-  choiceCard: {
+  genderCard: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     backgroundColor: Colors.white,
     borderWidth: 2,
     borderColor: Colors.border,
-    borderRadius: 24,
-    paddingVertical: 16,
-    borderBottomWidth: 6,
+    borderRadius: 20,
+    paddingVertical: 20,
+    borderBottomWidth: 5,
   },
-  choiceCardActive: {
-    backgroundColor: Colors.white,
+  genderCardActive: {
     borderColor: Colors.primary,
-    borderBottomWidth: 6,
+    backgroundColor: Colors.primaryLight,
   },
-  choiceCardText: {
-    fontSize: 15,
+  genderEmoji: {
+    fontSize: 32,
+  },
+  genderText: {
+    fontSize: 16,
     fontWeight: '900',
     color: Colors.text,
-    textTransform: 'uppercase',
   },
-  choiceCardTextActive: {
+  genderTextActive: {
     color: Colors.primary,
   },
-  microTip: {
+
+  // Measurements
+  measurementRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderRadius: 24,
+    gap: 12,
+  },
+  measurementCard: {
     backgroundColor: Colors.white,
+    borderRadius: 20,
     borderWidth: 2,
     borderColor: Colors.border,
-    marginTop: 8,
-    borderBottomWidth: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    alignItems: 'center',
+    borderBottomWidth: 5,
   },
-  microTipText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
+  measurementEmoji: {
+    fontSize: 28,
+    marginBottom: 8,
+  },
+  inputWithUnit: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  measurementInput: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: Colors.text,
+    textAlign: 'center',
+    minWidth: 60,
+  },
+  unitText: {
+    fontSize: 16,
+    fontWeight: '700',
     color: Colors.textSecondary,
-    fontWeight: '800',
   },
-  optionsGrid: {
+  funTip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 20,
+  },
+  funTipEmoji: {
+    fontSize: 24,
+  },
+  funTipText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.primary,
+    lineHeight: 20,
+  },
+
+  // Goals Grid
+  goalsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
     marginBottom: 24,
   },
-  optionCard: {
+  goalCard: {
     width: '48%',
     backgroundColor: Colors.white,
     borderWidth: 2,
     borderColor: Colors.border,
-    borderRadius: 24,
+    borderRadius: 20,
     paddingVertical: 20,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     alignItems: 'center',
-    gap: 10,
-    borderBottomWidth: 6,
+    gap: 6,
+    borderBottomWidth: 5,
   },
-  optionCardActive: {
-    backgroundColor: Colors.white,
+  goalCardActive: {
     borderColor: Colors.primary,
-    borderBottomWidth: 6,
+    backgroundColor: Colors.primaryLight,
   },
-  optionLabel: {
-    fontSize: 14,
+  goalEmoji: {
+    fontSize: 32,
+  },
+  goalLabel: {
+    fontSize: 15,
     fontWeight: '900',
     color: Colors.text,
     textAlign: 'center',
-    textTransform: 'uppercase',
   },
-  optionLabelActive: {
+  goalLabelActive: {
     color: Colors.primary,
   },
-  listOption: {
+  goalDesc: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    textAlign: 'center',
+  },
+
+  // Activity Cards
+  activityCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 14,
     backgroundColor: Colors.white,
     borderWidth: 2,
     borderColor: Colors.border,
-    borderRadius: 24,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    marginBottom: 12,
-    borderBottomWidth: 6,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+    borderBottomWidth: 4,
   },
-  listOptionActive: {
+  activityCardActive: {
     borderColor: Colors.primary,
-    borderBottomWidth: 6,
+    backgroundColor: Colors.primaryLight,
   },
-  listOptionContent: {
+  activityEmoji: {
+    fontSize: 28,
+  },
+  activityContent: {
     flex: 1,
   },
-  listOptionLabel: {
+  activityLabel: {
     fontSize: 16,
     fontWeight: '900',
     color: Colors.text,
-    marginBottom: 4,
-    textTransform: 'uppercase',
+    marginBottom: 2,
   },
-  listOptionLabelActive: {
+  activityLabelActive: {
     color: Colors.primary,
   },
-  listOptionDesc: {
+  activityDesc: {
     fontSize: 13,
+    fontWeight: '600',
     color: Colors.textSecondary,
-    fontWeight: '700',
   },
-  tipCard: {
+
+  // Diet Grid
+  dietGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 12,
+    marginBottom: 16,
+  },
+  dietCard: {
+    width: '48%',
     backgroundColor: Colors.white,
-    borderRadius: 24,
     borderWidth: 2,
     borderColor: Colors.border,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    marginTop: 16,
-    borderBottomWidth: 6,
+    borderRadius: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    gap: 6,
+    borderBottomWidth: 5,
   },
-  tipText: {
-    flex: 1,
-    fontSize: 13,
+  dietCardActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,
+  },
+  dietEmoji: {
+    fontSize: 32,
+  },
+  dietLabel: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: Colors.text,
+    textAlign: 'center',
+  },
+  dietLabelActive: {
+    color: Colors.primary,
+  },
+  dietDesc: {
+    fontSize: 12,
+    fontWeight: '600',
     color: Colors.textSecondary,
-    lineHeight: 20,
-    fontWeight: '800',
+    textAlign: 'center',
   },
+
+  // Final Tip
+  finalTip: {
+    alignItems: 'center',
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 20,
+    padding: 24,
+    marginTop: 8,
+  },
+  finalTipEmoji: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  finalTipTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: Colors.primary,
+    marginBottom: 8,
+  },
+  finalTipText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  // Bottom Bar
   bottomBar: {
     position: 'absolute',
     left: 0,
@@ -628,39 +922,95 @@ const styles = StyleSheet.create({
     borderTopWidth: 2,
     borderTopColor: Colors.border,
   },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderWidth: 1,
-    borderColor: Colors.primary,
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
   },
-  backButtonText: {
+  modalContent: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+  },
+  modalHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  modalSubtitle: {
     fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  pickersRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  pickerColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  pickerLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  wheelContainer: {
+    height: ITEM_HEIGHT * 5,
+    overflow: 'hidden',
+  },
+  wheelHighlight: {
+    position: 'absolute',
+    top: ITEM_HEIGHT * 2,
+    left: 4,
+    right: 4,
+    height: ITEM_HEIGHT,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 12,
+    zIndex: -1,
+  },
+  wheelItem: {
+    height: ITEM_HEIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  wheelItemText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textLight,
+  },
+  wheelItemTextSelected: {
+    fontSize: 20,
     fontWeight: '900',
     color: Colors.primary,
   },
-  backButtonDisabled: {
-    borderColor: Colors.borderLight,
-  },
-  backButtonTextDisabled: {
-    color: Colors.textLight,
-  },
-  nextButton: {
-    flex: 2,
-    backgroundColor: Colors.primary,
-    borderRadius: 16,
-    paddingVertical: 16,
+  agePreview: {
     alignItems: 'center',
-    justifyContent: 'center',
+    marginTop: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.background,
+    borderRadius: 12,
   },
-  nextButtonText: {
+  agePreviewText: {
     fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  agePreviewBold: {
     fontWeight: '900',
-    color: Colors.white,
+    color: Colors.primary,
   },
 });

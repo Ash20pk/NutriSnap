@@ -11,12 +11,11 @@ import {
   Modal,
   Easing,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/Colors';
 import { useUser } from '../../context/UserContext';
 import { mealApi, questApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
-import { format, getISOWeek, getISOWeekYear } from 'date-fns';
+import { format } from 'date-fns';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import PageHeader from '../../components/PageHeader';
@@ -26,19 +25,19 @@ import StandardBarChart from '../../components/StandardBarChart';
 import StandardDonutChart from '../../components/StandardDonutChart';
 import AppCard from '../../components/AppCard';
 import SectionTitle from '../../components/SectionTitle';
+import StreakCalendarModal from '../../components/StreakCalendarModal';
 import * as Haptics from 'expo-haptics';
 
 const { width } = Dimensions.get('window');
 
 const WEEKLY_WRAP_RELEASE_HOUR = 22;
-const WEEKLY_WRAP_RELEASE_MINUTE = 0;
-const WEEKLY_WRAP_STORAGE_KEY = 'weekly_wrap_last_shown_iso_week';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useUser();
   const [stats, setStats] = useState<any>(null);
   const [questStats, setQuestStats] = useState<any>(null);
+  const [showStreakCalendar, setShowStreakCalendar] = useState(false);
   const [weeklyData, setWeeklyData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [showGoalModal, setShowGoalModal] = useState(false);
@@ -78,38 +77,10 @@ export default function HomeScreen() {
     }
   }, [user]);
 
-  const computeWeeklyWrapKey = useCallback((d: Date) => {
-    return `${getISOWeekYear(d)}-W${getISOWeek(d)}`;
+  const openStreakCalendar = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setShowStreakCalendar(true);
   }, []);
-
-  const getWeeklyWrapReferenceDate = useCallback((now: Date) => {
-    // Weekly wrap is released Sunday 10pm local time.
-    // Grace window: allow showing on Monday as well, but the wrap still belongs to Sunday.
-    if (now.getDay() === 1) {
-      const sunday = new Date(now);
-      sunday.setDate(now.getDate() - 1);
-      return sunday;
-    }
-    return now;
-  }, []);
-
-  const shouldShowWeeklyWrap = useCallback(async () => {
-    const now = new Date();
-    const day = now.getDay();
-    if (day !== 0 && day !== 1) return false;
-
-    const ref = getWeeklyWrapReferenceDate(now);
-    const release = new Date(ref);
-    release.setHours(WEEKLY_WRAP_RELEASE_HOUR, WEEKLY_WRAP_RELEASE_MINUTE, 0, 0);
-
-    // On Sunday: only after 10pm.
-    // On Monday: grace window for the same Sunday wrap (release already passed).
-    if (day === 0 && now.getTime() < release.getTime()) return false;
-
-    const key = computeWeeklyWrapKey(ref);
-    const lastShown = await AsyncStorage.getItem(WEEKLY_WRAP_STORAGE_KEY);
-    return lastShown !== key;
-  }, [computeWeeklyWrapKey, getWeeklyWrapReferenceDate]);
 
   const fetchWeeklyData = React.useCallback(async () => {
     if (!user) return;
@@ -150,11 +121,27 @@ export default function HomeScreen() {
     if (user) {
       fetchStats();
       fetchWeeklyData();
-      shouldShowWeeklyWrap()
-        .then(setShowWeeklyWrapBanner)
-        .catch(() => setShowWeeklyWrapBanner(false));
     }
-  }, [user, fetchStats, fetchWeeklyData, shouldShowWeeklyWrap]);
+  }, [user, fetchStats, fetchWeeklyData]);
+
+  useEffect(() => {
+    const checkWeeklyWrap = () => {
+      const now = new Date();
+      const currentDay = now.getDay(); // 0 is Sunday
+      const currentHour = now.getHours();
+      
+      // Show banner on Sunday after 10 PM or anytime on Monday
+      if ((currentDay === 0 && currentHour >= WEEKLY_WRAP_RELEASE_HOUR) || currentDay === 1) {
+        setShowWeeklyWrapBanner(true);
+      } else {
+        setShowWeeklyWrapBanner(false);
+      }
+    };
+
+    checkWeeklyWrap();
+    const interval = setInterval(checkWeeklyWrap, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     Animated.parallel([
@@ -274,6 +261,12 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
+      <StreakCalendarModal
+        visible={showStreakCalendar}
+        onClose={() => setShowStreakCalendar(false)}
+        userId={user?.id}
+      />
+
       <PageHeader 
         title={`Hello, ${user?.name}`} 
         subtitle={hasMetGoal 
@@ -292,10 +285,14 @@ export default function HomeScreen() {
               <Ionicons name="person-outline" size={20} color={Colors.text} />
             </TouchableOpacity>
 
-            <View style={styles.streakBadge}>
+            <TouchableOpacity
+              style={styles.streakBadge}
+              onPress={openStreakCalendar}
+              activeOpacity={0.85}
+            >
               <Ionicons name="flame" size={20} color={Colors.highLevels} />
               <Text style={styles.streakText}>{questStats?.current_streak ?? 0}</Text>
-            </View>
+            </TouchableOpacity>
           </View>
         }
       />
@@ -318,19 +315,11 @@ export default function HomeScreen() {
       >
         {showWeeklyWrapBanner && (
           <AnimatedCard delay={100} type="pop" style={styles.bannerContainer}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.bannerCard}
-              onPress={async () => {
+              onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                try {
-                  const now = new Date();
-                  const ref = getWeeklyWrapReferenceDate(now);
-                  const key = computeWeeklyWrapKey(ref);
-                  await AsyncStorage.setItem(WEEKLY_WRAP_STORAGE_KEY, key);
-                } catch {
-                  // ignore
-                }
-                setShowWeeklyWrapBanner(false);
+                // Don't hide the banner - keep it visible all week even after viewing
                 router.push('/weekly-wrap');
               }}
               activeOpacity={0.9}
@@ -701,9 +690,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.white,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 14,
+    borderRadius: 20,
     gap: 6,
     borderWidth: 2,
     borderColor: Colors.border,

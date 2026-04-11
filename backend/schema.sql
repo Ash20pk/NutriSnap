@@ -1,4 +1,4 @@
--- NutriSnap Database Schema
+-- Loggr Database Schema
 -- Run this in Supabase SQL Editor to initialize the database
 
 -- Ensure target schema exists

@@ -1,4 +1,4 @@
-// Font configuration for NutriSnap - Fitness/Nutrition themed typography
+// Font configuration for Loggr - Fitness/Nutrition themed typography
 
 export const Fonts = {
   // Font families (using system fonts for consistency)

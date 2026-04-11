@@ -133,7 +133,7 @@ export default function Intro() {
             <View style={styles.logoMark}>
               <Ionicons name="leaf" size={22} color={Colors.white} />
             </View>
-            <Text style={styles.brand}>NutriSnap</Text>
+            <Text style={styles.brand}>Loggr</Text>
           </View>
 
           <Text

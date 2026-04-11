@@ -100,40 +100,88 @@ export default function ProfileScreen() {
 
   const [editVisible, setEditVisible] = React.useState(false);
   const [editUsernameDraft, setEditUsernameDraft] = React.useState('');
+  const [editNameDraft, setEditNameDraft] = React.useState('');
   const [editBioDraft, setEditBioDraft] = React.useState('');
   const [savingProfile, setSavingProfile] = React.useState(false);
+  const [profileRefreshLoading, setProfileRefreshLoading] = React.useState(false);
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    const candidate = (editUsernameDraft || '').trim().toLowerCase();
+    if (candidate && !/^[a-z0-9_]{3,20}$/.test(candidate)) {
+      Alert.alert('Invalid username', 'Use 3-20 characters: letters, numbers, underscores.');
+      return;
+    }
+    try {
+      setSavingProfile(true);
+      const updatePayload: any = {
+        bio: editBioDraft.trim(),
+        name: editNameDraft.trim()
+      };
+
+      const promises: Promise<any>[] = [userApi.updateMyProfile(updatePayload)];
+      if (candidate && candidate !== user.username) {
+        promises.push(socialApi.setMyUsername(candidate));
+      }
+
+      const results = await Promise.all(promises);
+      const profileRes = results[0];
+      const usernameRes = results.length > 1 ? results[1] : null;
+
+      await setUser({
+        ...user,
+        username: usernameRes ? usernameRes.username : user.username,
+        name: editNameDraft.trim(),
+        bio: profileRes.bio ?? editBioDraft.trim()
+      });
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      setEditVisible(false);
+    } catch (e: any) {
+      const status = e?.response?.status;
+      const detail = e?.response?.data?.detail;
+      if (status === 409) {
+        Alert.alert('Username taken', 'That username is already taken. Try another.');
+      } else {
+        Alert.alert('Error', detail || 'Failed to save profile');
+      }
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   React.useEffect(() => {
     setEditUsernameDraft((user?.username || '').toString());
+    setEditNameDraft((user?.name || '').toString());
     setEditBioDraft((user?.bio || '').toString());
-  }, [user?.username, user?.bio]);
+  }, [user?.username, user?.name, user?.bio]);
+
+  const refreshProfileData = React.useCallback(async () => {
+    if (!user?.id) return;
+    setProfileRefreshLoading(true);
+    try {
+      const [statsRes, badgesRes, followersRes, followingRes] = await Promise.all([
+        questApi.getStats(user.id),
+        questApi.getBadges(user.id),
+        socialApi.getMyFollowers(),
+        socialApi.getMyFollowing(),
+      ]);
+      setStats(statsRes);
+      setBadges(badgesRes.badges || []);
+      setFollowersCount((followersRes.followers || []).length);
+      setFollowingCount((followingRes.following || []).length);
+    } catch (e) {
+      console.error('Error loading profile data:', e);
+    } finally {
+      setProfileRefreshLoading(true);
+      setProfileRefreshLoading(false);
+    }
+  }, [user?.id]);
 
   React.useEffect(() => {
-    if (!user?.id) return;
-    let cancelled = false;
-    Promise.all([
-      questApi.getStats(user.id),
-      questApi.getBadges(user.id),
-      socialApi.getMyFollowers(),
-      socialApi.getMyFollowing(),
-    ])
-      .then(([statsRes, badgesRes, followersRes, followingRes]) => {
-        if (cancelled) return;
-        setStats(statsRes);
-        setBadges(badgesRes.badges || []);
-        setFollowersCount((followersRes.followers || []).length);
-        setFollowingCount((followingRes.following || []).length);
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        console.error('Error loading profile data:', e);
-      })
-      .finally(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
+    refreshProfileData();
+  }, [refreshProfileData]);
 
   const handleLogout = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -171,6 +219,20 @@ export default function ProfileScreen() {
       <PageHeader 
         title="Profile" 
         subtitle="Manage your account"
+        rightComponent={
+          <TouchableOpacity 
+            onPress={refreshProfileData} 
+            disabled={profileRefreshLoading}
+            style={styles.refreshBtn}
+          >
+            <Ionicons 
+              name="refresh" 
+              size={22} 
+              color={Colors.primary} 
+              style={profileRefreshLoading ? { opacity: 0.5 } : null}
+            />
+          </TouchableOpacity>
+        }
       />
       
       <ScrollView
@@ -285,7 +347,18 @@ export default function ProfileScreen() {
                   <Ionicons name="close" size={24} color={Colors.text} />
                 </TouchableOpacity>
                 <Text style={styles.modalTitle}>Edit Profile</Text>
-                <View style={{ width: 40 }} />
+                <TouchableOpacity
+                  onPress={async () => {
+                    // Trigger the same save logic as the DuoButton
+                    // We can move the logic to a helper function
+                    handleSaveProfile();
+                  }}
+                  disabled={savingProfile}
+                >
+                  <Text style={[styles.saveBtnText, savingProfile && { opacity: 0.5 }]}>
+                    {savingProfile ? '...' : 'Done'}
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
@@ -310,6 +383,21 @@ export default function ProfileScreen() {
                       </TouchableOpacity>
                     </View>
                     <Text style={styles.changePhotoHint}>Tap to change photo</Text>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Name</Text>
+                    <View style={styles.inputWrapper}>
+                      <Ionicons name="person-outline" size={20} color={Colors.primary} style={{ marginRight: 10 }} />
+                      <TextInput
+                        style={styles.textInput}
+                        value={editNameDraft}
+                        onChangeText={setEditNameDraft}
+                        placeholder="Your name"
+                        placeholderTextColor={Colors.textLight}
+                        selectionColor={Colors.primary}
+                      />
+                    </View>
                   </View>
 
                   <View style={styles.inputGroup}>
@@ -351,47 +439,7 @@ export default function ProfileScreen() {
 
                   <DuoButton
                     title={savingProfile ? 'Saving...' : 'Save Changes'}
-                    onPress={async () => {
-                      if (!user) return;
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                      const candidate = (editUsernameDraft || '').trim().toLowerCase();
-                      if (candidate && !/^[a-z0-9_]{3,20}$/.test(candidate)) {
-                        Alert.alert('Invalid username', 'Use 3-20 characters: letters, numbers, underscores.');
-                        return;
-                      }
-                      try {
-                        setSavingProfile(true);
-                        const updatePayload: any = { bio: editBioDraft.trim() };
-
-                        const promises: Promise<any>[] = [userApi.updateMyProfile(updatePayload)];
-                        if (candidate && candidate !== user.username) {
-                          promises.push(socialApi.setMyUsername(candidate));
-                        }
-
-                        const results = await Promise.all(promises);
-                        const profileRes = results[0];
-                        const usernameRes = results.length > 1 ? results[1] : null;
-
-                        await setUser({
-                          ...user,
-                          username: usernameRes ? usernameRes.username : user.username,
-                          bio: profileRes.bio ?? editBioDraft.trim()
-                        });
-
-                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-                        setEditVisible(false);
-                      } catch (e: any) {
-                        const status = e?.response?.status;
-                        const detail = e?.response?.data?.detail;
-                        if (status === 409) {
-                          Alert.alert('Username taken', 'That username is already taken. Try another.');
-                        } else {
-                          Alert.alert('Error', detail || 'Failed to save profile');
-                        }
-                      } finally {
-                        setSavingProfile(false);
-                      }
-                    }}
+                    onPress={handleSaveProfile}
                     disabled={savingProfile}
                     loading={savingProfile}
                     color={Colors.primary}
@@ -680,6 +728,17 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
     marginBottom: Spacing.sm,
   },
+  refreshBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 4,
+  },
   modalCloseBtn: {
     width: Radius.round,
     height: Radius.round,
@@ -689,9 +748,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: Colors.border,
-  },
-  modalScroll: {
-    flex: 1,
   },
   modalAvatarSection: {
     alignItems: 'center',
@@ -706,44 +762,44 @@ const styles = StyleSheet.create({
     right: -4,
     bottom: 4,
     backgroundColor: Colors.primary,
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    borderWidth: 3,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 4,
     borderColor: Colors.white,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
   },
   changePhotoHint: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.primary,
+    marginTop: 8,
   },
   inputGroup: {
     marginBottom: Spacing.xxl,
   },
   inputLabel: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: Colors.text,
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.textSecondary,
     textTransform: 'uppercase',
-    marginBottom: Spacing.sm,
-    marginLeft: Spacing.xs,
-    letterSpacing: 0.5,
+    marginBottom: Spacing.xs + 2,
+    marginLeft: 4,
+    letterSpacing: 1,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: Radius.xl,
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 16,
     borderWidth: 2,
     borderColor: Colors.border,
-    borderBottomWidth: 4,
     paddingHorizontal: Spacing.lg,
   },
   inputPrefix: {
@@ -754,16 +810,16 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
-    height: 56,
+    height: 52,
     fontSize: 16,
     fontWeight: '700',
     color: Colors.text,
   },
   inputHint: {
     fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: Spacing.sm,
-    marginLeft: Spacing.xs,
+    color: Colors.textLight,
+    marginTop: 6,
+    marginLeft: 4,
     fontWeight: '600',
   },
   bioInputWrapper: {
@@ -887,27 +943,48 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xl,
     borderWidth: 2,
     borderColor: Colors.border,
-    maxHeight: '85%',
+    height: '85%',
+    width: '100%',
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    overflow: 'hidden',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.xxl,
-    paddingTop: Spacing.lg,
+    paddingTop: Spacing.xl,
     paddingBottom: Spacing.md,
+    backgroundColor: Colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '900',
     color: Colors.text,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: -0.5,
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 10,
+  },
+  saveBtnText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.primary,
+    paddingHorizontal: 8,
+  },
+  modalScroll: {
+    flex: 1,
   },
   modalContent: {
     paddingHorizontal: Spacing.xxl,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.lg,
+    paddingTop: Spacing.xl,
+    paddingBottom: 60,
   },
   badgeCount: {
     fontSize: 14,

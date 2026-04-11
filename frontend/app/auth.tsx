@@ -2,12 +2,14 @@ import React, { useMemo, useState } from 'react';
 import {
   Alert,
   Dimensions,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -97,20 +99,21 @@ export default function AuthScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <PageHeader
-        title={mode === 'signin' ? "Let's sign you in" : 'Create Account'}
-        subtitle={
-          mode === 'signin'
-            ? 'Sign in and elevate your nutrition game.'
-            : 'Sign up and take the first step towards your goals.'
-        }
-      />
-      <KeyboardAvoidingView 
-        style={styles.flex} 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={[styles.body, isSmallScreen && styles.bodySmall]}>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={styles.container}>
+        <PageHeader
+          title={mode === 'signin' ? "Let's sign you in" : 'Create Account'}
+          subtitle={
+            mode === 'signin'
+              ? 'Sign in and elevate your nutrition game.'
+              : 'Sign up and take the first step towards your goals.'
+          }
+        />
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={[styles.body, isSmallScreen && styles.bodySmall]}>
           <AnimatedCard
             type="pop"
             delay={100}
@@ -240,11 +243,12 @@ export default function AuthScreen() {
             <View style={[styles.logoMark, isSmallScreen && styles.logoMarkSmall]}>
               <Ionicons name="leaf" size={22} color={Colors.white} />
             </View>
-            <Text style={[styles.brand, isSmallScreen && styles.brandSmall]}>NutriSnap</Text>
+            <Text style={[styles.brand, isSmallScreen && styles.brandSmall]}>Loggr</Text>
           </View>
-        </View>
-      </KeyboardAvoidingView>
-    </View>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 

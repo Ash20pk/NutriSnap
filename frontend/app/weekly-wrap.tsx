@@ -51,7 +51,7 @@ export default function WeeklyWrapScreen() {
     {
       id: 'intro',
       title: 'Your Week\nin Review',
-      subtitle: 'NutriSnap Wrapped 2024',
+      subtitle: 'Loggr Wrapped 2024',
       gradient: [Colors.primary, Colors.accent] as const,
       icon: 'sparkles',
     },
@@ -298,8 +298,8 @@ export default function WeeklyWrapScreen() {
       
       await Share.share({
         url: Platform.OS === 'android' && !String(uri).startsWith('file://') ? `file://${uri}` : uri,
-        title: 'My Weekly NutriSnap',
-        message: `My Weekly NutriSnap Wrapped!\n\nConsistency: ${weeklyStats?.consistency || 0}%\n\n#NutriSnap #WeeklyWrap`,
+        title: 'My Weekly Loggr',
+        message: `My Weekly Loggr Wrapped!\n\nConsistency: ${weeklyStats?.consistency || 0}%\n\n#Loggr #WeeklyWrap`,
       });
     } catch (error) {
       console.error('Error sharing:', error);
@@ -683,7 +683,7 @@ export default function WeeklyWrapScreen() {
               </View>
 
               <View style={styles.cardFooter}>
-                <Text style={styles.footerBrand}>NUTRISNAP</Text>
+                <Text style={styles.footerBrand}>LOGGR</Text>
                 <View style={styles.footerDivider} />
                 <Text style={styles.footerTagline}>AI NUTRITION TRACKER</Text>
               </View>
@@ -878,6 +878,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   foodName: {
+    flex: 1,
     fontSize: 18,
     fontWeight: '800',
     color: Colors.white,

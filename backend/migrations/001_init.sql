@@ -1,5 +1,5 @@
 -- 001_init.sql
--- Idempotent migration for NutriSnap backend tables
+-- Idempotent migration for Loggr backend tables
 -- Safe to run multiple times.
 
 -- Ensure schema exists

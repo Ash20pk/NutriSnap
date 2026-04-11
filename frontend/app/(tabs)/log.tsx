@@ -48,6 +48,8 @@ export default function LogScreen() {
   const [configUnit, setConfigUnit] = useState<'g' | 'oz'>('g');
   const [mealNotes, setMealNotes] = useState('');
   const [manualParseLoading, setManualParseLoading] = useState(false);
+  const [clarificationQuestion, setClarificationQuestion] = useState<string | null>(null);
+  const [clarificationRequestedName, setClarificationRequestedName] = useState<string | null>(null);
 
   useEffect(() => {
     const openMode = typeof params?.openMode === 'string' ? params.openMode : '';
@@ -111,8 +113,17 @@ export default function LogScreen() {
       setRecording(null);
       setMealNotes('');
       setUsedVoice(false);
+      setClarificationQuestion(null);
+      setClarificationRequestedName(null);
     }
   }, [showModal]);
+
+  const getClarificationPrompt = () => {
+    const base = (clarificationRequestedName || '').trim();
+    const baseType = base ? base.split(' ').slice(-1).join(' ') : 'burrito';
+    const example = `"small chicken ${baseType} with cheese"`;
+    return `Please say it again with size + filling + extras (if any). For example: ${example}.`;
+  };
 
   const mealTypes: { id: 'breakfast' | 'lunch' | 'dinner' | 'snack'; label: string; icon: string }[] = [
     { id: 'breakfast', label: 'Breakfast', icon: 'sunny' },
@@ -226,6 +237,13 @@ export default function LogScreen() {
       }
 
       const result = await mealApi.voiceToMeal(uri, user.id);
+      if (result?.needs_clarification) {
+        setUsedVoice(true);
+        setClarificationQuestion(result.follow_up_question || 'Can you clarify what you meant?');
+        setClarificationRequestedName(result.requested_food_name || null);
+        return;
+      }
+
       const foods = result?.foods || [];
 
       if (foods.length === 0) {
@@ -233,6 +251,8 @@ export default function LogScreen() {
         return;
       }
 
+      setClarificationQuestion(null);
+      setClarificationRequestedName(null);
       setSelectedFoods(foods);
       setUsedVoice(true);
     } catch (e) {
@@ -585,9 +605,19 @@ export default function LogScreen() {
                         {!voiceLoading ? (
                           <>
                             <View style={styles.voicePromptContainerCentered}>
-                              <Text style={styles.voicePromptTitle}>Tap to speak your meal</Text>
-                              <Text style={styles.voicePromptSub}>{"\"2 boiled eggs and a bowl of poha\""}</Text>
+                              <Text style={styles.voicePromptTitle}>
+                                {clarificationQuestion ? 'Quick question' : 'Tap to speak your meal'}
+                              </Text>
+                              <Text style={styles.voicePromptSub}>
+                                {clarificationQuestion ? getClarificationPrompt() : '"2 boiled eggs and a bowl of poha"'}
+                              </Text>
+                              {!!clarificationRequestedName && (
+                                <Text style={styles.voicePromptSub}>
+                                  {`You said: ${clarificationRequestedName}`}
+                                </Text>
+                              )}
                             </View>
+
                             <TouchableOpacity
                               style={[styles.micButtonLarge, isRecording && styles.micButtonActive]}
                               onPress={() => {

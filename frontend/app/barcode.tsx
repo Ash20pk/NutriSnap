@@ -9,6 +9,7 @@ import {
   Dimensions,
   Modal,
   ActivityIndicator,
+  Image,
   TextInput,
   LayoutAnimation,
   Platform,
@@ -27,7 +28,8 @@ import { useUser } from '../context/UserContext';
 import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
+const CONTRIBUTION_CARD_HEIGHT = Math.min(Math.round(height * 0.78), 840);
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -52,6 +54,9 @@ export default function BarcodeScreen() {
   const [showContributionModal, setShowContributionModal] = useState(false);
   const [contributionBarcode, setContributionBarcode] = useState('');
   const [contributionNeedsFront, setContributionNeedsFront] = useState(false);
+  const [contributionFrontImageBase64, setContributionFrontImageBase64] = useState<string | null>(null);
+  const [contributionLabelImagesBase64, setContributionLabelImagesBase64] = useState<string[]>([]);
+  const [contributionStep, setContributionStep] = useState<1 | 2>(1);
 
   const isProcessingRef = useRef(false);
 
@@ -60,63 +65,104 @@ export default function BarcodeScreen() {
     setShowContributionModal(false);
     setContributionBarcode('');
     setContributionNeedsFront(false);
+    setContributionFrontImageBase64(null);
+    setContributionLabelImagesBase64([]);
+    setContributionStep(1);
     // Add a small delay to prevent immediate re-scan if still holding phone over barcode
     setTimeout(() => {
       isProcessingRef.current = false;
     }, 1000);
   };
 
-  const processLabelPhoto = async (barcode: string) => {
+  const _ensureCameraPermission = async (): Promise<boolean> => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission Required', 'Camera permission is needed to take label photos.');
+      return false;
+    }
+    return true;
+  };
+
+  const _captureBase64Photo = async (): Promise<string | null> => {
+    const result = await ImagePicker.launchCameraAsync({
+      base64: true,
+      quality: 0.55,
+      allowsEditing: false,
+    });
+    if (result.canceled || !result.assets?.[0]?.base64) return null;
+    return result.assets[0].base64;
+  };
+
+  const addFrontPhoto = async () => {
+    if (isSubmittingLabels || isProcessingLabel) return;
+    if (!(await _ensureCameraPermission())) return;
+    try {
+      setIsSubmittingLabels(true);
+      const b64 = await _captureBase64Photo();
+      if (!b64) return;
+      setContributionFrontImageBase64(b64);
+    } finally {
+      setIsSubmittingLabels(false);
+    }
+  };
+
+  const captureOrReplaceLabelPhotoAt = async (idx: number) => {
+    if (isSubmittingLabels || isProcessingLabel) return;
+    if (idx < 0 || idx > 2) return;
+    if (!(await _ensureCameraPermission())) return;
+    try {
+      setIsSubmittingLabels(true);
+      const b64 = await _captureBase64Photo();
+      if (!b64) return;
+      setContributionLabelImagesBase64((prev) => {
+        const next = [...prev];
+        if (idx < next.length) next[idx] = b64;
+        else next.push(b64);
+        return next.slice(0, 3);
+      });
+    } finally {
+      setIsSubmittingLabels(false);
+    }
+  };
+
+  const removeLabelPhotoAt = (idx: number) => {
+    setContributionLabelImagesBase64((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const analyzeLabelPhotos = async (barcode: string) => {
     if (!user?.id) {
       Alert.alert('Error', 'You must be logged in.');
       return;
     }
-    if (isSubmittingLabels) return;
+    if (isSubmittingLabels || isProcessingLabel) return;
+    if (!barcode) return;
+
+    if (contributionNeedsFront && !contributionFrontImageBase64) {
+      Alert.alert('Missing Front Photo', 'Please take a photo of the front of the pack first.');
+      return;
+    }
+
+    if (!contributionLabelImagesBase64.length) {
+      Alert.alert('Missing Label Photo', 'Please add at least 1 label photo (nutrition/ingredients).');
+      return;
+    }
 
     try {
-      // Request camera permission
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('Permission Required', 'Camera permission is needed to take label photos.');
-        return;
-      }
-
-      setIsSubmittingLabels(true);
-
-      let frontImageBase64: string | undefined;
-      if (contributionNeedsFront) {
-        const front = await ImagePicker.launchCameraAsync({
-          base64: true,
-          quality: 0.55,
-          allowsEditing: false,
-        });
-        if (front.canceled || !front.assets?.[0]?.base64) {
-          setIsSubmittingLabels(false);
-          return;
-        }
-        frontImageBase64 = front.assets[0].base64;
-      }
-
-      const label = await ImagePicker.launchCameraAsync({
-        base64: true,
-        quality: 0.55,
-        allowsEditing: false,
-      });
-
-      if (label.canceled || !label.assets?.[0]?.base64) {
-        setIsSubmittingLabels(false);
-        return;
-      }
-
-      const imageBase64 = label.assets[0].base64;
-
       // Send to AI for processing
       setIsProcessingLabel(true);
-      const response = await foodApi.processLabelImage(barcode, user.id, imageBase64, frontImageBase64);
+      const response = await foodApi.processLabelImage(
+        barcode,
+        user.id,
+        contributionLabelImagesBase64,
+        contributionFrontImageBase64 ?? undefined
+      );
       setIsProcessingLabel(false);
 
       // Close contribution modal
       setShowContributionModal(false);
+      setContributionFrontImageBase64(null);
+      setContributionLabelImagesBase64([]);
+      setContributionStep(1);
 
       // Set the scanned product from AI response
       const food = response.food;
@@ -162,12 +208,11 @@ export default function BarcodeScreen() {
       setIsProcessingLabel(false);
       const message = e?.response?.data?.detail || 'Could not process the label. Please try again.';
       Alert.alert('Processing Failed', message, [
-        { text: 'Try Again', onPress: () => processLabelPhoto(barcode) },
+        { text: 'Try Again', onPress: () => analyzeLabelPhotos(barcode) },
         { text: 'Scan Again', style: 'cancel', onPress: resetScanning },
       ]);
     } finally {
       setIsProcessingLabel(false);
-      setIsSubmittingLabels(false);
     }
   };
 
@@ -358,6 +403,7 @@ export default function BarcodeScreen() {
         setContributionBarcode(data);
         setContributionNeedsFront(false);
         setShowContributionModal(true);
+        setContributionStep(1);
         return;
       }
 
@@ -408,11 +454,15 @@ export default function BarcodeScreen() {
         setContributionBarcode(data);
         setContributionNeedsFront(true);
         setShowContributionModal(true);
+        setContributionStep(1);
       } else {
         Alert.alert(
           'Lookup Failed',
           'Could not fetch product details. Please try again.',
-          [{ text: 'Scan Again', onPress: resetScanning }]
+          [
+            { text: 'Try Again', onPress: resetScanning },
+            { text: 'Cancel', style: 'cancel', onPress: () => router.back() },
+          ]
         );
       }
     } finally {
@@ -799,73 +849,160 @@ export default function BarcodeScreen() {
               <Ionicons name="close" size={22} color={Colors.text} />
             </TouchableOpacity>
 
-            <View style={styles.contributionContent}>
-              <View style={styles.contributionIconWrap}>
-                <Ionicons name="heart" size={56} color={Colors.primary} />
-              </View>
+            <ScrollView
+              style={{ width: '100%' }}
+              contentContainerStyle={[styles.contributionContent, { flexGrow: 1 }]}
+              showsVerticalScrollIndicator={false}
+              bounces={true}
+            >
+              <View style={{ flex: 1 }}>
+                {contributionStep === 1 ? (
+                  <>
 
-              <Text style={styles.contributionTitle}>
-                Help Us Help Everyone
-              </Text>
+                    <Text style={styles.contributionTitle}>
+                      Help Us Help Everyone
+                    </Text>
 
-              <Text style={styles.contributionSubtitle}>
-                {contributionNeedsFront ? 'This product is not in our database yet' : 'We need label details to add this product'}
-              </Text>
+                    <Text style={styles.contributionSubtitle}>
+                      {contributionNeedsFront ? 'This product is not in our database yet' : 'We need label details to add this product'}
+                    </Text>
 
-              <Text style={styles.contributionText}>
-                By sharing a photo of the label, you help make the world a healthier place for everyone
-              </Text>
+                    <Text style={styles.contributionText}>
+                      By sharing a photo of the label, you help make the world a healthier place for everyone
+                    </Text>
 
-              <View style={styles.contributionInstructions}>
-                <Text style={styles.contribInstructionTitle}>What to capture:</Text>
-                {contributionNeedsFront ? (
-                  <View style={styles.contribInstructionRow}>
-                    <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
-                    <Text style={styles.contribInstructionText}>Front of the pack (product name)</Text>
-                  </View>
-                ) : null}
-                <View style={styles.contribInstructionRow}>
-                  <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
-                  <Text style={styles.contribInstructionText}>Nutrition Facts label</Text>
-                </View>
-                <View style={styles.contribInstructionRow}>
-                  <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
-                  <Text style={styles.contribInstructionText}>Ingredients list</Text>
-                </View>
-                <Text style={styles.contribInstructionHint}>
-                  {contributionNeedsFront
-                    ? 'We’ll ask for 2 photos: front of pack + the label (nutrition/ingredients).'
-                    : 'Take the label (nutrition/ingredients). If both fit in one photo, that’s fine.'}
-                </Text>
+                    <View style={styles.contributionInstructions}>
+                      <Text style={styles.contribInstructionTitle}>What to capture:</Text>
+                      {contributionNeedsFront ? (
+                        <View style={styles.contribInstructionRow}>
+                          <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+                          <Text style={styles.contribInstructionText}>Front of the pack (product name)</Text>
+                        </View>
+                      ) : null}
+                      <View style={styles.contribInstructionRow}>
+                        <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+                        <Text style={styles.contribInstructionText}>Nutrition Facts label</Text>
+                      </View>
+                      <View style={styles.contribInstructionRow}>
+                        <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+                        <Text style={styles.contribInstructionText}>Ingredients list</Text>
+                      </View>
+                      <Text style={styles.contribInstructionHint}>
+                        {contributionNeedsFront
+                          ? 'We’ll ask for 2 photos: front of pack + the label (nutrition/ingredients).'
+                          : 'Take the label (nutrition/ingredients). If both fit in one photo, that’s fine.'}
+                      </Text>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.photoRowWrap}>
+                    </View>
+
+                    {contributionNeedsFront ? (
+                      <View style={styles.photoRowWrap}>
+                        <Text style={styles.photoRowTitle}>Front photo</Text>
+                        <View style={styles.photoRow}>
+                          <TouchableOpacity
+                            style={[styles.photoChip, !!contributionFrontImageBase64 && styles.photoChipActive]}
+                            onPress={addFrontPhoto}
+                            disabled={isSubmittingLabels || isProcessingLabel}
+                          >
+                            <Ionicons name="camera" size={16} color={Colors.text} />
+                            <Text style={styles.photoChipText}>{contributionFrontImageBase64 ? 'Retake' : 'Add'}</Text>
+                          </TouchableOpacity>
+                          <Text style={styles.photoCountText}>{contributionFrontImageBase64 ? '1/1 added' : '0/1 added'}</Text>
+                        </View>
+                      </View>
+                    ) : null}
+
+                    <View style={styles.photoRowWrap}>
+                      <View style={styles.photoRowHeader}>
+                        <Text style={styles.photoRowTitle}>Label photos</Text>
+                        <Text style={styles.photoCountText}>{contributionLabelImagesBase64.length}/3</Text>
+                      </View>
+
+                      <View style={styles.uploadGrid}>
+                        {[0, 1, 2].map((idx) => {
+                          const b64 = contributionLabelImagesBase64[idx];
+                          const isFilled = !!b64;
+                          return (
+                            <View key={idx} style={styles.uploadSlotWrap}>
+                              <TouchableOpacity
+                                style={[styles.uploadSlot, isFilled && styles.uploadSlotFilled]}
+                                onPress={() => captureOrReplaceLabelPhotoAt(idx)}
+                                disabled={isSubmittingLabels || isProcessingLabel}
+                                activeOpacity={0.9}
+                              >
+                                {isFilled ? (
+                                  <Image
+                                    source={{ uri: `data:image/jpeg;base64,${b64}` }}
+                                    style={styles.uploadImage}
+                                  />
+                                ) : (
+                                  <View style={styles.uploadEmptyState}>
+                                    <Ionicons name="add" size={28} color={Colors.textSecondary} />
+                                    <Text style={styles.uploadEmptyText}>Add</Text>
+                                  </View>
+                                )}
+                              </TouchableOpacity>
+
+                              <View style={styles.uploadSlotFooter}>
+                                <Text style={styles.uploadSlotLabel}>Photo {idx + 1}</Text>
+                                {isFilled ? (
+                                  <TouchableOpacity
+                                    onPress={() => removeLabelPhotoAt(idx)}
+                                    disabled={isSubmittingLabels || isProcessingLabel}
+                                  >
+                                    <Text style={styles.photoRemoveText}>Remove</Text>
+                                  </TouchableOpacity>
+                                ) : null}
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </View>
+
+                    <Text style={[styles.uploadTipText, { marginVertical: 16 }]}>
+                      TIP: Use good lighting and keep text sharp. Add photos for nutrition + ingredients.
+                    </Text>
+                  </>
+                )}
               </View>
 
               <View style={styles.contributionButtons}>
                 <DuoButton
-                  title={(isSubmittingLabels || isProcessingLabel) ? 'Analyzing...' : (contributionNeedsFront ? 'Take Photos' : 'Take Photo')}
+                  title={contributionStep === 1 ? "Continue" : ((isSubmittingLabels || isProcessingLabel) ? 'Analyzing' : 'Analyze')}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                    processLabelPhoto(contributionBarcode);
+                    if (contributionStep === 1) {
+                      setContributionStep(2);
+                    } else {
+                      analyzeLabelPhotos(contributionBarcode);
+                    }
                   }}
                   disabled={isSubmittingLabels || isProcessingLabel}
-                  loading={isSubmittingLabels || isProcessingLabel}
+                  loading={contributionStep === 2 && (isSubmittingLabels || isProcessingLabel)}
                   color={Colors.primary}
                   size="large"
                   style={{ width: '100%' }}
-                  leftIcon={<Ionicons name="camera" size={20} color={Colors.white} />}
+                  leftIcon={<Ionicons name={contributionStep === 1 ? "arrow-forward" : "sparkles"} size={20} color={Colors.white} />}
                 />
 
                 <TouchableOpacity
                   style={styles.cancelLink}
-                  onPress={resetScanning}
+                  onPress={contributionStep === 1 ? resetScanning : () => setContributionStep(1)}
+                  disabled={isSubmittingLabels || isProcessingLabel}
                 >
-                  <Text style={styles.cancelLinkText}>SCAN AGAIN</Text>
+                  <Text style={styles.cancelLinkText}>{contributionStep === 1 ? "SCAN AGAIN" : "BACK"}</Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            </ScrollView>
           </AnimatedCard>
         </View>
       </Modal>
-    </SafeAreaView >
+    </SafeAreaView>
   );
 }
 
@@ -1407,6 +1544,7 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     padding: 32,
     width: '100%',
+    height: '90%',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: Colors.border,
@@ -1494,5 +1632,147 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     gap: 4,
+  },
+  photoRowWrap: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  photoRowTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: Colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  photoRowHeader: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  photoRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  photoChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: Colors.backgroundSecondary,
+    borderWidth: 2,
+    borderColor: Colors.border,
+  },
+  photoChipActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + '10',
+  },
+  photoChipText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: Colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  photoCountText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.textSecondary,
+    textAlign: 'right',
+  },
+  photoThumbList: {
+    width: '100%',
+    marginTop: 10,
+    gap: 8,
+  },
+  photoThumb: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: Colors.backgroundSecondary,
+    borderWidth: 2,
+    borderColor: Colors.border,
+  },
+  photoThumbText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  photoRemoveText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: Colors.error,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  uploadGrid: {
+    width: '100%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  uploadSlotWrap: {
+    width: '48%',
+    marginBottom: 8,
+  },
+  uploadSlot: {
+    width: '100%',
+    aspectRatio: 0.85,
+    borderRadius: 16,
+    backgroundColor: Colors.backgroundSecondary,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadSlotFilled: {
+    borderColor: Colors.primary,
+  },
+  uploadImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  uploadEmptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadEmptyText: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: '900',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  uploadSlotFooter: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  uploadSlotLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  uploadTipText: {
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 16,
   },
 });

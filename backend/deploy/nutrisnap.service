@@ -1,0 +1,60 @@
+# Systemd service file for NutriSnap Backend API
+# Install to: /etc/systemd/system/nutrisnap.service
+#
+# Installation:
+#   sudo cp deploy/nutrisnap.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable nutrisnap
+#   sudo systemctl start nutrisnap
+#
+# Management:
+#   sudo systemctl status nutrisnap
+#   sudo systemctl restart nutrisnap
+#   sudo systemctl stop nutrisnap
+#   sudo journalctl -u nutrisnap -f
+
+[Unit]
+Description=NutriSnap Backend API
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=notify
+User=nutrisnap
+Group=nutrisnap
+WorkingDirectory=/opt/nutrisnap/backend
+
+# Environment
+Environment="PATH=/opt/nutrisnap/backend/venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=/opt/nutrisnap/backend/.env
+
+# Start command
+ExecStart=/opt/nutrisnap/backend/venv/bin/gunicorn app.main:app -c gunicorn_conf.py
+
+# Reload command (graceful restart)
+ExecReload=/bin/kill -s HUP $MAINPID
+
+# Shutdown behavior
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Restart policy
+Restart=always
+RestartSec=5
+StartLimitInterval=60
+StartLimitBurst=3
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/nutrisnap/backend/logs
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

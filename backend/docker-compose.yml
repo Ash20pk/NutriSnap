@@ -1,0 +1,128 @@
+# ============================================================
+# NutriSnap — Docker Compose
+# Usage:
+#   docker compose up            → production-like (gunicorn)
+#   docker compose --profile dev up → dev server (uvicorn --reload)
+# ============================================================
+
+services:
+
+  # ── PostgreSQL database ─────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: nutrisnap_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nutrisnap}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nutrisnap_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-nutrisnap}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Auto-run schema on first boot
+      - ./schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    ports:
+      - "5434:5432"   # host 5434 → container 5432 (5432+5433 already allocated)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nutrisnap} -d ${POSTGRES_DB:-nutrisnap}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - nutrisnap_net
+
+  # ── API — production (gunicorn + uvicorn workers) ───────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: nutrisnap_api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Override DB URL to point at the compose service
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nutrisnap}:${POSTGRES_PASSWORD:-nutrisnap_secret}@db:5432/${POSTGRES_DB:-nutrisnap}
+      ENVIRONMENT: production
+      HOST: 0.0.0.0
+      PORT: "8000"
+      # Tune workers to your host's CPU count; override via .env
+      WORKERS: ${WORKERS:-4}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - nutrisnap_net
+    volumes:
+      # Mount migrations folder so you can run them inside the container
+      - ./migrations:/app/migrations:ro
+
+  # ── API — dev hot-reload server (opt-in with --profile dev) ─
+  api_dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: nutrisnap_api_dev
+    profiles: ["dev"]
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-nutrisnap}:${POSTGRES_PASSWORD:-nutrisnap_secret}@db:5432/${POSTGRES_DB:-nutrisnap}
+      ENVIRONMENT: development
+      HOST: 0.0.0.0
+      PORT: "8000"
+    command:
+      - uvicorn
+      - app.main:app
+      - --reload
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --log-level
+      - debug
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # Live-reload source code from your host
+      - ./app:/app/app
+      - ./gunicorn_conf.py:/app/gunicorn_conf.py
+    networks:
+      - nutrisnap_net
+
+  # ── pgAdmin (optional, dev convenience) ─────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: nutrisnap_pgadmin
+    profiles: ["dev"]
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@nutrisnap.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
+    networks:
+      - nutrisnap_net
+
+volumes:
+  postgres_data:
+
+networks:
+  nutrisnap_net:
+    driver: bridge

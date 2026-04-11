@@ -1,8 +1,8 @@
-# NutriSnap - Product Requirements Document (PRD)
+# Loggr - Product Requirements Document (PRD)
 
 ## Executive Summary
 
-NutriSnap is a mobile nutrition tracking application that revolutionizes meal logging through AI-powered photo analysis with innovative coin calibration technology. Built with Expo (React Native) and FastAPI, it provides accurate portion tracking and comprehensive nutrition insights, with a focus on Indian cuisine.
+Loggr is a mobile nutrition tracking application that revolutionizes meal logging through AI-powered photo analysis with innovative coin calibration technology. Built with Expo (React Native) and FastAPI, it provides accurate portion tracking and comprehensive nutrition insights, with a focus on Indian cuisine.
 
 ## Problem Statement
 
@@ -12,7 +12,7 @@ NutriSnap is a mobile nutrition tracking application that revolutionizes meal lo
 - Regional cuisines (especially Indian) are poorly represented in global apps
 - Portion estimation without specialized hardware is unreliable
 
-## Solution: NutriSnap MVP
+## Solution: Loggr MVP
 
 ### Core Innovation: Coin Calibration System
 
@@ -381,7 +381,7 @@ GET /api/meals/stats/{user_id}?date=2026-01-02
 
 ### Competitive Differentiation
 
-| Feature | NutriSnap | MyFitnessPal | HealthifyMe | Noom |
+| Feature | Loggr | MyFitnessPal | HealthifyMe | Noom |
 |---------|-----------|--------------|-------------|------|
 | AI Photo Logging | ✓ Coin-calibrated | ✓ Basic | ✓ Basic | ✗ |
 | Portion Accuracy | Mathematical | Estimated | Estimated | N/A |
@@ -448,7 +448,7 @@ GET /api/meals/stats/{user_id}?date=2026-01-02
 
 ### Conclusion
 
-NutriSnap MVP successfully demonstrates:
+Loggr MVP successfully demonstrates:
 1. ✅ AI-powered food recognition
 2. ✅ Innovative coin calibration system
 3. ✅ Comprehensive Indian food database

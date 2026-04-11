@@ -8,7 +8,12 @@ from typing import List, Dict, Any
 from datetime import datetime, timezone
 
 
-async def _generate_analytics_ai(meals: List[Dict], time_range: str, openai_client) -> Dict[str, Any]:
+async def _generate_analytics_ai(
+    meals: List[Dict],
+    time_range: str,
+    openai_client=None,
+    micronutrient_targets: Dict[str, Dict] = None,
+) -> Dict[str, Any]:
     """
     Generate AI-powered analytics from meal data with token optimization.
     
@@ -17,6 +22,13 @@ async def _generate_analytics_ai(meals: List[Dict], time_range: str, openai_clie
     2. Use single AI call for all insights (batch processing)
     3. Structured output format for consistency
     4. Focus on actionable insights, not verbose descriptions
+    5. Use personalized RDA/AI targets based on user's age/sex
+    
+    Args:
+        meals: List of meal dictionaries with nutrition data
+        time_range: "week", "month", or "year"
+        openai_client: OpenAI client instance
+        micro_targets: Personalized micronutrient targets (RDA/UL) by age/sex
     
     Returns:
     {
@@ -26,42 +38,87 @@ async def _generate_analytics_ai(meals: List[Dict], time_range: str, openai_clie
         "tokens_used": int
     }
     """
-    
+
     if not openai_client:
-        return {
-            "insights": {},
-            "bio_impact": {},
-            "health_insights": {},
-            "bio_alerts": [],
-            "red_flags": [],
-            "tokens_used": 0
-        }
-    
+        try:
+            from app.core.config import settings
+            from openai import AsyncOpenAI
+            if not getattr(settings, "OPENAI_API_KEY", None):
+                return {
+                    "insights": {},
+                    "bio_impact": {},
+                    "health_insights": {},
+                    "bio_alerts": [],
+                    "red_flags": [],
+                    "tokens_used": 0,
+                }
+            openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        except Exception:
+            return {
+                "insights": {},
+                "bio_impact": {},
+                "health_insights": {},
+                "bio_alerts": [],
+                "red_flags": [],
+                "tokens_used": 0,
+            }
+
     # Aggregate meal data to reduce token usage
     summary = _aggregate_meal_data(meals, time_range)
     
+    # Build personalized health targets section
+    if micronutrient_targets:
+        targets_lines = []
+        # Format targets with RDA and UL where available
+        for nutrient, values in micronutrient_targets.items():
+            rda = values.get("rda")
+            ul = values.get("ul")
+            # Extract nutrient name and unit from key (e.g., "vitamin_c_mg" -> "Vit C", "mg")
+            name_parts = nutrient.replace("_", " ").title().replace("Ug", "µg").replace("Mg", "mg").replace("G", "g")
+            if rda and ul:
+                targets_lines.append(f"- {name_parts}: RDA {rda}, UL {ul}")
+            elif rda:
+                targets_lines.append(f"- {name_parts}: RDA {rda}")
+            elif ul:
+                targets_lines.append(f"- {name_parts}: UL {ul}")
+        health_targets = "\n".join(targets_lines) if targets_lines else "- Using general adult guidelines"
+    else:
+        # Fallback to general targets if personalized not available
+        health_targets = """- Sugar: <50g | Sodium: <2300mg | Fiber: >25g | Sat Fat: <20g
+- Calcium: >1000mg | Iron: >8mg | Vit C: >75mg
+- Vit A: >700-900µg | Vit D: >15µg | Magnesium: >320-420mg | Zinc: >8-11mg | Folate: >400µg | B12: >2.4µg"""
+    
     # Optimized prompt - concise and focused with micronutrients
-    prompt = f"""Analyze this {time_range} nutrition data and provide health insights.
+    if time_range == "daily":
+        timeframe_header = "TODAY (last 24h)"
+        macro_header = "MACROS (Total Today)"
+        micro_header = "MICRONUTRIENTS (Total Today)"
+    else:
+        timeframe_header = f"{time_range.upper()} (averaged per day)"
+        macro_header = "MACROS (Daily Avg)"
+        micro_header = "MICRONUTRIENTS (Daily Avg)"
 
-MACROS (Daily Avg):
+    prompt = f"""Analyze this nutrition data and provide health insights.
+
+TIMEFRAME: {timeframe_header}
+
+{macro_header}:
 - Calories: {summary['avg_calories']:.0f} | Protein: {summary['avg_protein']:.0f}g | Carbs: {summary['avg_carbs']:.0f}g | Fat: {summary['avg_fat']:.0f}g
 
-MICRONUTRIENTS (Daily Avg):
+{micro_header}:
 - Sugar: {summary['avg_sugar']:.0f}g | Sodium: {summary['avg_sodium']:.0f}mg | Fiber: {summary['avg_fiber']:.0f}g
 - Sat Fat: {summary['avg_saturated_fat']:.0f}g | Chol: {summary['avg_cholesterol']:.0f}mg | Potassium: {summary['avg_potassium']:.0f}mg
 - Calcium: {summary['avg_calcium']:.0f}mg | Iron: {summary['avg_iron']:.1f}mg | Vit C: {summary['avg_vitamin_c']:.0f}mg
-- Vit A: {summary['avg_vitamin_a']:.0f}ug | Vit D: {summary['avg_vitamin_d']:.1f}ug | Magnesium: {summary['avg_magnesium']:.0f}mg
-- Zinc: {summary['avg_zinc']:.1f}mg | Folate: {summary['avg_folate']:.0f}ug | B12: {summary['avg_vitamin_b12']:.1f}ug
+- Vit A: {summary['avg_vitamin_a']:.0f}µg | Vit D: {summary['avg_vitamin_d']:.1f}µg | Magnesium: {summary['avg_magnesium']:.0f}mg
+- Zinc: {summary['avg_zinc']:.1f}mg | Folate: {summary['avg_folate']:.0f}µg | B12: {summary['avg_vitamin_b12']:.1f}µg
 
 PATTERNS:
 - Meals: {summary['meal_count']} | Types: {summary['meal_types']}
 - Top Foods: {', '.join(summary['top_foods'][:5])}
 - Late Meals (>9pm): {summary['late_meals']} | Consistency: {summary['consistency_score']:.1f}/10
 
-HEALTH TARGETS:
-- Sugar: <50g | Sodium: <2300mg | Fiber: >25g | Sat Fat: <20g
-- Calcium: >1000mg | Iron: >8mg (F), >18mg (M) | Vit C: >75mg
-- Vit A: >700-900ug | Vit D: >15ug | Magnesium: >320-420mg | Zinc: >8-11mg | Folate: >400ug | B12: >2.4ug
+PERSONALIZED HEALTH TARGETS (based on user's age/sex):
+{health_targets}
 
 Return ONLY JSON:
 {{
@@ -71,6 +128,7 @@ Return ONLY JSON:
     "micronutrient_status": "key deficiencies or excesses (sugar/sodium/fiber focus)",
     "timing": "meal timing impact on health",
     "variety": "food diversity comment"
+    {', "suggestions": [{"title": "max 5 words", "action": "max 18 words", "culprit_foods": ["Food"], "reason": "max 18 words"}]' if time_range == 'daily' else ''}
   }},
   "bio_impact": {{
     "energy": 0-100,
@@ -123,6 +181,16 @@ RED FLAGS RULES (CRITICAL):
 - Every red_flags item must name at least 1 culprit_food and reference a concrete metric (e.g. sugar/sodium/fiber/sat fat) or a concrete behavior (e.g. late meals) that is actually present.
 
 Focus on identifying RED FLAGS - problematic patterns like excessive consumption of specific foods, nutrient overages, or unhealthy eating patterns. Be specific with quantities and frequencies."""
+
+    if time_range == "daily":
+        prompt += """
+
+DAILY MODE RULES (CRITICAL):
+- Prioritize red_flags and suggestions for TODAY only (last 24h). Do not average across the week.
+- Every suggestion must reference at least one specific culprit_food from Top Foods.
+- Suggestions must be actionable and specific (swap/limit/add/when).
+- If there are no red flags, keep red_flags empty but still return 1-3 practical suggestions.
+"""
 
     try:
         response = await openai_client.chat.completions.create(
@@ -243,10 +311,25 @@ def _aggregate_meal_data(meals: List[Dict], time_range: str) -> Dict[str, Any]:
         total_folate += micros.get("folate_ug", 0)
         total_vitamin_b12 += micros.get("vitamin_b12_ug", 0)
     
-    # Calculate daily averages
-    days = 7 if time_range == "week" else (30 if time_range == "month" else 365)
-    unique_days = len(set(m.get("timestamp", datetime.now(timezone.utc)).date() for m in meals))
-    days_with_data = max(unique_days, 1)
+    # Calculate per-day averages; in daily mode we want totals for today (divisor=1)
+    if time_range == "daily":
+        days_with_data = 1
+    else:
+        unique_days = set()
+        for m in meals:
+            ts = m.get("timestamp")
+            if isinstance(ts, str):
+                try:
+                    ts = datetime.fromisoformat(ts)
+                except Exception:
+                    ts = None
+            if isinstance(ts, datetime):
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                unique_days.add(ts.date())
+            else:
+                unique_days.add(datetime.now(timezone.utc).date())
+        days_with_data = max(len(unique_days), 1)
     
     # Meal type distribution
     meal_types = {}
@@ -274,7 +357,17 @@ def _aggregate_meal_data(meals: List[Dict], time_range: str) -> Dict[str, Any]:
     top_foods = [name for name, _ in top_foods]
     
     # Late meal count (after 9pm)
-    late_meals = sum(1 for m in meals if m.get("timestamp", datetime.now(timezone.utc)).hour >= 21)
+    late_meals = 0
+    for m in meals:
+        ts = m.get("timestamp")
+        if isinstance(ts, str):
+            try:
+                ts = datetime.fromisoformat(ts)
+            except Exception:
+                ts = None
+        if isinstance(ts, datetime):
+            if ts.hour >= 21:
+                late_meals += 1
     
     # Consistency score (based on meal frequency and timing regularity)
     consistency_score = min(10, (len(meals) / days_with_data) * 2.5)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-NutriSnap Backend API Testing Suite
+Loggr Backend API Testing Suite
 Tests all backend endpoints comprehensively
 """
 
@@ -14,7 +14,7 @@ import time
 # Backend URL from frontend .env
 BACKEND_URL = "https://snapmeal-5.preview.emergentagent.com/api"
 
-class NutriSnapTester:
+class LoggrTester:
     def __init__(self):
         self.test_user_id = None
         self.test_results = []
@@ -442,7 +442,7 @@ class NutriSnapTester:
 
     def run_all_tests(self):
         """Run all backend tests"""
-        print("🧪 Starting NutriSnap Backend API Tests")
+        print("🧪 Starting Loggr Backend API Tests")
         print(f"Backend URL: {BACKEND_URL}")
         print("=" * 60)
         
@@ -481,5 +481,5 @@ class NutriSnapTester:
         return self.test_results
 
 if __name__ == "__main__":
-    tester = NutriSnapTester()
+    tester = LoggrTester()
     results = tester.run_all_tests()
