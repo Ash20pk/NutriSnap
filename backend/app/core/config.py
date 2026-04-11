@@ -77,6 +77,31 @@ class Settings:
         """Check if running in production environment."""
         return os.environ.get("ENVIRONMENT", "development").lower() == "production"
 
+    def validate_production(self) -> None:
+        """
+        Fail fast if critical environment variables are missing in production.
+        Call this once during application startup.
+        """
+        if not self.is_production:
+            return
+        required = {
+            "DATABASE_URL": self.DATABASE_URL,
+            "OPENAI_API_KEY": self.OPENAI_API_KEY,
+            "SUPABASE_URL": self.SUPABASE_URL,
+            "SUPABASE_JWT_SECRET": self.SUPABASE_JWT_SECRET,
+            "SUPABASE_SERVICE_ROLE_KEY": self.SUPABASE_SERVICE_ROLE_KEY,
+            "ADMIN_API_KEY": self.ADMIN_API_KEY,
+        }
+        missing = [k for k, v in required.items() if not v]
+        if missing:
+            raise RuntimeError(
+                f"Missing required environment variables for production: {', '.join(missing)}"
+            )
+        if self.CORS_ORIGINS == ["*"]:
+            raise RuntimeError(
+                "CORS_ORIGINS must not be '*' in production. Set explicit allowed origins."
+            )
+
 
 # Global settings instance
 settings = Settings()

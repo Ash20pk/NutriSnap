@@ -11,6 +11,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.logging_config import setup_logging
+from app.core.middleware import AIRateLimitMiddleware, RequestSizeLimitMiddleware
 from app.db.pool import init_pool, close_pool, check_pool_health
 
 # Import route modules
@@ -28,6 +29,7 @@ async def lifespan(app: FastAPI):
     Handles startup and shutdown events.
     """
     # Startup
+    settings.validate_production()
     logger.info("Starting NutriSnap Backend API (Modular)")
     logger.info(f"Environment: {'production' if settings.is_production else 'development'}")
     logger.info(f"Database: {settings.DATABASE_URL[:30]}..." if settings.DATABASE_URL else "Database: Not configured")
@@ -62,6 +64,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Reject oversized request bodies before they reach handlers
+app.add_middleware(RequestSizeLimitMiddleware)
+
+# Per-user token-bucket rate limiting on AI endpoints
+app.add_middleware(AIRateLimitMiddleware)
 
 # Include route modules
 app.include_router(analytics.router, prefix="/api")

@@ -57,7 +57,16 @@ def extract_json_from_text(text: str) -> str:
     return content.strip()
 
 
-_openai_client: AsyncOpenAI | None = AsyncOpenAI(api_key=settings.OPENAI_API_KEY) if settings.OPENAI_API_KEY else None
+_openai_client: AsyncOpenAI | None = None
+
+
+def _get_openai_client() -> AsyncOpenAI:
+    global _openai_client
+    if _openai_client is None:
+        if not settings.OPENAI_API_KEY:
+            raise RuntimeError("OPENAI_API_KEY is not set")
+        _openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    return _openai_client
 
 
 def _clamp_float(value: Any, low: float, high: float) -> float:
@@ -97,9 +106,7 @@ def _safe_nonneg_float(value: Any) -> float:
 
 
 async def _estimate_usda_like_macros_per_100g(food_name: str) -> tuple[float, float, float, float]:
-    if _openai_client is None:
-        raise RuntimeError("OPENAI_API_KEY is not set")
-
+    client = _get_openai_client()
     name = (food_name or "").strip()
     if not name:
         raise ValueError("food_name is required")
@@ -116,7 +123,7 @@ async def _estimate_usda_like_macros_per_100g(food_name: str) -> tuple[float, fl
     )
 
     for _ in range(2):
-        response = await _openai_client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=settings.OPENAI_CHEAP_MODEL or settings.OPENAI_MODEL or "gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -144,7 +151,7 @@ async def _estimate_usda_like_macros_per_100g(food_name: str) -> tuple[float, fl
             "Your previous output did not meet constraints (non-zero calories, numeric values, plausible ranges). "
             "Return corrected JSON ONLY with the same 4 keys and valid numbers within bounds."
         )
-        response = await _openai_client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=settings.OPENAI_CHEAP_MODEL or settings.OPENAI_MODEL or "gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -173,9 +180,7 @@ async def _estimate_usda_like_macros_per_100g(food_name: str) -> tuple[float, fl
 
 
 async def _estimate_usda_like_micros_per_100g(food_name: str) -> Dict[str, float]:
-    if _openai_client is None:
-        raise RuntimeError("OPENAI_API_KEY is not set")
-
+    client = _get_openai_client()
     name = (food_name or "").strip()
     if not name:
         raise ValueError("food_name is required")
@@ -221,7 +226,7 @@ async def _estimate_usda_like_micros_per_100g(food_name: str) -> Dict[str, float
         "Units are encoded in the key (g_per_100g, mg_per_100g, ug_per_100g)."
     )
 
-    response = await _openai_client.chat.completions.create(
+    response = await client.chat.completions.create(
         model=settings.OPENAI_CHEAP_MODEL or settings.OPENAI_MODEL or "gpt-4o-mini",
         messages=[
             {"role": "system", "content": system_prompt},
@@ -244,14 +249,12 @@ async def _estimate_usda_like_micros_per_100g(food_name: str) -> Dict[str, float
 
 
 async def transcribe_audio_file(audio: UploadFile) -> str:
-    if _openai_client is None:
-        raise RuntimeError("OPENAI_API_KEY is not set")
-
+    client = _get_openai_client()
     audio_bytes = await audio.read()
     if not audio_bytes:
         return ""
 
-    transcription = await _openai_client.audio.transcriptions.create(
+    transcription = await client.audio.transcriptions.create(
         model="whisper-1",
         file=(audio.filename or "audio.m4a", audio_bytes, audio.content_type or "application/octet-stream"),
     )
@@ -259,14 +262,12 @@ async def transcribe_audio_file(audio: UploadFile) -> str:
 
 
 async def infer_portion_from_text(transcript: str) -> Dict[str, Any]:
-    if _openai_client is None:
-        raise RuntimeError("OPENAI_API_KEY is not set")
-
+    client = _get_openai_client()
     cleaned = (transcript or "").strip()
     if not cleaned:
         return {"quantity": None, "unit": None}
 
-    response = await _openai_client.chat.completions.create(
+    response = await client.chat.completions.create(
         model=settings.OPENAI_MODEL or "gpt-4o",
         messages=[
             {
@@ -310,14 +311,12 @@ async def infer_portion_from_text(transcript: str) -> Dict[str, Any]:
 
 
 async def parse_voice_meal_text(transcript: str) -> List[Dict[str, Any]]:
-    if _openai_client is None:
-        raise RuntimeError("OPENAI_API_KEY is not set")
-
+    client = _get_openai_client()
     cleaned = (transcript or "").strip()
     if not cleaned:
         return []
 
-    response = await _openai_client.chat.completions.create(
+    response = await client.chat.completions.create(
         model=settings.OPENAI_MODEL or "gpt-4o",
         messages=[
             {
@@ -761,12 +760,11 @@ async def match_food_to_database_db(conn: asyncpg.Connection, name: str, quantit
     fat_per_100g = 0.0
     micros_per_100g: Dict[str, float] = {}
 
-    if _openai_client is not None:
-        try:
-            calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g = await _estimate_usda_like_macros_per_100g(original_name)
-            micros_per_100g = await _estimate_usda_like_micros_per_100g(original_name)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to estimate nutrition for '{original_name}': {type(e).__name__}: {str(e)}")
+    try:
+        calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g = await _estimate_usda_like_macros_per_100g(original_name)
+        micros_per_100g = await _estimate_usda_like_micros_per_100g(original_name)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to estimate nutrition for '{original_name}': {type(e).__name__}: {str(e)}")
 
     if calories_per_100g <= 0:
         raise HTTPException(status_code=500, detail=f"Failed to estimate non-zero nutrition for '{original_name}'")
@@ -882,13 +880,11 @@ async def match_food_to_database_db(conn: asyncpg.Connection, name: str, quantit
 
 
 async def analyze_food_image(image_base64: str) -> Dict[str, Any]:
-    if _openai_client is None:
-        raise RuntimeError("OPENAI_API_KEY is not set")
-
+    client = _get_openai_client()
     normalized_image_base64 = normalize_base64_image(image_base64)
     image_url = f"data:image/jpeg;base64,{normalized_image_base64}"
 
-    response = await _openai_client.chat.completions.create(
+    response = await client.chat.completions.create(
         model=settings.OPENAI_MODEL or "gpt-4o",
         messages=[
             {

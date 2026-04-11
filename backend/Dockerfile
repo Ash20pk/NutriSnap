@@ -3,7 +3,7 @@
 # ============================================================
 
 # ── Stage 1: dependency builder ──────────────────────────────
-FROM python:3.11-slim AS builder
+FROM python:3.12-slim AS builder
 
 WORKDIR /build
 
@@ -23,7 +23,7 @@ RUN pip install --upgrade pip \
 
 
 # ── Stage 2: runtime image ───────────────────────────────────
-FROM python:3.11-slim AS runtime
+FROM python:3.12-slim AS runtime
 
 LABEL maintainer="NutriSnap Team"
 LABEL description="NutriSnap Backend API"
@@ -67,15 +67,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
 # Override gunicorn bind so it listens on all interfaces inside the container
 ENV GUNICORN_BIND=0.0.0.0:8000
 
-# Default: production server (gunicorn + uvicorn workers)
+# Default: production server (gunicorn + uvicorn workers via gunicorn_conf.py)
 # Override CMD for dev: ["uvicorn", "app.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
-CMD ["gunicorn", "app.main:app", \
-     "--bind", "0.0.0.0:8000", \
-     "--worker-class", "uvicorn.workers.UvicornWorker", \
-     "--workers", "4", \
-     "--timeout", "120", \
-     "--keep-alive", "5", \
-     "--max-requests", "1000", \
-     "--max-requests-jitter", "50", \
-     "--access-logfile", "-", \
-     "--error-logfile", "-"]
+CMD ["gunicorn", "app.main:app", "-c", "gunicorn_conf.py"]

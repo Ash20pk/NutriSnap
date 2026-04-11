@@ -28,6 +28,15 @@ SUPABASE_JWKS_URL = os.environ.get(
 _supabase_jwk_client: PyJWKClient | None = None
 
 
+def _get_jwk_client() -> PyJWKClient:
+    global _supabase_jwk_client
+    if _supabase_jwk_client is None:
+        if not SUPABASE_JWKS_URL:
+            raise HTTPException(status_code=401, detail="SUPABASE_JWKS_URL not set for asymmetric JWT verification")
+        _supabase_jwk_client = PyJWKClient(SUPABASE_JWKS_URL)
+    return _supabase_jwk_client
+
+
 async def get_current_uid(authorization: Optional[str] = Header(None)) -> str:
     """
     Extract and validate user ID from JWT token.
@@ -69,14 +78,7 @@ async def get_current_uid(authorization: Optional[str] = Header(None)) -> str:
                 issuer=SUPABASE_JWT_ISSUER,
             )
         elif alg in ("RS256", "ES256"):
-            if not SUPABASE_JWKS_URL:
-                raise HTTPException(status_code=401, detail="SUPABASE_JWKS_URL not set for asymmetric JWT verification")
-
-            global _supabase_jwk_client
-            if _supabase_jwk_client is None:
-                _supabase_jwk_client = PyJWKClient(SUPABASE_JWKS_URL)
-
-            signing_key = _supabase_jwk_client.get_signing_key_from_jwt(token).key
+            signing_key = _get_jwk_client().get_signing_key_from_jwt(token).key
             payload = jwt.decode(
                 token,
                 signing_key,

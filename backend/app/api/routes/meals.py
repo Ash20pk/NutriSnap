@@ -64,7 +64,7 @@ async def log_meal(
     require_user_match(uid, meal_data.user_id)
     
     # Convert Pydantic models to dicts
-    foods = [f.dict() for f in meal_data.foods]
+    foods = [f.model_dump() for f in meal_data.foods]
     
     return await service.log_meal(
         user_id=meal_data.user_id,

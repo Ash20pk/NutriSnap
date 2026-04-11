@@ -10,6 +10,10 @@ build/
 .venv/
 venv/
 env/
+nutrisnap/
+
+# ── Legacy entrypoint (not used in production) ──
+server.py
 
 # ── Testing / coverage ──────────────────────────
 .pytest_cache/

@@ -1,3 +1,15 @@
+# ============================================================
+# DEPRECATED — This monolithic entrypoint is no longer used.
+# The canonical production entrypoint is:  app/main.py
+# Run with:  gunicorn app.main:app -c gunicorn_conf.py
+# ============================================================
+import warnings
+warnings.warn(
+    "server.py is deprecated. Use 'app.main:app' as the application entrypoint.",
+    DeprecationWarning,
+    stacklevel=1,
+)
+
 from fastapi import FastAPI, APIRouter, File, UploadFile, HTTPException, Depends, Header, Form, Query
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware

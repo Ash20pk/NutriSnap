@@ -7,7 +7,7 @@ import multiprocessing
 import os
 
 # Server socket
-bind = "127.0.0.1:8000"  # Bind to localhost; nginx will reverse proxy
+bind = os.environ.get("GUNICORN_BIND", "127.0.0.1:8000")
 
 # Worker processes
 workers = int(os.environ.get("WORKERS", multiprocessing.cpu_count() * 2 + 1))
