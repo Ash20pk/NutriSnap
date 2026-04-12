@@ -1,0 +1,17 @@
+# Maestro configuration for NutriSnap frontend E2E tests
+# https://maestro.mobile.dev/
+
+appId: com.ash20pk.loggr
+name: NutriSnap E2E Tests
+
+# Tags for selective runs
+tags:
+  smoke: [01_intro_screen, 04_home_tab]
+  auth: [01_intro_screen, 02_auth_flow, 03_onboarding]
+  nutrition: [04_home_tab, 05_log_tab, 08_text_log]
+  full: all
+
+# Environment variables
+env:
+  TEST_EMAIL: "e2e-test@nutrisnap.local"
+  TEST_PASSWORD: "TestPass!abc123"

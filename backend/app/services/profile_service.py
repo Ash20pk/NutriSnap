@@ -214,11 +214,15 @@ class ProfileService:
             if not user_row:
                 raise HTTPException(status_code=404, detail="User not found")
             
+            # Derive age from DOB if available, else fall back to stored integer
+            dob = user_row.get("date_of_birth")
+            age = calculate_age_from_dob(dob) if dob else int(user_row["age"] or 25)
+
             # Calculate new targets
             targets = calculate_calorie_target(
                 float(user_row["weight"]),
                 float(user_row["height"]),
-                int(user_row["age"]),
+                age,
                 str(user_row["gender"]),
                 activity_level,
                 goal,

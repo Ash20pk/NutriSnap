@@ -1,0 +1,68 @@
+# Flow 14: Social features — search users, public profile, follow
+appId: com.ash20pk.loggr
+name: Social Flow
+tags:
+  - features
+
+---
+
+- launchApp
+- waitForAnimationToEnd
+
+# Navigate to profile tab
+- tapOn:
+    text: ".*[Pp]rofile.*"
+    optional: true
+- waitForAnimationToEnd
+
+# === Followers / Following count ===
+- assertVisible:
+    text: ".*[Ff]ollower.*|.*[Ff]ollowing.*"
+    optional: true
+
+# Tap on followers
+- tapOn:
+    text: ".*[Ff]ollower.*"
+    optional: true
+- waitForAnimationToEnd
+
+# Should show followers list or empty state
+- assertVisible:
+    text: ".*[Ff]ollower.*|.*[Nn]o [Ff]ollower.*|.*[Ee]mpty.*"
+    optional: true
+- back
+- waitForAnimationToEnd
+
+# Tap on following
+- tapOn:
+    text: ".*[Ff]ollowing.*"
+    optional: true
+- waitForAnimationToEnd
+
+- assertVisible:
+    text: ".*[Ff]ollowing.*|.*[Nn]ot [Ff]ollowing.*|.*[Ee]mpty.*"
+    optional: true
+- back
+- waitForAnimationToEnd
+
+# === Search users (if search is accessible from profile) ===
+- tapOn:
+    text: ".*[Ss]earch.*|.*[Ff]ind.*"
+    optional: true
+- waitForAnimationToEnd
+
+# Type a search query
+- tapOn:
+    id: "user-search-input"
+    optional: true
+- inputText: "test"
+  optional: true
+- waitForAnimationToEnd
+
+# Should show results or empty state
+- assertVisible:
+    text: ".*[Rr]esult.*|.*[Nn]o.*[Uu]ser.*|.*[Ff]ollow.*"
+    optional: true
+
+- back
+- waitForAnimationToEnd

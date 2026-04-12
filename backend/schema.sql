@@ -132,6 +132,7 @@ CREATE TABLE IF NOT EXISTS public.meals (
     image_base64    text,                                  -- TODO: migrate to Supabase Storage URL
     logging_method  text NOT NULL,                         -- 'photo' | 'voice' | 'manual' | 'barcode' | 'text'
     notes           text,
+    micros          jsonb DEFAULT '{}',                    -- micronutrient breakdown
     review_status   text DEFAULT 'finalized',              -- 'finalized' | 'pending_review'
     timestamp       timestamptz NOT NULL DEFAULT now()
 );

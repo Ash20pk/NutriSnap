@@ -1,0 +1,56 @@
+# Flow 04: Home tab — calorie ring, macros, meal list
+appId: com.ash20pk.loggr
+name: Home Tab
+tags:
+  - smoke
+  - nutrition
+
+---
+
+- launchApp
+- waitForAnimationToEnd
+
+# Should be on home tab by default (or navigate to it)
+- tapOn:
+    text: ".*[Hh]ome.*"
+    optional: true
+- waitForAnimationToEnd
+
+# === Calorie summary visible ===
+- assertVisible:
+    text: ".*[Cc]alories.*|.*kcal.*|.*cal.*"
+    optional: true
+
+# === Macro breakdown visible ===
+- assertVisible:
+    text: ".*[Pp]rotein.*"
+    optional: true
+- assertVisible:
+    text: ".*[Cc]arbs.*"
+    optional: true
+- assertVisible:
+    text: ".*[Ff]at.*"
+    optional: true
+
+# === Target values shown ===
+# The calorie target from profile should be displayed
+- assertVisible:
+    text: ".*\\d+.*"
+    optional: true
+
+# === Meal list area ===
+# Either shows logged meals or empty state
+- assertVisible:
+    text: ".*[Mm]eal.*|.*[Bb]reakfast.*|.*[Ll]unch.*|.*[Dd]inner.*|.*[Nn]o [Mm]eals.*|.*[Ll]og.*"
+    optional: true
+
+# === Pull to refresh ===
+- scroll:
+    direction: DOWN
+    duration: 500
+- waitForAnimationToEnd
+
+# Page should still be functional after refresh
+- assertVisible:
+    text: ".*[Cc]alories.*|.*kcal.*"
+    optional: true

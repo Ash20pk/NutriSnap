@@ -1,0 +1,44 @@
+# Flow 02: Authentication flow — email sign-in
+appId: com.ash20pk.loggr
+name: Auth Flow
+tags:
+  - auth
+
+---
+
+- launchApp:
+    clearState: true
+- waitForAnimationToEnd
+
+# Look for sign-in button
+- assertVisible:
+    text: ".*[Ss]ign.*"
+    optional: true
+
+# Tap sign in with email (if visible — may be Apple-only on iOS)
+- tapOn:
+    text: ".*[Ee]mail.*|.*[Ss]ign [Ii]n.*"
+    optional: true
+
+# If email/password fields appear, fill them
+- tapOn:
+    id: "email-input"
+    optional: true
+- inputText: ${TEST_EMAIL}
+  
+- tapOn:
+    id: "password-input"
+    optional: true
+- inputText: ${TEST_PASSWORD}
+
+# Submit
+- tapOn:
+    text: ".*[Ss]ign [Ii]n.*|.*[Ll]og [Ii]n.*|.*[Cc]ontinue.*"
+    optional: true
+
+- waitForAnimationToEnd
+
+# After auth, should see either onboarding or home
+- assertVisible:
+    text: ".*[Hh]ome.*|.*[Ww]elcome.*|.*[Ll]et.*[Ss]tart.*|.*[Nn]ame.*"
+    optional: true

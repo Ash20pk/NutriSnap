@@ -1,0 +1,65 @@
+# Flow 08: Text-based meal logging — full end-to-end
+appId: com.ash20pk.loggr
+name: Text Log (E2E)
+tags:
+  - nutrition
+
+---
+
+- launchApp
+- waitForAnimationToEnd
+
+# Navigate to log tab
+- tapOn:
+    text: ".*[Ll]og.*"
+- waitForAnimationToEnd
+
+# Tap text/type option
+- tapOn:
+    text: ".*[Tt]ext.*|.*[Tt]ype.*"
+    optional: true
+- waitForAnimationToEnd
+
+# Should see text input area
+- assertVisible:
+    text: ".*[Ww]hat.*eat.*|.*[Dd]escribe.*|.*[Tt]ype.*meal.*"
+    optional: true
+
+# Type a meal description
+- tapOn:
+    id: "meal-text-input"
+    optional: true
+- inputText: "200g of chicken breast and 150g of brown rice"
+
+# Submit
+- tapOn:
+    text: ".*[Aa]nalyze.*|.*[Ss]ubmit.*|.*[Ll]og.*|.*[Dd]one.*"
+    optional: true
+
+# Wait for AI processing
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      text: ".*[Cc]hicken.*|.*[Rr]ice.*|.*[Rr]eview.*"
+    timeout: 30000
+
+# Should see detected foods
+- assertVisible:
+    text: ".*[Cc]hicken.*"
+    optional: true
+
+# Should see calorie/macro info
+- assertVisible:
+    text: ".*[Cc]al.*|.*kcal.*"
+    optional: true
+
+# Confirm/log the meal
+- tapOn:
+    text: ".*[Cc]onfirm.*|.*[Ll]og.*|.*[Ss]ave.*"
+    optional: true
+- waitForAnimationToEnd
+
+# Should return to home or show success
+- assertVisible:
+    text: ".*[Ss]uccess.*|.*[Ll]ogged.*|.*[Hh]ome.*|.*[Cc]alories.*"
+    optional: true

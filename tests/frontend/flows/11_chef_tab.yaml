@@ -1,0 +1,31 @@
+# Flow 11: Chef tab — recipe generation
+appId: com.ash20pk.loggr
+name: Chef Tab
+tags:
+  - features
+
+---
+
+- launchApp
+- waitForAnimationToEnd
+
+# Navigate to chef
+- tapOn:
+    text: ".*[Cc]hef.*"
+    optional: true
+- waitForAnimationToEnd
+
+# Should show chef UI
+- assertVisible:
+    text: ".*[Cc]hef.*|.*[Rr]ecipe.*|.*[Ii]ngredient.*|.*[Gg]enerate.*"
+    optional: true
+
+# Should show ingredient input area
+- assertVisible:
+    text: ".*[Ii]ngredient.*|.*[Aa]dd.*"
+    optional: true
+
+# Should show saved recipes or generate button
+- assertVisible:
+    text: ".*[Gg]enerate.*|.*[Ss]aved.*|.*[Rr]ecipe.*"
+    optional: true

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AppState } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
@@ -25,7 +25,7 @@ type AuthContextType = {
   signUpEmail: (email: string, password: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   signInGoogle: () => Promise<void>;
-  signInApple: () => Promise<void>;
+  // signInApple: () => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -58,29 +58,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signInEmail = async (email: string, password: string) => {
+  const signInEmail = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
     if (error) throw error;
-  };
+  }, []);
 
-  const signUpEmail = async (email: string, password: string) => {
+  const signUpEmail = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
     });
     if (error) throw error;
-  };
+  }, []);
 
-  const resetPassword = async (email: string) => {
+  const resetPassword = useCallback(async (email: string) => {
     const redirectTo = Linking.createURL('auth-callback');
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
     if (error) throw error;
-  };
+  }, []);
 
-  const signInOAuth = async (provider: Provider) => {
+  const signInOAuth = useCallback(async (provider: Provider) => {
     const redirectTo = Linking.createURL('auth-callback');
 
     const { data, error } = await supabase.auth.signInWithOAuth({
@@ -104,20 +104,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Wait briefly and refresh session to ensure it's fully established
     await new Promise((resolve) => setTimeout(resolve, 100));
     await supabase.auth.getSession();
-  };
+  }, []);
 
-  const signInGoogle = async () => {
+  const signInGoogle = useCallback(async () => {
     await signInOAuth('google');
-  };
+  }, [signInOAuth]);
 
-  const signInApple = async () => {
-    await signInOAuth('apple');
-  };
+  // const signInApple = async () => {
+  //   await signInOAuth('apple');
+  // };
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
-  };
+  }, []);
 
   const value = useMemo<AuthContextType>(
     () => ({
@@ -128,10 +128,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUpEmail,
       resetPassword,
       signInGoogle,
-      signInApple,
+      // signInApple,
       logout,
     }),
-    [user, session?.access_token, isLoading]
+    [user, session?.access_token, isLoading, signInEmail, signUpEmail, resetPassword, signInGoogle, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

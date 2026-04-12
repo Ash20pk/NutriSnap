@@ -260,7 +260,9 @@ class AIMealService:
         try:
             parsed = await parse_voice_meal_text(text)
             # Convert Pydantic models to dicts if needed
-            if parsed and hasattr(parsed[0], 'dict'):
+            if parsed and hasattr(parsed[0], 'model_dump'):
+                return [item.model_dump() for item in parsed]
+            elif parsed and hasattr(parsed[0], 'dict'):
                 return [item.dict() for item in parsed]
             return parsed
         except Exception as e:

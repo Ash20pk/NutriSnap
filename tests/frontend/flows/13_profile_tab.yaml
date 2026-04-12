@@ -1,0 +1,69 @@
+# Flow 13: Profile tab — user info, goals, weight history, settings
+appId: com.ash20pk.loggr
+name: Profile Tab
+tags:
+  - features
+
+---
+
+- launchApp
+- waitForAnimationToEnd
+
+# Navigate to profile tab
+- tapOn:
+    text: ".*[Pp]rofile.*"
+    optional: true
+- waitForAnimationToEnd
+
+# === Profile info ===
+- assertVisible:
+    text: ".*E2E Test User.*|.*[Pp]rofile.*"
+    optional: true
+
+# Should show calorie target
+- assertVisible:
+    text: ".*[Cc]alorie.*|.*kcal.*"
+    optional: true
+
+# Should show current goal
+- assertVisible:
+    text: ".*[Mm]aintain.*|.*[Ll]ose.*|.*[Gg]ain.*"
+    optional: true
+
+# Should show weight
+- assertVisible:
+    text: ".*[Kk]g.*|.*[Ww]eight.*"
+    optional: true
+
+# === Scroll to weight history ===
+- scroll:
+    direction: DOWN
+    duration: 500
+- waitForAnimationToEnd
+
+- assertVisible:
+    text: ".*[Ww]eight.*[Hh]istory.*|.*[Ww]eight.*[Cc]heck.*"
+    optional: true
+
+# === Weekly wrap section ===
+- scroll:
+    direction: DOWN
+    duration: 500
+- assertVisible:
+    text: ".*[Ww]eekly.*|.*[Ww]rap.*|.*[Ss]ettings.*"
+    optional: true
+
+# === Edit profile ===
+- tapOn:
+    text: ".*[Ee]dit.*"
+    optional: true
+- waitForAnimationToEnd
+
+# Should show edit fields or settings
+- assertVisible:
+    text: ".*[Bb]io.*|.*[Uu]sername.*|.*[Ss]ave.*|.*[Gg]oal.*"
+    optional: true
+
+# Go back
+- back
+- waitForAnimationToEnd

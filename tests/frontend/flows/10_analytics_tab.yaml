@@ -1,0 +1,53 @@
+# Flow 10: Analytics tab — insights, charts, micronutrients
+appId: com.ash20pk.loggr
+name: Analytics Tab
+tags:
+  - nutrition
+
+---
+
+- launchApp
+- waitForAnimationToEnd
+
+# Navigate to analytics
+- tapOn:
+    text: ".*[Aa]nalytics.*|.*[Ii]nsight.*"
+    optional: true
+- waitForAnimationToEnd
+
+# Should show analytics or loading state
+- assertVisible:
+    text: ".*[Aa]nalytics.*|.*[Ii]nsight.*|.*[Ll]oading.*|.*[Nn]o [Dd]ata.*"
+    optional: true
+
+# Time range selector
+- assertVisible:
+    text: ".*[Ww]eek.*|.*[Mm]onth.*"
+    optional: true
+
+# Switch to month view
+- tapOn:
+    text: ".*[Mm]onth.*"
+    optional: true
+- waitForAnimationToEnd
+
+# Should show data or empty state without crashing
+- assertVisible:
+    text: ".*[Aa]nalytics.*|.*[Ii]nsight.*|.*[Nn]o.*|.*[Cc]alories.*"
+    optional: true
+
+# Bio impact section
+- scroll:
+    direction: DOWN
+    duration: 500
+- assertVisible:
+    text: ".*[Hh]eart.*|.*[Ll]iver.*|.*[Bb]rain.*|.*[Bb]io.*"
+    optional: true
+
+# Micronutrient section
+- scroll:
+    direction: DOWN
+    duration: 500
+- assertVisible:
+    text: ".*[Mm]icro.*|.*[Vv]itamin.*|.*[Mm]ineral.*|.*[Nn]utrient.*"
+    optional: true

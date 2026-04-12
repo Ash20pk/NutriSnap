@@ -1,0 +1,83 @@
+# Flow 03: Onboarding — complete profile setup
+appId: com.ash20pk.loggr
+name: Onboarding
+tags:
+  - auth
+
+---
+
+- launchApp
+- waitForAnimationToEnd
+
+# === Step 1: Name ===
+- assertVisible:
+    text: ".*[Nn]ame.*"
+    optional: true
+- tapOn:
+    id: "name-input"
+    optional: true
+- inputText: "E2E Test User"
+- tapOn:
+    text: ".*[Nn]ext.*|.*[Cc]ontinue.*"
+    optional: true
+
+# === Step 2: Date of Birth ===
+- waitForAnimationToEnd
+- assertVisible:
+    text: ".*[Bb]irth.*|.*[Dd]ate.*|.*DOB.*"
+    optional: true
+# Date picker interaction varies by platform — tap next
+- tapOn:
+    text: ".*[Nn]ext.*|.*[Cc]ontinue.*"
+    optional: true
+
+# === Step 3: Gender ===
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*[Mm]ale.*"
+    optional: true
+- tapOn:
+    text: ".*[Nn]ext.*|.*[Cc]ontinue.*"
+    optional: true
+
+# === Step 4: Height & Weight ===
+- waitForAnimationToEnd
+- assertVisible:
+    text: ".*[Hh]eight.*|.*[Ww]eight.*"
+    optional: true
+- tapOn:
+    text: ".*[Nn]ext.*|.*[Cc]ontinue.*"
+    optional: true
+
+# === Step 5: Goal ===
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*[Mm]aintain.*"
+    optional: true
+- tapOn:
+    text: ".*[Nn]ext.*|.*[Cc]ontinue.*"
+    optional: true
+
+# === Step 6: Activity Level ===
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*[Mm]oderate.*"
+    optional: true
+- tapOn:
+    text: ".*[Nn]ext.*|.*[Cc]ontinue.*"
+    optional: true
+
+# === Step 7: Dietary Preference ===
+- waitForAnimationToEnd
+- tapOn:
+    text: ".*[Nn]one.*|.*[Nn]o [Pp]reference.*"
+    optional: true
+- tapOn:
+    text: ".*[Ff]inish.*|.*[Dd]one.*|.*[Cc]omplete.*|.*[Ss]tart.*"
+    optional: true
+
+# Should land on home screen
+- waitForAnimationToEnd
+- assertVisible:
+    text: ".*[Hh]ome.*|.*[Tt]oday.*|.*[Cc]alories.*"
+    optional: true

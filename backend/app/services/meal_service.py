@@ -109,16 +109,19 @@ class MealService:
                 if nf.get("displayQuantity") is None or unit == "oz":
                     nf["displayQuantity"] = grams
 
-                # Compute totals from per-100g macros if totals are missing
+                # Always recompute macros from per_100g when available —
+                # never trust client-sent totals if the source data is present.
                 ratio = grams / 100.0 if grams else 0.0
                 for key in ("calories", "protein", "carbs", "fat"):
-                    if nf.get(key) is None:
-                        per100_key = f"{key}_per_100g"
-                        per100 = nf.get(per100_key)
+                    per100_key = f"{key}_per_100g"
+                    per100 = nf.get(per100_key)
+                    if per100 is not None:
                         try:
-                            nf[key] = round(float(per100 or 0) * ratio, 2)
+                            nf[key] = round(float(per100) * ratio, 2)
                         except Exception:
                             nf[key] = 0.0
+                    elif nf.get(key) is None:
+                        nf[key] = 0.0
 
                 normalized_foods.append(nf)
 
@@ -313,23 +316,27 @@ class MealService:
     async def get_daily_summary(
         self,
         user_id: str,
-        target_date: Optional[date] = None
+        target_date: Optional[date] = None,
+        timezone_offset: int = 0,
     ) -> Dict[str, Any]:
         """
         Get daily nutrition summary for a specific date.
         
         Args:
             user_id: User UUID
-            target_date: Date to get summary for (defaults to today)
+            target_date: Date to get summary for (defaults to today in user's tz)
+            timezone_offset: Timezone offset in minutes (e.g. +330 for IST)
         
         Returns:
             Daily summary with totals and targets
         """
+        tz_delta = timedelta(minutes=int(timezone_offset))
         if target_date is None:
-            target_date = date.today()
-        
-        start_of_day = datetime.combine(target_date, datetime.min.time())
-        end_of_day = datetime.combine(target_date, datetime.max.time())
+            target_date = (datetime.now(timezone.utc) + tz_delta).date()
+
+        # Compute UTC window for the user's local midnight→23:59:59
+        start_of_day = datetime.combine(target_date, datetime.min.time()) - tz_delta
+        end_of_day   = datetime.combine(target_date, datetime.max.time()) - tz_delta
         
         async with self.pool.acquire() as conn:
             # Get meal totals
@@ -558,9 +565,14 @@ class MealService:
             for fr in food_rows:
                 foods_by_id[str(fr["id"])] = dict(fr)
         
-        # Compute micros for each meal
+        # Use stored micros when populated; recompute from DB only when empty
+        # (covers legacy records logged before micro computation was added,
+        #  or records where food_id was missing at log time)
         for m in meals:
-            m["micros"] = compute_meal_micros(m, foods_by_id)
+            stored = m.get("micros") or {}
+            has_data = any(v for v in stored.values() if v) if isinstance(stored, dict) else False
+            if not has_data:
+                m["micros"] = compute_meal_micros(m, foods_by_id)
     
     async def _upsert_user_daily_activity(
         self,

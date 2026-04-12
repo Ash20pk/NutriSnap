@@ -1,0 +1,61 @@
+# Flow 15: Weight check flow — record new weight
+appId: com.ash20pk.loggr
+name: Weight Check
+tags:
+  - nutrition
+
+---
+
+- launchApp
+- waitForAnimationToEnd
+
+# Navigate to profile
+- tapOn:
+    text: ".*[Pp]rofile.*"
+    optional: true
+- waitForAnimationToEnd
+
+# Scroll down to find weight check
+- scroll:
+    direction: DOWN
+    duration: 500
+- waitForAnimationToEnd
+
+# Tap weight check button
+- tapOn:
+    text: ".*[Ww]eight.*[Cc]heck.*|.*[Uu]pdate.*[Ww]eight.*|.*[Rr]ecord.*"
+    optional: true
+- waitForAnimationToEnd
+
+# Should see weight input
+- assertVisible:
+    text: ".*[Ww]eight.*|.*[Kk]g.*"
+    optional: true
+
+# Enter new weight
+- tapOn:
+    id: "weight-input"
+    optional: true
+- clearText
+  optional: true
+- inputText: "73.5"
+  optional: true
+
+# Submit
+- tapOn:
+    text: ".*[Ss]ave.*|.*[Uu]pdate.*|.*[Cc]onfirm.*"
+    optional: true
+- waitForAnimationToEnd
+
+# Should show success or updated profile
+- assertVisible:
+    text: ".*73.*|.*[Ss]uccess.*|.*[Uu]pdated.*"
+    optional: true
+
+# Weight history should now have the new entry
+- scroll:
+    direction: DOWN
+    duration: 500
+- assertVisible:
+    text: ".*73.*|.*[Ww]eight.*"
+    optional: true

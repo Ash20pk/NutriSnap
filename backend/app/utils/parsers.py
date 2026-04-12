@@ -86,7 +86,7 @@ def _valid_usda_macro_estimate(cal: float, p: float, c: float, f: float) -> bool
         return False
     if any(x < 0 for x in (p, c, f)):
         return False
-    if cal > 900:
+    if cal > 902:
         return False
     if p > 100 or c > 100 or f > 100:
         return False

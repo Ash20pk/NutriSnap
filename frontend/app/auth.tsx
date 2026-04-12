@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
   Dimensions,
@@ -23,7 +23,7 @@ import DuoButton from '../components/DuoButton';
 
 export default function AuthScreen() {
   const router = useRouter();
-  const { isLoading, signInEmail, signUpEmail, resetPassword, signInGoogle, signInApple } = useAuth();
+  const { isLoading, signInEmail, signUpEmail, resetPassword, signInGoogle, /*signInApple*/ } = useAuth();
 
   const { height: screenHeight } = Dimensions.get('window');
   const isSmallScreen = screenHeight < 740;
@@ -35,7 +35,7 @@ export default function AuthScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
-  const canUseApple = useMemo(() => Platform.OS === 'ios', []);
+  // const canUseApple = useMemo(() => Platform.OS === 'ios', []);
 
   const handleEmail = async () => {
     if (!email.trim() || password.length < 6) {
@@ -69,16 +69,16 @@ export default function AuthScreen() {
     }
   };
 
-  const handleApple = async () => {
-    setSubmitting(true);
-    try {
-      await signInApple();
-    } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'Apple sign-in failed');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  // const handleApple = async () => {
+  //   setSubmitting(true);
+  //   try {
+  //     await signInApple();
+  //   } catch (e: any) {
+  //     Alert.alert('Error', e?.message ?? 'Apple sign-in failed');
+  //   } finally {
+  //     setSubmitting(false);
+  //   }
+  // };
 
   const handleForgotPassword = async () => {
     if (!email.trim()) {
@@ -198,7 +198,8 @@ export default function AuthScreen() {
             </View>
 
             <View style={[styles.socialButtons, isSmallScreen && styles.socialButtonsSmall]}>
-              {canUseApple && (
+              {/* Apple sign-in disabled */}
+              {/* {canUseApple && (
                 <DuoButton
                   title="Continue with Apple"
                   onPress={handleApple}
@@ -209,7 +210,7 @@ export default function AuthScreen() {
                   size="small"
                   leftIcon={<Ionicons name="logo-apple" size={18} color={Colors.text} />}
                 />
-              )}
+              )} */}
 
               <DuoButton
                 title="Continue with Google"

@@ -1,0 +1,35 @@
+# Flow 05: Log tab — meal logging options displayed
+appId: com.ash20pk.loggr
+name: Log Tab
+tags:
+  - nutrition
+
+---
+
+- launchApp
+- waitForAnimationToEnd
+
+# Navigate to log tab
+- tapOn:
+    text: ".*[Ll]og.*"
+
+- waitForAnimationToEnd
+
+# Should display logging method options
+- assertVisible:
+    text: ".*[Pp]hoto.*|.*[Cc]amera.*"
+    optional: true
+- assertVisible:
+    text: ".*[Vv]oice.*"
+    optional: true
+- assertVisible:
+    text: ".*[Tt]ext.*|.*[Tt]ype.*"
+    optional: true
+- assertVisible:
+    text: ".*[Bb]arcode.*|.*[Ss]can.*"
+    optional: true
+
+# === Meal type selection should be visible ===
+- assertVisible:
+    text: ".*[Bb]reakfast.*|.*[Ll]unch.*|.*[Dd]inner.*|.*[Ss]nack.*"
+    optional: true

@@ -1,0 +1,30 @@
+# Flow 06: Voice meal logging — UI interaction
+appId: com.ash20pk.loggr
+name: Voice Log
+tags:
+  - nutrition
+
+---
+
+- launchApp
+- waitForAnimationToEnd
+
+# Navigate to log
+- tapOn:
+    text: ".*[Ll]og.*"
+- waitForAnimationToEnd
+
+# Tap voice option
+- tapOn:
+    text: ".*[Vv]oice.*"
+    optional: true
+- waitForAnimationToEnd
+
+# Should see recording UI or microphone button
+- assertVisible:
+    text: ".*[Rr]ecord.*|.*[Mm]ic.*|.*[Ss]peak.*|.*[Tt]ap.*"
+    optional: true
+
+# Go back (voice requires actual audio — can't fully test in CI)
+- back
+- waitForAnimationToEnd

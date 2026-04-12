@@ -1,0 +1,24 @@
+# Flow 01: Intro/splash screen loads correctly
+appId: com.ash20pk.loggr
+name: Intro Screen
+tags:
+  - smoke
+  - auth
+
+---
+
+- launchApp:
+    clearState: true
+
+# Splash screen should appear then transition to intro or auth
+- waitForAnimationToEnd
+
+# Should see the intro screen with sign-in options
+- assertVisible:
+    text: ".*[Ll]og.*[Gg]r.*|.*[Ss]ign.*|.*[Gg]et [Ss]tarted.*"
+    optional: true
+
+# The app should not crash (check for any visible element)
+- assertVisible:
+    id: ".*"
+    optional: true

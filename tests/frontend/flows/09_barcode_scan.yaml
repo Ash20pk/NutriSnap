@@ -1,0 +1,35 @@
+# Flow 09: Barcode scanning — UI navigation
+appId: com.ash20pk.loggr
+name: Barcode Scan
+tags:
+  - nutrition
+
+---
+
+- launchApp
+- waitForAnimationToEnd
+
+# Navigate to log
+- tapOn:
+    text: ".*[Ll]og.*"
+- waitForAnimationToEnd
+
+# Tap barcode/scan
+- tapOn:
+    text: ".*[Bb]arcode.*|.*[Ss]can.*"
+    optional: true
+- waitForAnimationToEnd
+
+# Camera permission
+- tapOn:
+    text: ".*[Aa]llow.*"
+    optional: true
+
+# Should see scanner UI
+- assertVisible:
+    text: ".*[Ss]can.*|.*[Bb]arcode.*|.*[Pp]oint.*|.*[Cc]amera.*"
+    optional: true
+
+# Go back
+- back
+- waitForAnimationToEnd

@@ -23,14 +23,22 @@ def get_meal_service() -> MealService:
 # Pydantic models for request/response
 class FoodItem(BaseModel):
     food_id: Optional[str] = None
+    id: Optional[str] = None
     name: str
-    calories: float
-    protein: float
-    carbs: float
-    fat: float
+    calories: Optional[float] = None
+    protein: Optional[float] = None
+    carbs: Optional[float] = None
+    fat: Optional[float] = None
+    calories_per_100g: Optional[float] = None
+    protein_per_100g: Optional[float] = None
+    carbs_per_100g: Optional[float] = None
+    fat_per_100g: Optional[float] = None
     quantity: Optional[float] = None
     displayQuantity: Optional[float] = None
+    displayUnit: Optional[str] = None
     unit: Optional[str] = None
+
+    model_config = {"extra": "allow"}
 
 
 class MealLogCreate(BaseModel):
@@ -127,6 +135,7 @@ async def get_meal_history_legacy(
 async def get_daily_summary(
     user_id: str,
     target_date: Optional[str] = Query(None),
+    timezone_offset: int = Query(0),
     uid: str = Depends(get_current_uid),
     service: MealService = Depends(get_meal_service)
 ):
@@ -135,7 +144,8 @@ async def get_daily_summary(
     
     Args:
         user_id: User UUID
-        target_date: Date in YYYY-MM-DD format (defaults to today)
+        target_date: Date in YYYY-MM-DD format (defaults to today in user's tz)
+        timezone_offset: Timezone offset in minutes (e.g. +330 for IST)
         uid: Current user ID (from auth)
         service: Meal service instance
     
@@ -148,7 +158,7 @@ async def get_daily_summary(
     if target_date:
         parsed_date = date.fromisoformat(target_date)
     
-    return await service.get_daily_summary(user_id, parsed_date)
+    return await service.get_daily_summary(user_id, parsed_date, timezone_offset)
 
 
 @router.get("/stats/{user_id}")

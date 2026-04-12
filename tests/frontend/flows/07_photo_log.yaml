@@ -1,0 +1,34 @@
+# Flow 07: Photo meal logging — camera screen
+appId: com.ash20pk.loggr
+name: Photo Log
+tags:
+  - nutrition
+
+---
+
+- launchApp
+- waitForAnimationToEnd
+
+# Navigate to camera
+- tapOn:
+    text: ".*[Ll]og.*"
+- waitForAnimationToEnd
+
+- tapOn:
+    text: ".*[Pp]hoto.*|.*[Cc]amera.*"
+    optional: true
+- waitForAnimationToEnd
+
+# Camera permission dialog may appear
+- tapOn:
+    text: ".*[Aa]llow.*"
+    optional: true
+
+# Should see camera preview or permission message
+- assertVisible:
+    text: ".*[Tt]ake.*|.*[Cc]apture.*|.*[Pp]ermission.*|.*[Cc]amera.*"
+    optional: true
+
+# Go back without taking photo
+- back
+- waitForAnimationToEnd

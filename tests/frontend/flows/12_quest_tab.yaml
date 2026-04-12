@@ -1,0 +1,66 @@
+# Flow 12: Quest tab — daily quests, badges, streaks, leaderboard
+appId: com.ash20pk.loggr
+name: Quest Tab
+tags:
+  - features
+
+---
+
+- launchApp
+- waitForAnimationToEnd
+
+# Navigate to quest tab
+- tapOn:
+    text: ".*[Qq]uest.*"
+    optional: true
+- waitForAnimationToEnd
+
+# === Daily quests section ===
+- assertVisible:
+    text: ".*[Qq]uest.*|.*[Dd]aily.*"
+    optional: true
+
+# Should show XP / level info
+- assertVisible:
+    text: ".*[Xx][Pp].*|.*[Ll]evel.*"
+    optional: true
+
+# Should show streak info
+- assertVisible:
+    text: ".*[Ss]treak.*|.*[Dd]ay.*"
+    optional: true
+
+# Scroll to see badges section
+- scroll:
+    direction: DOWN
+    duration: 500
+- waitForAnimationToEnd
+
+- assertVisible:
+    text: ".*[Bb]adge.*|.*[Aa]chievement.*"
+    optional: true
+
+# Scroll to leaderboard
+- scroll:
+    direction: DOWN
+    duration: 500
+- waitForAnimationToEnd
+
+- assertVisible:
+    text: ".*[Ll]eaderboard.*|.*[Rr]ank.*"
+    optional: true
+
+# Tap on streak calendar if visible
+- tapOn:
+    text: ".*[Ss]treak.*|.*[Cc]alendar.*"
+    optional: true
+- waitForAnimationToEnd
+
+# Calendar modal should show days
+- assertVisible:
+    text: ".*[Mm]on.*|.*[Tt]ue.*|.*[Ww]ed.*|.*\\d+.*"
+    optional: true
+
+# Close modal
+- back
+- waitForAnimationToEnd

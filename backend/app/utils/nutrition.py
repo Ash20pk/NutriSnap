@@ -60,12 +60,12 @@ def calculate_calorie_target(
 
     # Goal-based protein targets (g/kg bodyweight)
     goal_normalized = (goal or "").strip().lower()
-    if goal_normalized == "lose_weight":
-        protein_g_per_kg = 1.8
-    elif goal_normalized == "gain_muscle":
-        protein_g_per_kg = 1.6
+    if goal_normalized == "gain_muscle":
+        protein_g_per_kg = 2.0   # Higher end of ACSM 1.6-2.2 g/kg for hypertrophy
+    elif goal_normalized == "lose_weight":
+        protein_g_per_kg = 1.8   # High protein to preserve lean mass in deficit
     else:
-        protein_g_per_kg = 1.2
+        protein_g_per_kg = 1.2   # Adequate for maintain / general_health
 
     protein = max(0.0, float(weight) * protein_g_per_kg)
     protein_cal = protein * 4.0
