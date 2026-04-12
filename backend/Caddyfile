@@ -1,0 +1,36 @@
+# ============================================================
+# NutriSnap — Caddyfile
+# Replace "your-domain.com" with your actual domain.
+# Caddy automatically provisions and renews HTTPS via Let's Encrypt.
+# No certbot, no manual cert management needed.
+# ============================================================
+
+your-domain.com {
+    # Reverse proxy to the API container
+    reverse_proxy api:8000 {
+        # Match gunicorn/uvicorn timeout
+        transport http {
+            read_timeout  125s
+            write_timeout 125s
+        }
+    }
+
+    # Body size limit (must be >= MAX_UPLOAD_SIZE_MB in .env)
+    request_body {
+        max_size 12MB
+    }
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options    "nosniff"
+        X-Frame-Options           "DENY"
+        -Server
+    }
+
+    # Structured access log
+    log {
+        output stdout
+        format json
+    }
+}

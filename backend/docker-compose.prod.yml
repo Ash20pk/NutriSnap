@@ -1,0 +1,71 @@
+# ============================================================
+# NutriSnap — Production Compose (DigitalOcean / Ubuntu)
+# Uses Supabase for DB — no local postgres needed.
+#
+# Usage on droplet:
+#   docker compose -f docker-compose.prod.yml up -d
+# ============================================================
+
+services:
+
+  # ── API (gunicorn + uvicorn workers) ────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: nutrisnap-api:latest
+    container_name: nutrisnap_api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      ENVIRONMENT: production
+      GUNICORN_BIND: "0.0.0.0:8000"
+    expose:
+      - "8000"          # internal only — nginx handles public traffic
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 25s
+    networks:
+      - nutrisnap_net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Caddy reverse proxy (auto-HTTPS via Let's Encrypt) ────────
+  caddy:
+    image: caddy:2-alpine
+    container_name: nutrisnap_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # stores certs (persisted across restarts)
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - nutrisnap_net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  nutrisnap_net:
+    driver: bridge

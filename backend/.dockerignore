@@ -38,3 +38,12 @@ coverage.xml
 
 # ── Docker volumes (local dev) ──────────────────
 postgres_data/
+
+# ── Deploy / infra files (not needed inside image) ──
+deploy.sh
+nginx.conf
+Caddyfile
+docker-compose*.yml
+migrations/
+schema.sql
+tests/
