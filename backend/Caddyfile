@@ -5,7 +5,7 @@
 # No certbot, no manual cert management needed.
 # ============================================================
 
-your-domain.com {
+:80 {
     # Reverse proxy to the API container
     reverse_proxy api:8000 {
         # Match gunicorn/uvicorn timeout
@@ -22,9 +22,8 @@ your-domain.com {
 
     # Security headers
     header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains"
-        X-Content-Type-Options    "nosniff"
-        X-Frame-Options           "DENY"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options        "DENY"
         -Server
     }
 
