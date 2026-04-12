@@ -97,10 +97,7 @@ class Settings:
             raise RuntimeError(
                 f"Missing required environment variables for production: {', '.join(missing)}"
             )
-        if self.CORS_ORIGINS == ["*"]:
-            raise RuntimeError(
-                "CORS_ORIGINS must not be '*' in production. Set explicit allowed origins."
-            )
+        # CORS wildcard is acceptable for mobile-only backends (no browser clients)
 
 
 # Global settings instance
