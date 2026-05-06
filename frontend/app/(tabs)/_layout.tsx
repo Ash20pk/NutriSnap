@@ -149,7 +149,6 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          href: null,
           tabBarIcon: ({ color, focused }) => (
             <View style={[
               styles.iconContainer,

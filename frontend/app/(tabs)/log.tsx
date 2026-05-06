@@ -31,7 +31,7 @@ export default function LogScreen() {
   const params = useLocalSearchParams();
   const { user } = useUser();
   const searchInputRef = useRef<TextInput>(null);
-  const ENABLE_CAMERA_LOGGING = false;
+  const ENABLE_CAMERA_LOGGING = true;
   const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
   const [logMethod, setLogMethod] = useState<'photo' | 'manual' | null>(null);
   const [loading, setLoading] = useState(false);
@@ -422,7 +422,7 @@ export default function LogScreen() {
                 <View style={styles.methodContent}>
                   <Text style={styles.methodTitle}>Take a Photo</Text>
                   <Text style={styles.methodDescription}>
-                    Photo logging will return in a future update
+                    Snap a photo for instant AI meal recognition
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />

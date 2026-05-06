@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import PageHeader from '../components/PageHeader';
 import AnimatedCard from '../components/AnimatedCard';
 import DuoButton from '../components/DuoButton';
+import * as WebBrowser from 'expo-web-browser';
 
 export default function AuthScreen() {
   const router = useRouter();
@@ -177,7 +178,18 @@ export default function AuthScreen() {
                 <View style={[styles.checkbox, acceptedTerms && styles.checkboxActive]}>
                   {acceptedTerms && <Ionicons name="checkmark" size={14} color={Colors.white} />}
                 </View>
-                <Text style={styles.termsText}>I agree to the terms of privacy policy</Text>
+                <Text style={styles.termsText}>
+                  I agree to the{' '}
+                  <Text
+                    style={styles.termsLink}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      router.push('/privacy-policy' as any);
+                    }}
+                  >
+                    Privacy Policy
+                  </Text>
+                </Text>
               </TouchableOpacity>
             )}
 
@@ -358,6 +370,11 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontWeight: '800',
     flex: 1,
+  },
+  termsLink: {
+    color: Colors.primary,
+    fontWeight: '900',
+    textDecorationLine: 'underline',
   },
   dividerRow: {
     flexDirection: 'row',

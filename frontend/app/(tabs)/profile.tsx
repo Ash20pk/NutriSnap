@@ -11,12 +11,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { Colors, Spacing, Radius } from '../../constants/Colors';
 import { useUser } from '../../context/UserContext';
 import { useAuth } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import PageHeader from '../../components/PageHeader';
 import AnimatedCard from '../../components/AnimatedCard';
 import SectionTitle from '../../components/SectionTitle';
@@ -25,6 +28,7 @@ import DuoButton from '../../components/DuoButton';
 import ProfileRow from '../../components/ProfileRow';
 import { useRouter } from 'expo-router';
 import { questApi, socialApi, userApi } from '../../utils/api';
+import { supabase } from '../../utils/supabase';
 
 interface QuestBadge {
   id: string;
@@ -174,7 +178,6 @@ export default function ProfileScreen() {
     } catch (e) {
       console.error('Error loading profile data:', e);
     } finally {
-      setProfileRefreshLoading(true);
       setProfileRefreshLoading(false);
     }
   }, [user?.id]);
@@ -182,6 +185,56 @@ export default function ProfileScreen() {
   React.useEffect(() => {
     refreshProfileData();
   }, [refreshProfileData]);
+
+  const [uploadingPhoto, setUploadingPhoto] = React.useState(false);
+
+  const handlePickPhoto = async () => {
+    if (!user) return;
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission required', 'Allow Loggr to access your photos to set a profile picture.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+      if (result.canceled || !result.assets[0]) return;
+
+      setUploadingPhoto(true);
+      const uri = result.assets[0].uri;
+      const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const filePath = `${user.id}.${ext}`;
+
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const binaryString = atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, bytes, { contentType: `image/${ext}`, upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
+      const updated = await userApi.updateMyProfile({ avatar_url: urlData.publicUrl });
+      await setUser({ ...user, avatar_url: updated.avatar_url ?? urlData.publicUrl });
+      setAvatarImageFailed(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (e: any) {
+      Alert.alert('Upload failed', e?.message ?? 'Could not update profile photo. Try again.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
   const handleLogout = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -198,6 +251,44 @@ export default function ProfileScreen() {
             authLogout();
             logout();
             router.replace('/intro' as any);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+    Alert.alert(
+      'Delete Account',
+      'This permanently deletes your account, all meal logs, badges, and progress. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Forever',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Are you absolutely sure?',
+              'Type "delete" to confirm.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Yes, delete my account',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await userApi.deleteAccount();
+                      await authLogout();
+                      logout();
+                      router.replace('/intro' as any);
+                    } catch (e: any) {
+                      Alert.alert('Error', e?.message ?? 'Failed to delete account. Please try again.');
+                    }
+                  },
+                },
+              ]
+            );
           },
         },
       ]
@@ -377,9 +468,12 @@ export default function ProfileScreen() {
                       </View>
                       <TouchableOpacity
                         style={styles.avatarEditBadge}
-                        onPress={() => Alert.alert('Coming soon', 'Profile photo uploading will be added next.')}
+                        onPress={handlePickPhoto}
+                        disabled={uploadingPhoto}
                       >
-                        <Ionicons name="camera" size={18} color={Colors.white} />
+                        {uploadingPhoto
+                          ? <ActivityIndicator size="small" color={Colors.white} />
+                          : <Ionicons name="camera" size={18} color={Colors.white} />}
                       </TouchableOpacity>
                     </View>
                     <Text style={styles.changePhotoHint}>Tap to change photo</Text>
@@ -588,6 +682,26 @@ export default function ProfileScreen() {
           <Ionicons name="log-out" size={20} color={Colors.error} />
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
+      </AnimatedCard>
+
+      {/* Danger Zone */}
+      <AnimatedCard delay={750} type="pop" style={styles.section}>
+        <SectionTitle title="Danger Zone" />
+        <AppCard padding={16}>
+          <TouchableOpacity
+            onPress={() => router.push('/privacy-policy' as any)}
+            style={styles.dangerRow}
+          >
+            <Ionicons name="shield-checkmark-outline" size={20} color={Colors.textSecondary} />
+            <Text style={styles.dangerRowText}>Privacy Policy</Text>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
+          </TouchableOpacity>
+          <View style={styles.dangerDivider} />
+          <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
+            <Ionicons name="trash" size={20} color={Colors.error} />
+            <Text style={styles.deleteText}>Delete Account</Text>
+          </TouchableOpacity>
+        </AppCard>
       </AnimatedCard>
 
       <View style={{ height: 100 }} />
@@ -1059,5 +1173,35 @@ const styles = StyleSheet.create({
     color: Colors.error,
     textTransform: 'uppercase',
     letterSpacing: 1,
+  },
+  dangerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  dangerRowText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.textSecondary,
+  },
+  dangerDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: Spacing.sm,
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  deleteText: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: Colors.error,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 });

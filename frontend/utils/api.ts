@@ -467,9 +467,12 @@ export const userApi = {
     const response = await api.get('/user/me');
     return response.data;
   },
-  updateMyProfile: async (payload: { bio?: string | null; avatar_url?: string | null }): Promise<UserProfile> => {
+  updateMyProfile: async (payload: { bio?: string | null; avatar_url?: string | null; name?: string | null }): Promise<UserProfile> => {
     const response = await api.put('/user/me/profile', payload);
     return response.data;
+  },
+  deleteAccount: async (): Promise<void> => {
+    await api.delete('/user/me');
   },
   getUser: async (userId: string): Promise<UserProfile> => {
     const response = await api.get(`/user/${userId}`);

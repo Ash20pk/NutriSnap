@@ -22,6 +22,7 @@ export default function RootLayout() {
             <Stack.Screen name="onboarding" />
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="camera" />
+            <Stack.Screen name="privacy-policy" />
           </Stack>
         </View>
       </UserProvider>

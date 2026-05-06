@@ -40,6 +40,7 @@ class GoalsUpdateRequest(BaseModel):
 class ProfileUpdateRequest(BaseModel):
     bio: Optional[str] = None
     avatar_url: Optional[str] = None
+    name: Optional[str] = None
 
 
 class WeightCheckRequest(BaseModel):
@@ -140,7 +141,8 @@ async def update_my_profile(
     return await service.update_profile(
         uid=uid,
         bio=payload.bio,
-        avatar_url=payload.avatar_url
+        avatar_url=payload.avatar_url,
+        name=payload.name,
     )
 
 
@@ -213,6 +215,24 @@ async def get_weight_history(
         List of weight history entries
     """
     return await service.get_weight_history(uid, limit)
+
+
+@router.delete("/me")
+async def delete_my_account(
+    uid: str = Depends(get_current_uid),
+    service: ProfileService = Depends(get_profile_service)
+):
+    """
+    Permanently delete the current user's account and all associated data.
+
+    Args:
+        uid: Current user ID (from auth)
+        service: Profile service instance
+
+    Returns:
+        Confirmation message
+    """
+    return await service.delete_account(uid)
 
 
 @router.post("/me/username")

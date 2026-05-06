@@ -4,9 +4,11 @@ Handles user onboarding, profile updates, goals, and weight tracking.
 """
 
 import logging
+import os
 from datetime import datetime, date
 from typing import Dict, Any, Optional
 import asyncpg
+import httpx
 from fastapi import HTTPException
 
 from app.utils.nutrition import calculate_calorie_target, calculate_age_from_dob
@@ -156,16 +158,18 @@ class ProfileService:
         self,
         uid: str,
         bio: Optional[str] = None,
-        avatar_url: Optional[str] = None
+        avatar_url: Optional[str] = None,
+        name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Update user profile bio and avatar.
-        
+        Update user profile bio, avatar, and display name.
+
         Args:
             uid: User UUID
             bio: User bio text
             avatar_url: Avatar image URL
-        
+            name: Display name
+
         Returns:
             Updated user profile
         """
@@ -174,18 +178,20 @@ class ProfileService:
                 """
                 UPDATE profiles
                 SET bio = COALESCE($2, bio),
-                    avatar_url = COALESCE($3, avatar_url)
+                    avatar_url = COALESCE($3, avatar_url),
+                    name = COALESCE($4, name)
                 WHERE id = $1
                 RETURNING *
                 """,
                 to_uuid(uid),
                 bio,
                 avatar_url,
+                name,
             )
-        
+
         if not row:
             raise HTTPException(status_code=404, detail="User not found")
-        
+
         return profile_from_record(row)
     
     async def update_goals(
@@ -415,5 +421,44 @@ class ProfileService:
         
         if not row:
             raise HTTPException(status_code=404, detail="User not found")
-        
+
         return {"user_id": str(row["id"]), "username": row["username"]}
+
+    async def delete_account(self, uid: str) -> Dict[str, str]:
+        """
+        Permanently delete user account and all associated data.
+
+        Deletes the profile row (cascading to meals, quests, etc.) then
+        removes the Supabase Auth user via the Admin API if credentials are
+        configured.
+
+        Args:
+            uid: User UUID
+
+        Returns:
+            Confirmation message
+        """
+        async with self.pool.acquire() as conn:
+            result = await conn.execute(
+                "DELETE FROM profiles WHERE id = $1",
+                to_uuid(uid),
+            )
+            if result == "DELETE 0":
+                raise HTTPException(status_code=404, detail="User not found")
+
+        supabase_url = os.environ.get("SUPABASE_URL", "").strip()
+        service_role_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+        if supabase_url and service_role_key:
+            try:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    await client.delete(
+                        f"{supabase_url}/auth/v1/admin/users/{uid}",
+                        headers={
+                            "apikey": service_role_key,
+                            "Authorization": f"Bearer {service_role_key}",
+                        },
+                    )
+            except Exception:
+                logger.warning("Failed to delete Supabase auth user %s — profile data already removed", uid)
+
+        return {"detail": "Account deleted successfully"}

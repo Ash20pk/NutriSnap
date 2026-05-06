@@ -58,7 +58,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     (async () => {
       try {
         if (!authUser) {
-          console.log('[UserContext] No auth user, clearing profile');
+          if (__DEV__) console.log('[UserContext] No auth user, clearing profile');
           await AsyncStorage.removeItem('user_profile');
           setUserState(null);
           setIsLoading(false);
@@ -68,10 +68,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         // Only load cached profile, don't call backend during auth flow
         const userData = await AsyncStorage.getItem('user_profile');
         if (userData) {
-          console.log('[UserContext] Found cached profile');
+          if (__DEV__) console.log('[UserContext] Found cached profile');
           setUserState(JSON.parse(userData));
         } else {
-          console.log('[UserContext] No cached profile - will load from backend later');
+          if (__DEV__) console.log('[UserContext] No cached profile - will load from backend later');
           setUserState(null);
         }
         setIsLoading(false);
