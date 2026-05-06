@@ -12,6 +12,7 @@ import {
   UIManager,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
 import { mealApi, analyticsApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,6 +34,8 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 const InsightHeader = ({ title, insight }: { title: string; insight?: string }) => {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const [expanded, setExpanded] = useState(false);
 
   const toggle = useCallback(() => {
@@ -58,7 +61,7 @@ const InsightHeader = ({ title, insight }: { title: string; insight?: string }) 
           <Ionicons
             name={expanded ? "chevron-up" : "sparkles"}
             size={18}
-            color={Colors.primary}
+            color={theme.primary}
           />
         )}
       </TouchableOpacity>
@@ -72,6 +75,8 @@ const InsightHeader = ({ title, insight }: { title: string; insight?: string }) 
 };
 
 const CollapsibleBioAlert = ({ alert }: { alert: any }) => {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const [expanded, setExpanded] = useState(false);
 
   const toggle = useCallback(() => {
@@ -110,7 +115,7 @@ const CollapsibleBioAlert = ({ alert }: { alert: any }) => {
         <Ionicons
           name={expanded ? "chevron-up" : "chevron-down"}
           size={16}
-          color={Colors.textSecondary}
+          color={theme.textSecondary}
         />
       </View>
 
@@ -126,6 +131,8 @@ const CollapsibleBioAlert = ({ alert }: { alert: any }) => {
 };
 
 const CollapsibleRedFlag = ({ flag }: { flag: any }) => {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const [expanded, setExpanded] = useState(false);
 
   const toggle = useCallback(() => {
@@ -161,7 +168,7 @@ const CollapsibleRedFlag = ({ flag }: { flag: any }) => {
         <Ionicons
           name={expanded ? "chevron-up" : "chevron-down"}
           size={16}
-          color={Colors.textSecondary}
+          color={theme.textSecondary}
         />
       </View>
 
@@ -226,6 +233,8 @@ interface ApiBioImpact {
 }
 
 export default function AnalyticsScreen() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const { user } = useUser();
   const [loading, setLoading] = useState(false);
   const [timeRange, setTimeRange] = useState<'week' | 'month'>('week');
@@ -358,11 +367,11 @@ export default function AnalyticsScreen() {
       chartData = last7Days.map((day) => ({
         label: day,
         value: dayTotals[day] || 0,
-        frontColor: Colors.primary,
-        gradientColor: Colors.primaryLight,
+        frontColor: theme.primary,
+        gradientColor: theme.primaryLight,
         showGradient: true,
         labelTextStyle: {
-          color: Colors.textSecondary,
+          color: theme.textSecondary,
           fontSize: 10,
           fontWeight: '900',
           width: 45,
@@ -388,11 +397,11 @@ export default function AnalyticsScreen() {
       chartData = weekTotals.map((total, i) => ({
         label: i === 0 ? 'Days 29-30' : `Week ${i}`,
         value: total,
-        frontColor: Colors.primary,
-        gradientColor: Colors.primaryLight,
+        frontColor: theme.primary,
+        gradientColor: theme.primaryLight,
         showGradient: true,
         labelTextStyle: {
-          color: Colors.textSecondary,
+          color: theme.textSecondary,
           fontSize: 10,
           fontWeight: '900',
           width: 60,
@@ -748,7 +757,7 @@ export default function AnalyticsScreen() {
           <RefreshControl
             refreshing={loading}
             onRefresh={fetchAnalytics}
-            tintColor={Colors.primary}
+            tintColor={theme.primary}
           />
         }
       >
@@ -800,7 +809,7 @@ export default function AnalyticsScreen() {
           />
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
-              <Ionicons name="flame" size={28} color={Colors.primary} />
+              <Ionicons name="flame" size={28} color={theme.primary} />
               <Text style={styles.statValue}>{averages.calories || 0}</Text>
               <Text style={styles.statLabel}>kcal/day</Text>
             </View>
@@ -831,22 +840,22 @@ export default function AnalyticsScreen() {
           <Text style={styles.subSectionTitle}>Key Minerals & Fiber</Text>
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
-              <Ionicons name="water-outline" size={24} color={Colors.text} />
+              <Ionicons name="water-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{microAverages.sodium_mg || 0}</Text>
               <Text style={styles.statLabel}>Sodium (mg)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="leaf-outline" size={24} color={Colors.text} />
+              <Ionicons name="leaf-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{microAverages.fiber_g || 0}</Text>
               <Text style={styles.statLabel}>Fiber (g)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="battery-charging-outline" size={24} color={Colors.text} />
+              <Ionicons name="battery-charging-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{microAverages.potassium_mg || 0}</Text>
               <Text style={styles.statLabel}>Potassium (mg)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="nutrition-outline" size={24} color={Colors.text} />
+              <Ionicons name="nutrition-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{microAverages.calcium_mg || 0}</Text>
               <Text style={styles.statLabel}>Calcium (mg)</Text>
             </View>
@@ -854,22 +863,22 @@ export default function AnalyticsScreen() {
 
           <View style={[styles.statsGrid, { marginTop: 12 }]}>
             <View style={styles.statCard}>
-              <Ionicons name="pulse-outline" size={24} color={Colors.text} />
+              <Ionicons name="pulse-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{microAverages.iron_mg || 0}</Text>
               <Text style={styles.statLabel}>Iron (mg)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="flash-outline" size={24} color={Colors.text} />
+              <Ionicons name="flash-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{microAverages.magnesium_mg || 0}</Text>
               <Text style={styles.statLabel}>Magnesium (mg)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="cog-outline" size={24} color={Colors.text} />
+              <Ionicons name="cog-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{(microAverages.zinc_mg || 0).toFixed(1)}</Text>
               <Text style={styles.statLabel}>Zinc (mg)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="construct-outline" size={24} color={Colors.text} />
+              <Ionicons name="construct-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{microAverages.phosphorus_mg || 0}</Text>
               <Text style={styles.statLabel}>Phosphorus (mg)</Text>
             </View>
@@ -878,22 +887,22 @@ export default function AnalyticsScreen() {
           <Text style={[styles.subSectionTitle, { marginTop: 20 }]}>Vitamins</Text>
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
-              <Ionicons name="sunny-outline" size={24} color={Colors.text} />
+              <Ionicons name="sunny-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{microAverages.vitamin_c_mg || 0}</Text>
               <Text style={styles.statLabel}>Vit C (mg)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="eye-outline" size={24} color={Colors.text} />
+              <Ionicons name="eye-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{microAverages.vitamin_a_ug || 0}</Text>
               <Text style={styles.statLabel}>Vit A (µg)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="rainy-outline" size={24} color={Colors.text} />
+              <Ionicons name="rainy-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{(microAverages.vitamin_d_ug || 0).toFixed(1)}</Text>
               <Text style={styles.statLabel}>Vit D (µg)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="shield-outline" size={24} color={Colors.text} />
+              <Ionicons name="shield-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{(microAverages.vitamin_e_mg || 0).toFixed(1)}</Text>
               <Text style={styles.statLabel}>Vit E (mg)</Text>
             </View>
@@ -901,22 +910,22 @@ export default function AnalyticsScreen() {
 
           <View style={[styles.statsGrid, { marginTop: 12 }]}>
             <View style={styles.statCard}>
-              <Ionicons name="leaf-outline" size={24} color={Colors.text} />
+              <Ionicons name="leaf-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{microAverages.vitamin_k_ug || 0}</Text>
               <Text style={styles.statLabel}>Vit K (µg)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="medical-outline" size={24} color={Colors.text} />
+              <Ionicons name="medical-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{(microAverages.vitamin_b12_ug || 0).toFixed(1)}</Text>
               <Text style={styles.statLabel}>B12 (µg)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="ellipse-outline" size={24} color={Colors.text} />
+              <Ionicons name="ellipse-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{microAverages.folate_ug || 0}</Text>
               <Text style={styles.statLabel}>Folate (µg)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="flask-outline" size={24} color={Colors.text} />
+              <Ionicons name="flask-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{(microAverages.vitamin_b6_mg || 0).toFixed(1)}</Text>
               <Text style={styles.statLabel}>B6 (mg)</Text>
             </View>
@@ -925,22 +934,22 @@ export default function AnalyticsScreen() {
           <Text style={[styles.subSectionTitle, { marginTop: 20 }]}>Fats & Others</Text>
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
-              <Ionicons name="cafe-outline" size={24} color={Colors.text} />
+              <Ionicons name="cafe-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{microAverages.sugar_g || 0}</Text>
               <Text style={styles.statLabel}>Sugar (g)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="flame-outline" size={24} color={Colors.text} />
+              <Ionicons name="flame-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{microAverages.saturated_fat_g || 0}</Text>
               <Text style={styles.statLabel}>Sat Fat (g)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="contrast-outline" size={24} color={Colors.text} />
+              <Ionicons name="contrast-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{microAverages.cholesterol_mg || 0}</Text>
               <Text style={styles.statLabel}>Chol (mg)</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="remove-circle-outline" size={24} color={Colors.text} />
+              <Ionicons name="remove-circle-outline" size={24} color={theme.text} />
               <Text style={styles.statValue}>{microAverages.trans_fat_g || 0}</Text>
               <Text style={styles.statLabel}>Trans (g)</Text>
             </View>
@@ -980,14 +989,14 @@ export default function AnalyticsScreen() {
               <View style={styles.pieChartContainer}>
                 <View style={styles.pieChartWrapper}>
                   <StandardDonutChart
-                    data={hasAnyMacros ? macroDistribution : [{ value: 1, color: Colors.border }]}
+                    data={hasAnyMacros ? macroDistribution : [{ value: 1, color: theme.border }]}
                     radius={90}
                     innerRadius={60}
                     showText
                     centerLabelComponent={() => (
                       <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                        <Ionicons name="nutrition" size={20} color={Colors.white} />
-                        <Text style={{ marginTop: 4, color: Colors.primary, fontSize: 10, fontWeight: '900', textAlign: 'center' }}>
+                        <Ionicons name="nutrition" size={20} color={theme.white} />
+                        <Text style={{ marginTop: 4, color: theme.primary, fontSize: 10, fontWeight: '900', textAlign: 'center' }}>
                           Macros
                         </Text>
                       </View>
@@ -1094,7 +1103,7 @@ export default function AnalyticsScreen() {
               <View style={styles.ingredientsGrid}>
                 {ingredientInsights.map((ing, index) => (
                   <View key={index} style={styles.ingredientBadge}>
-                    <Ionicons name="leaf-outline" size={14} color={Colors.primary} />
+                    <Ionicons name="leaf-outline" size={14} color={theme.primary} />
                     <Text style={styles.ingredientBadgeText}>{ing.name}</Text>
                     <View style={styles.ingCountBadge}>
                       <Text style={styles.ingCountText}>{ing.count}</Text>
@@ -1122,7 +1131,7 @@ export default function AnalyticsScreen() {
                   { label: 'Liver', key: 'liver', score: bioImpact.organEffects.liver, icon: 'shield-checkmark', color: Colors.success },
                   { label: 'Kidney', key: 'kidney', score: bioImpact.organEffects.kidney, icon: 'water', color: Colors.info },
                   { label: 'Brain', key: 'brain', score: bioImpact.organEffects.brain, icon: 'flash', color: Colors.warning },
-                  { label: 'Skin', key: 'skin', score: bioImpact.organEffects.skin, icon: 'sparkles', color: Colors.primary },
+                  { label: 'Skin', key: 'skin', score: bioImpact.organEffects.skin, icon: 'sparkles', color: theme.primary },
                 ].map((organ, index) => (
                   <View key={index} style={styles.organItem}>
                     <View style={[styles.organIconContainer, { backgroundColor: organ.color + '15' }]}>
@@ -1175,7 +1184,7 @@ export default function AnalyticsScreen() {
                   { label: 'Muscle Recovery', value: bioImpact.recovery, icon: 'barbell', color: Colors.error },
                   { label: 'Mental Focus', value: bioImpact.focus, icon: 'eye', color: Colors.info },
                   { label: 'Sugar Stability', value: bioImpact.stability, icon: 'pulse', color: Colors.success },
-                  { label: 'Antioxidant Load', value: bioImpact.antioxidants, icon: 'leaf', color: Colors.primary },
+                  { label: 'Antioxidant Load', value: bioImpact.antioxidants, icon: 'leaf', color: theme.primary },
                   { label: 'Digestive Ease', value: bioImpact.digestion, icon: 'water', color: Colors.info },
                 ].map((item, index) => (
                   <View key={index} style={styles.organItem}>
@@ -1245,10 +1254,11 @@ export default function AnalyticsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: theme.background,
   },
   scrollView: {
     flex: 1,
@@ -1259,12 +1269,12 @@ const styles = StyleSheet.create({
   },
   timeRangeContainer: {
     flexDirection: 'row',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     padding: 4,
     marginBottom: 20,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
   },
   timeRangeButton: {
@@ -1274,17 +1284,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   timeRangeButtonActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
   },
   timeRangeText: {
     fontSize: 13,
     fontWeight: '900',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
   timeRangeTextActive: {
-    color: Colors.white,
+    color: theme.white,
   },
   section: {
     marginBottom: 20,
@@ -1294,11 +1304,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     padding: 18,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
   },
   toolIconWrap: {
@@ -1315,7 +1325,7 @@ const styles = StyleSheet.create({
   toolTitle: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     marginBottom: 2,
@@ -1323,22 +1333,22 @@ const styles = StyleSheet.create({
   toolSubtitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     lineHeight: 18,
   },
   standardCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     padding: 20,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
-    borderBottomColor: Colors.border,
+    borderBottomColor: theme.border,
   },
   sectionTitle: {
     fontSize: 18, // H2
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginBottom: 16,
     textTransform: 'uppercase',
     letterSpacing: 1.0,
@@ -1346,7 +1356,7 @@ const styles = StyleSheet.create({
   },
   insightText: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     lineHeight: 20,
     marginBottom: 16,
     fontWeight: '600',
@@ -1359,25 +1369,25 @@ const styles = StyleSheet.create({
   },
   statCard: {
     width: '48.5%',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     padding: 16,
     height: 110, // Fixed height for consistent grid alignment
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
   },
   statValue: {
     fontSize: 22,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginVertical: 4,
   },
   statLabel: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontWeight: '800',
     textTransform: 'uppercase',
     textAlign: 'center',
@@ -1404,12 +1414,12 @@ const styles = StyleSheet.create({
   ringValue: {
     fontSize: 18,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   ringLabel: {
     fontSize: 10,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     marginTop: 8,
   },
@@ -1423,13 +1433,13 @@ const styles = StyleSheet.create({
   heroStatLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
   },
   heroStatValue: {
     fontSize: 18,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   statusTag: {
     flexDirection: 'row',
@@ -1453,7 +1463,7 @@ const styles = StyleSheet.create({
   subSectionTitle: {
     fontSize: 15, // H3
     fontWeight: '900',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     marginBottom: 16,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -1483,18 +1493,18 @@ const styles = StyleSheet.create({
   organLabelCompact: {
     fontSize: 13,
     fontWeight: '800',
-    color: Colors.text,
+    color: theme.text,
   },
   organScoreCompact: {
     fontSize: 12,
     fontWeight: '900',
   },
   chartCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     padding: 20,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 8,
     overflow: 'hidden',
   },
@@ -1505,11 +1515,11 @@ const styles = StyleSheet.create({
   },
   hollowBar: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
-    borderBottomColor: Colors.border,
+    borderBottomColor: theme.border,
     borderRadius: 8,
     marginHorizontal: 1,
   },
@@ -1550,19 +1560,19 @@ const styles = StyleSheet.create({
   legendLabel: {
     fontSize: 15,
     fontWeight: '800',
-    color: Colors.text,
+    color: theme.text,
   },
   legendValue: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontWeight: '800',
   },
   mealTypeCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     padding: 20,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 8,
     gap: 12,
   },
@@ -1574,7 +1584,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   mealTypeInfo: {
     flexDirection: 'row',
@@ -1591,7 +1601,7 @@ const styles = StyleSheet.create({
   mealTypeName: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -1601,19 +1611,19 @@ const styles = StyleSheet.create({
   mealTypeCount: {
     fontSize: 13,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   mealTypeCalories: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontWeight: '800',
   },
   topFoodsCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     padding: 20,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 8,
     gap: 10,
   },
@@ -1625,7 +1635,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   foodInfo: {
     flexDirection: 'row',
@@ -1637,19 +1647,19 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   foodRankText: {
     fontSize: 12,
     fontWeight: '900',
-    color: Colors.white,
+    color: theme.white,
   },
   foodName: {
     fontSize: 14,
     fontWeight: '800',
-    color: Colors.text,
+    color: theme.text,
     flex: 1,
   },
   foodStats: {
@@ -1658,19 +1668,19 @@ const styles = StyleSheet.create({
   foodCount: {
     fontSize: 13,
     fontWeight: '900',
-    color: Colors.primary,
+    color: theme.primary,
   },
   foodCalories: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontWeight: '800',
   },
   ingredientsCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     padding: 20,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 8,
   },
   ingredientsGrid: {
@@ -1686,17 +1696,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     gap: 6,
   },
   ingredientBadgeText: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
   },
   ingCountBadge: {
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -1704,7 +1714,7 @@ const styles = StyleSheet.create({
   ingCountText: {
     fontSize: 10,
     fontWeight: '900',
-    color: Colors.white,
+    color: theme.white,
   },
   emptyFoods: {
     alignItems: 'center',
@@ -1714,14 +1724,14 @@ const styles = StyleSheet.create({
   emptyFoodsText: {
     fontSize: 14,
     fontWeight: '800',
-    color: Colors.textLight,
+    color: theme.textLight,
   },
   healthInsightsCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     padding: 20,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 8,
   },
   organGrid: {
@@ -1734,7 +1744,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     gap: 12,
   },
   organIconContainer: {
@@ -1743,9 +1753,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   organInfo: {
     flex: 1,
@@ -1759,7 +1769,7 @@ const styles = StyleSheet.create({
   organLabel: {
     fontSize: 14, // Standardized
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -1769,7 +1779,7 @@ const styles = StyleSheet.create({
   },
   organProgressBg: {
     height: 6,
-    backgroundColor: Colors.border,
+    backgroundColor: theme.border,
     borderRadius: 3,
     overflow: 'hidden',
     marginBottom: 6,
@@ -1781,15 +1791,15 @@ const styles = StyleSheet.create({
   organInsightText: {
     fontSize: 12, // Standardized caption
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     lineHeight: 16,
   },
   bioImpactCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     padding: 20,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 8,
   },
   bioGrid: {
@@ -1802,7 +1812,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     alignItems: 'center',
     gap: 8,
     marginBottom: 10,
@@ -1813,9 +1823,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   bioInfo: {
     width: '100%',
@@ -1829,18 +1839,18 @@ const styles = StyleSheet.create({
   bioLabel: {
     fontSize: 11, // Standardized caption
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
   bioValueText: {
     fontSize: 14, // Standardized
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   bioProgressBg: {
     height: 4,
-    backgroundColor: Colors.border,
+    backgroundColor: theme.border,
     borderRadius: 2,
     overflow: 'hidden',
   },
@@ -1849,11 +1859,11 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   redFlagsCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     padding: 20,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 8,
     gap: 16,
   },
@@ -1862,7 +1872,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   alertIconBox: {
     width: 36,
@@ -1875,27 +1885,27 @@ const styles = StyleSheet.create({
   alertTitle: {
     fontSize: 13,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   alertBody: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontWeight: '700',
     lineHeight: 20,
   },
   bioAlertMetric: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   bioAlertMessage: {
     fontSize: 14,
-    color: Colors.text,
+    color: theme.text,
     fontWeight: '700',
     lineHeight: 18,
   },
@@ -1931,7 +1941,7 @@ const styles = StyleSheet.create({
   },
   redFlagDescription: {
     fontSize: 14,
-    color: Colors.text,
+    color: theme.text,
     lineHeight: 20,
     marginBottom: 14,
     fontWeight: '700',
@@ -1940,12 +1950,12 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: theme.border,
   },
   redFlagCulpritsLabel: {
     fontSize: 11,
     fontWeight: '900',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     marginBottom: 10,
     letterSpacing: 0.8,
@@ -1956,7 +1966,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   redFlagCulpritBadge: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 14,
@@ -1968,7 +1978,7 @@ const styles = StyleSheet.create({
   },
   redFlagFrequency: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontWeight: '900',
     marginTop: 10,
     textTransform: 'uppercase',
@@ -1988,7 +1998,7 @@ const styles = StyleSheet.create({
   correctiveTitle: {
     fontSize: 15,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 4,
@@ -1997,7 +2007,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     alignItems: 'flex-start',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     padding: 12,
     borderRadius: 14,
     borderWidth: 1,
@@ -2007,13 +2017,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.text,
+    color: theme.text,
     lineHeight: 18,
   },
   correctiveSubText: {
     fontSize: 11,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     marginTop: 4,
   },
   modalOverlay: {
@@ -2025,12 +2035,12 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   modalContent: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 32,
     padding: 24,
     width: '100%',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 10,
   },
   modalHeader: {
@@ -2042,7 +2052,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 22,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     flex: 1,
     paddingRight: 16,
   },
@@ -2057,23 +2067,23 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   modalStatLabel: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
   },
   modalStatValue: {
     fontSize: 18,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   modalSubtitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     marginTop: 4,
   },
@@ -2081,7 +2091,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -2090,7 +2100,7 @@ const styles = StyleSheet.create({
   modalScoreText: {
     fontSize: 16,
     fontWeight: '900',
-    color: Colors.white,
+    color: theme.white,
   },
   modalSection: {
     gap: 10,
@@ -2098,7 +2108,7 @@ const styles = StyleSheet.create({
   modalSectionTitle: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
   },
   driverTags: {
@@ -2144,7 +2154,7 @@ const styles = StyleSheet.create({
   culpritText: {
     fontSize: 15,
     fontWeight: '800',
-    color: Colors.text,
+    color: theme.text,
   },
   culpritFooter: {
     flexDirection: 'row',
@@ -2165,7 +2175,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   labelHeader: {
     flexDirection: 'row',
@@ -2176,7 +2186,7 @@ const styles = StyleSheet.create({
   labelText: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -2191,23 +2201,23 @@ const styles = StyleSheet.create({
   labelValue: {
     fontSize: 20,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginBottom: 4,
   },
   labelDesc: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     lineHeight: 16,
   },
   solutionText: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     lineHeight: 22,
   },
   modalCloseBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
     paddingVertical: 16,
     borderRadius: 20,
     alignItems: 'center',
@@ -2216,9 +2226,10 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(0,0,0,0.15)',
   },
   modalCloseBtnText: {
-    color: Colors.white,
+    color: theme.white,
     fontSize: 16,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
-});
+  });
+}

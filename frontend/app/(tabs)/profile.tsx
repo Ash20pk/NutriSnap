@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Colors, Spacing, Radius } from '../../constants/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
 import { useAuth } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -54,6 +55,8 @@ interface QuestStats {
 }
 
 export default function ProfileScreen() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const router = useRouter();
   const { user, setUser, logout } = useUser();
   const { logout: authLogout } = useAuth();
@@ -319,7 +322,7 @@ export default function ProfileScreen() {
             <Ionicons 
               name="refresh" 
               size={22} 
-              color={Colors.primary} 
+              color={theme.primary} 
               style={profileRefreshLoading ? { opacity: 0.5 } : null}
             />
           </TouchableOpacity>
@@ -356,7 +359,7 @@ export default function ProfileScreen() {
                     setEditVisible(true);
                   }}
                 >
-                  <Ionicons name="pencil" size={16} color={Colors.white} />
+                  <Ionicons name="pencil" size={16} color={theme.white} />
                 </TouchableOpacity>
               </View>
 
@@ -403,10 +406,10 @@ export default function ProfileScreen() {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                   setEditVisible(true);
                 }}
-                color={Colors.primary}
+                color={theme.primary}
                 size="large"
                 style={{ width: '100%', marginTop: 8 }}
-                leftIcon={<Ionicons name="create-outline" size={18} color={Colors.white} />}
+                leftIcon={<Ionicons name="create-outline" size={18} color={theme.white} />}
               />
             </View>
           </AppCard>
@@ -435,7 +438,7 @@ export default function ProfileScreen() {
                   style={styles.modalCloseBtn}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Ionicons name="close" size={24} color={Colors.text} />
+                  <Ionicons name="close" size={24} color={theme.text} />
                 </TouchableOpacity>
                 <Text style={styles.modalTitle}>Edit Profile</Text>
                 <TouchableOpacity
@@ -472,8 +475,8 @@ export default function ProfileScreen() {
                         disabled={uploadingPhoto}
                       >
                         {uploadingPhoto
-                          ? <ActivityIndicator size="small" color={Colors.white} />
-                          : <Ionicons name="camera" size={18} color={Colors.white} />}
+                          ? <ActivityIndicator size="small" color={theme.white} />
+                          : <Ionicons name="camera" size={18} color={theme.white} />}
                       </TouchableOpacity>
                     </View>
                     <Text style={styles.changePhotoHint}>Tap to change photo</Text>
@@ -482,14 +485,14 @@ export default function ProfileScreen() {
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Name</Text>
                     <View style={styles.inputWrapper}>
-                      <Ionicons name="person-outline" size={20} color={Colors.primary} style={{ marginRight: 10 }} />
+                      <Ionicons name="person-outline" size={20} color={theme.primary} style={{ marginRight: 10 }} />
                       <TextInput
                         style={styles.textInput}
                         value={editNameDraft}
                         onChangeText={setEditNameDraft}
                         placeholder="Your name"
-                        placeholderTextColor={Colors.textLight}
-                        selectionColor={Colors.primary}
+                        placeholderTextColor={theme.textLight}
+                        selectionColor={theme.primary}
                       />
                     </View>
                   </View>
@@ -503,11 +506,11 @@ export default function ProfileScreen() {
                         value={editUsernameDraft}
                         onChangeText={(t) => setEditUsernameDraft(t.toLowerCase().replace(/\s/g, ''))}
                         placeholder="your_username"
-                        placeholderTextColor={Colors.textLight}
+                        placeholderTextColor={theme.textLight}
                         autoCapitalize="none"
                         autoCorrect={false}
                         maxLength={20}
-                        selectionColor={Colors.primary}
+                        selectionColor={theme.primary}
                       />
                     </View>
                     <Text style={styles.inputHint}>3-20 characters (letters, numbers, underscores)</Text>
@@ -521,11 +524,11 @@ export default function ProfileScreen() {
                         value={editBioDraft}
                         onChangeText={setEditBioDraft}
                         placeholder="Tell us about your fitness journey..."
-                        placeholderTextColor={Colors.textLight}
+                        placeholderTextColor={theme.textLight}
                         multiline
                         numberOfLines={4}
                         maxLength={160}
-                        selectionColor={Colors.primary}
+                        selectionColor={theme.primary}
                       />
                     </View>
                     <Text style={styles.charCount}>{editBioDraft.length}/160</Text>
@@ -536,7 +539,7 @@ export default function ProfileScreen() {
                     onPress={handleSaveProfile}
                     disabled={savingProfile}
                     loading={savingProfile}
-                    color={Colors.primary}
+                    color={theme.primary}
                     size="large"
                     style={{ marginTop: Spacing.sm }}
                   />
@@ -609,13 +612,13 @@ export default function ProfileScreen() {
             {badges.slice(0, 4).map((b) => (
               <View key={b.id} style={[styles.badgeCard, !b.earned && styles.badgeCardLocked]}>
                 <View style={styles.badgeIconWrap}>
-                  <Ionicons name={b.icon as any} size={20} color={b.earned ? Colors.primary : Colors.textLight} />
+                  <Ionicons name={b.icon as any} size={20} color={b.earned ? theme.primary : theme.textLight} />
                 </View>
                 <View style={styles.badgeTextWrap}>
                   <Text style={styles.badgeTitle}>{b.title}</Text>
                   <Text style={styles.badgeSubtitle} numberOfLines={2}>{b.description}</Text>
                 </View>
-                {!b.earned && <Ionicons name="lock-closed" size={16} color={Colors.textLight} />}
+                {!b.earned && <Ionicons name="lock-closed" size={16} color={theme.textLight} />}
               </View>
             ))}
           </View>
@@ -635,7 +638,7 @@ export default function ProfileScreen() {
           />
           <ProfileRow
             icon="fitness"
-            iconColor={Colors.primary}
+            iconColor={theme.primary}
             label="Protein"
             value={`${Math.round(user?.protein_target || 0)}g`}
             showDivider
@@ -649,7 +652,7 @@ export default function ProfileScreen() {
           />
           <ProfileRow
             icon="water"
-            iconColor={Colors.primary}
+            iconColor={theme.primary}
             label="Fat"
             value={`${Math.round(user?.fat_target || 0)}g`}
           />
@@ -662,14 +665,14 @@ export default function ProfileScreen() {
         <AppCard padding={8}>
           <ProfileRow
             icon="restaurant"
-            iconColor={Colors.textSecondary}
+            iconColor={theme.textSecondary}
             label="Dietary Preference"
             value={user?.dietary_preference?.replace('_', ' ') || 'None'}
             showDivider
           />
           <ProfileRow
             icon="barbell"
-            iconColor={Colors.textSecondary}
+            iconColor={theme.textSecondary}
             label="Activity Level"
             value={user?.activity_level?.replace('_', ' ') || 'None'}
           />
@@ -683,11 +686,11 @@ export default function ProfileScreen() {
             style={styles.redeemRow}
             onPress={() => router.push('/redeem' as any)}
           >
-            <Ionicons name="gift-outline" size={20} color={Colors.primary} />
+            <Ionicons name="gift-outline" size={20} color={theme.primary} />
             <Text style={styles.redeemText}>
               {user?.is_special_user ? '🌸 Special Access Active' : 'Redeem a Code'}
             </Text>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
+            <Ionicons name="chevron-forward" size={18} color={theme.textLight} />
           </TouchableOpacity>
         </AppCard>
       </AnimatedCard>
@@ -708,9 +711,9 @@ export default function ProfileScreen() {
             onPress={() => router.push('/privacy-policy' as any)}
             style={styles.dangerRow}
           >
-            <Ionicons name="shield-checkmark-outline" size={20} color={Colors.textSecondary} />
+            <Ionicons name="shield-checkmark-outline" size={20} color={theme.textSecondary} />
             <Text style={styles.dangerRowText}>Privacy Policy</Text>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
+            <Ionicons name="chevron-forward" size={18} color={theme.textLight} />
           </TouchableOpacity>
           <View style={styles.dangerDivider} />
           <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
@@ -726,10 +729,11 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: theme.background,
   },
   contentContainer: {
     paddingHorizontal: Spacing.xxl,
@@ -747,29 +751,29 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: Radius.xxxxl,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: Spacing.sm + 2,
     overflow: 'hidden',
   },
   avatarTextLarge: {
     fontSize: 40,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   editBadgeLarge: {
     position: 'absolute',
     right: -6,
     bottom: Spacing.xs,
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
     width: Spacing.xxxl,
     height: Spacing.xxxl,
     borderRadius: Radius.md,
     borderWidth: 3,
-    borderColor: Colors.white,
+    borderColor: theme.white,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2,
@@ -782,7 +786,7 @@ const styles = StyleSheet.create({
   userNameLarge: {
     fontSize: 28,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
     textAlign: 'center',
     letterSpacing: 1,
@@ -791,7 +795,7 @@ const styles = StyleSheet.create({
   usernameTextLarge: {
     fontSize: 16,
     fontWeight: '900',
-    color: Colors.primary,
+    color: theme.primary,
     textTransform: 'uppercase',
     textAlign: 'center',
     marginBottom: Spacing.lg,
@@ -799,7 +803,7 @@ const styles = StyleSheet.create({
   usernameTextMutedLarge: {
     fontSize: 14,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textAlign: 'center',
     marginBottom: Spacing.lg,
     opacity: 0.6,
@@ -818,33 +822,33 @@ const styles = StyleSheet.create({
   statValueCentered: {
     fontSize: 22,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   statLabelCentered: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     marginTop: 2,
   },
   statDividerCentered: {
     width: 2,
     height: 32,
-    backgroundColor: Colors.border,
+    backgroundColor: theme.border,
     opacity: 0.5,
   },
   bioSection: {
     width: '100%',
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     padding: Spacing.lg,
     borderRadius: Radius.xxl,
     marginBottom: Spacing.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   bioText: {
     fontSize: 15,
-    color: Colors.text,
+    color: theme.text,
     textAlign: 'center',
     fontWeight: '600',
     lineHeight: 22,
@@ -852,7 +856,7 @@ const styles = StyleSheet.create({
   modalDragHandle: {
     width: 40,
     height: 4,
-    backgroundColor: Colors.border,
+    backgroundColor: theme.border,
     borderRadius: 2,
     alignSelf: 'center',
     marginTop: Spacing.md,
@@ -862,22 +866,22 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
   },
   modalCloseBtn: {
     width: Radius.round,
     height: Radius.round,
     borderRadius: Radius.xxl,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   modalAvatarSection: {
     alignItems: 'center',
@@ -891,12 +895,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: -4,
     bottom: 4,
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
     width: 40,
     height: 40,
     borderRadius: 20,
     borderWidth: 4,
-    borderColor: Colors.white,
+    borderColor: theme.white,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -908,7 +912,7 @@ const styles = StyleSheet.create({
   changePhotoHint: {
     fontSize: 14,
     fontWeight: '800',
-    color: Colors.primary,
+    color: theme.primary,
     marginTop: 8,
   },
   inputGroup: {
@@ -917,7 +921,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 13,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     marginBottom: Spacing.xs + 2,
     marginLeft: 4,
@@ -926,16 +930,16 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     paddingHorizontal: Spacing.lg,
   },
   inputPrefix: {
     fontSize: 16,
     fontWeight: '900',
-    color: Colors.primary,
+    color: theme.primary,
     marginRight: Spacing.xs,
   },
   textInput: {
@@ -943,11 +947,11 @@ const styles = StyleSheet.create({
     height: 52,
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.text,
+    color: theme.text,
   },
   inputHint: {
     fontSize: 12,
-    color: Colors.textLight,
+    color: theme.textLight,
     marginTop: 6,
     marginLeft: 4,
     fontWeight: '600',
@@ -964,17 +968,17 @@ const styles = StyleSheet.create({
   },
   charCount: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textAlign: 'right',
     marginTop: Spacing.xs,
     fontWeight: '700',
   },
   levelCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: Radius.xxxl,
     padding: Spacing.xl,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: Spacing.sm,
     marginBottom: Spacing.sm,
   },
@@ -998,7 +1002,7 @@ const styles = StyleSheet.create({
   levelBadgeText: {
     fontSize: 16,
     fontWeight: '900',
-    color: Colors.white,
+    color: theme.white,
     textTransform: 'uppercase',
   },
   xpInfo: {
@@ -1007,18 +1011,18 @@ const styles = StyleSheet.create({
   xpTitle: {
     fontSize: 18,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
   },
   xpSub: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     marginTop: 2,
   },
   xpProgressTrack: {
     height: 16,
-    backgroundColor: Colors.border,
+    backgroundColor: theme.border,
     borderRadius: 8,
     overflow: 'hidden',
   },
@@ -1037,23 +1041,23 @@ const styles = StyleSheet.create({
   },
   statCard: {
     width: '48%',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: Radius.xxl,
     padding: Spacing.lg,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
   },
   statValue: {
     fontSize: 20,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -1067,12 +1071,12 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalSheet: {
-    backgroundColor: Colors.background,
+    backgroundColor: theme.background,
     borderTopLeftRadius: Radius.xxxxl,
     borderTopRightRadius: Radius.xxxxl,
     paddingBottom: Spacing.xl,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     height: '85%',
     width: '100%',
     elevation: 20,
@@ -1089,14 +1093,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xxl,
     paddingTop: Spacing.xl,
     paddingBottom: Spacing.md,
-    backgroundColor: Colors.background,
+    backgroundColor: theme.background,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: theme.border,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     letterSpacing: -0.5,
     flex: 1,
     textAlign: 'center',
@@ -1105,7 +1109,7 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: 16,
     fontWeight: '800',
-    color: Colors.primary,
+    color: theme.primary,
     paddingHorizontal: 8,
   },
   modalScroll: {
@@ -1119,7 +1123,7 @@ const styles = StyleSheet.create({
   badgeCount: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.primary,
+    color: theme.primary,
   },
   badgesGrid: {
     flexDirection: 'row',
@@ -1128,10 +1132,10 @@ const styles = StyleSheet.create({
   },
   badgeCard: {
     width: '48%',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: Radius.xxxl,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     padding: Spacing.lg - 2,
     flexDirection: 'column',
     alignItems: 'center',
@@ -1140,17 +1144,17 @@ const styles = StyleSheet.create({
   },
   badgeCardLocked: {
     opacity: 0.5,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
   },
   badgeIconWrap: {
     width: 56,
     height: 56,
     borderRadius: Radius.xxl,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     marginBottom: Spacing.xs,
   },
   badgeTextWrap: {
@@ -1159,14 +1163,14 @@ const styles = StyleSheet.create({
   badgeTitle: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginBottom: 4,
     textAlign: 'center',
   },
   badgeSubtitle: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textAlign: 'center',
     lineHeight: 14,
   },
@@ -1175,7 +1179,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.sm,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderWidth: 2,
     borderColor: Colors.error,
     borderRadius: Radius.xl,
@@ -1200,11 +1204,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
   },
   dangerDivider: {
     height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: theme.border,
     marginVertical: Spacing.sm,
   },
   deleteButton: {
@@ -1230,6 +1234,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.text,
+    color: theme.text,
   },
-});
+  });
+}

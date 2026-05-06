@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { CameraView, Camera, BarcodeScanningResult } from 'expo-camera';
 import { Colors } from '../constants/Colors';
+import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -36,6 +37,8 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 export default function BarcodeScreen() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const router = useRouter();
   const params = useLocalSearchParams();
   const mode = typeof params?.mode === 'string' ? params.mode : '';
@@ -488,7 +491,7 @@ export default function BarcodeScreen() {
         <DuoButton
           title="Go Back"
           onPress={() => router.back()}
-          color={Colors.primary}
+          color={theme.primary}
           size="medium"
         />
       </View>
@@ -507,7 +510,7 @@ export default function BarcodeScreen() {
       >
         <View style={styles.processingOverlay}>
           <View style={styles.processingCard}>
-            <ActivityIndicator size="large" color={Colors.primary} />
+            <ActivityIndicator size="large" color={theme.primary} />
             <Text style={styles.processingTitle}>Parsing label…</Text>
             <Text style={styles.processingSubtitle}>This can take up to a minute</Text>
           </View>
@@ -531,7 +534,7 @@ export default function BarcodeScreen() {
                 router.back();
               }}
             >
-              <Ionicons name="close" size={28} color={Colors.white} />
+              <Ionicons name="close" size={28} color={theme.white} />
             </TouchableOpacity>
           </View>
 
@@ -545,12 +548,12 @@ export default function BarcodeScreen() {
             </View>
 
             <AnimatedCard type="pop" delay={200} style={styles.instructionBox}>
-              <Ionicons name="barcode-outline" size={32} color={Colors.white} />
+              <Ionicons name="barcode-outline" size={32} color={theme.white} />
               <Text style={styles.instructionTitle}>{isLookingUp ? 'Looking Up…' : 'Scan Barcode'}</Text>
               <Text style={styles.instructionText}>
                 {isLookingUp ? 'Fetching product details' : 'Align the barcode within the frame'}
               </Text>
-              {isLookingUp && <ActivityIndicator color={Colors.white} style={{ marginTop: 10 }} />}
+              {isLookingUp && <ActivityIndicator color={theme.white} style={{ marginTop: 10 }} />}
               <View style={styles.tipBadge}>
                 <Text style={styles.tipText}>💡 TIP: HOLD STEADY</Text>
               </View>
@@ -567,7 +570,7 @@ export default function BarcodeScreen() {
                 router.back();
               }}
             >
-              <Ionicons name="close" size={28} color={Colors.white} />
+              <Ionicons name="close" size={28} color={theme.white} />
             </TouchableOpacity>
           </View>
         </View>
@@ -588,7 +591,7 @@ export default function BarcodeScreen() {
               onPress={resetScanning}
               activeOpacity={0.8}
             >
-              <Ionicons name="close" size={22} color={Colors.text} />
+              <Ionicons name="close" size={22} color={theme.text} />
             </TouchableOpacity>
 
             <ScrollView
@@ -604,7 +607,7 @@ export default function BarcodeScreen() {
                 <Ionicons
                   name={isHealthMode ? 'shield-checkmark' : 'checkmark-circle'}
                   size={60}
-                  color={isHealthMode ? Colors.warning : Colors.primary}
+                  color={isHealthMode ? Colors.warning : theme.primary}
                 />
               </View>
 
@@ -636,7 +639,7 @@ export default function BarcodeScreen() {
                 <>
                   {healthLoading ? (
                     <View style={styles.healthLoadingBox}>
-                      <ActivityIndicator color={Colors.primary} />
+                      <ActivityIndicator color={theme.primary} />
                       <Text style={styles.healthLoadingText}>Analyzing label…</Text>
                     </View>
                   ) : healthCheck ? (
@@ -725,7 +728,7 @@ export default function BarcodeScreen() {
                         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                         setModalStep(2);
                       }}
-                      color={Colors.primary}
+                      color={theme.primary}
                       size="large"
                       style={{ width: '100%' }}
                     />
@@ -747,7 +750,7 @@ export default function BarcodeScreen() {
                           value={portionQty}
                           onChangeText={setPortionQty}
                           placeholder="100"
-                          placeholderTextColor={Colors.textLight}
+                          placeholderTextColor={theme.textLight}
                           keyboardType="numeric"
                           style={styles.portionInput}
                         />
@@ -760,12 +763,12 @@ export default function BarcodeScreen() {
                           disabled={voiceLoading}
                         >
                           {voiceLoading ? (
-                            <ActivityIndicator size="small" color={Colors.primary} />
+                            <ActivityIndicator size="small" color={theme.primary} />
                           ) : (
                             <Ionicons
                               name={isRecording ? 'stop-circle' : 'mic'}
                               size={22}
-                              color={isRecording ? Colors.error : Colors.primary}
+                              color={isRecording ? Colors.error : theme.primary}
                             />
                           )}
                         </TouchableOpacity>
@@ -797,7 +800,7 @@ export default function BarcodeScreen() {
                       onPress={logMealFromBarcode}
                       disabled={isLoggingMeal}
                       loading={isLoggingMeal}
-                      color={Colors.primary}
+                      color={theme.primary}
                       size="large"
                       style={{ width: '100%' }}
                     />
@@ -822,7 +825,7 @@ export default function BarcodeScreen() {
                 <DuoButton
                   title="Scan Again"
                   onPress={resetScanning}
-                  color={Colors.primary}
+                  color={theme.primary}
                   size="large"
                   style={{ width: '100%' }}
                 />
@@ -846,7 +849,7 @@ export default function BarcodeScreen() {
               onPress={resetScanning}
               activeOpacity={0.8}
             >
-              <Ionicons name="close" size={22} color={Colors.text} />
+              <Ionicons name="close" size={22} color={theme.text} />
             </TouchableOpacity>
 
             <ScrollView
@@ -908,7 +911,7 @@ export default function BarcodeScreen() {
                             onPress={addFrontPhoto}
                             disabled={isSubmittingLabels || isProcessingLabel}
                           >
-                            <Ionicons name="camera" size={16} color={Colors.text} />
+                            <Ionicons name="camera" size={16} color={theme.text} />
                             <Text style={styles.photoChipText}>{contributionFrontImageBase64 ? 'Retake' : 'Add'}</Text>
                           </TouchableOpacity>
                           <Text style={styles.photoCountText}>{contributionFrontImageBase64 ? '1/1 added' : '0/1 added'}</Text>
@@ -941,7 +944,7 @@ export default function BarcodeScreen() {
                                   />
                                 ) : (
                                   <View style={styles.uploadEmptyState}>
-                                    <Ionicons name="add" size={28} color={Colors.textSecondary} />
+                                    <Ionicons name="add" size={28} color={theme.textSecondary} />
                                     <Text style={styles.uploadEmptyText}>Add</Text>
                                   </View>
                                 )}
@@ -984,10 +987,10 @@ export default function BarcodeScreen() {
                   }}
                   disabled={isSubmittingLabels || isProcessingLabel}
                   loading={contributionStep === 2 && (isSubmittingLabels || isProcessingLabel)}
-                  color={Colors.primary}
+                  color={theme.primary}
                   size="large"
                   style={{ width: '100%' }}
-                  leftIcon={<Ionicons name={contributionStep === 1 ? "arrow-forward" : "sparkles"} size={20} color={Colors.white} />}
+                  leftIcon={<Ionicons name={contributionStep === 1 ? "arrow-forward" : "sparkles"} size={20} color={theme.white} />}
                 />
 
                 <TouchableOpacity
@@ -1006,10 +1009,11 @@ export default function BarcodeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.black,
+    backgroundColor: theme.black,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1027,7 +1031,7 @@ const styles = StyleSheet.create({
   processingCard: {
     width: '100%',
     maxWidth: 420,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 16,
     paddingVertical: 20,
     paddingHorizontal: 18,
@@ -1037,19 +1041,19 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.text,
+    color: theme.text,
     textAlign: 'center',
   },
   processingSubtitle: {
     marginTop: 6,
     fontSize: 13,
-    color: Colors.textLight,
+    color: theme.textLight,
     textAlign: 'center',
   },
   cameraOffPlaceholder: {
     flex: 1,
     width: '100%',
-    backgroundColor: Colors.black,
+    backgroundColor: theme.black,
   },
   camera: {
     flex: 1,
@@ -1090,7 +1094,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 50,
     height: 50,
-    borderColor: Colors.primary,
+    borderColor: theme.primary,
     borderWidth: 4,
     top: 0,
     left: 0,
@@ -1126,9 +1130,9 @@ const styles = StyleSheet.create({
     left: 10,
     right: 10,
     height: 3,
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
     opacity: 0.9,
-    shadowColor: Colors.primary,
+    shadowColor: theme.primary,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 1,
     shadowRadius: 12,
@@ -1148,7 +1152,7 @@ const styles = StyleSheet.create({
   instructionTitle: {
     fontSize: 24,
     fontWeight: '900',
-    color: Colors.white,
+    color: theme.white,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
   },
@@ -1167,7 +1171,7 @@ const styles = StyleSheet.create({
   },
   tipText: {
     fontSize: 12,
-    color: Colors.white,
+    color: theme.white,
     fontWeight: '900',
     letterSpacing: 0.8,
   },
@@ -1179,14 +1183,14 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   resultCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 36,
     padding: 32,
     width: '100%',
     height: '80%',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 12,
   },
   resultCloseButton: {
@@ -1196,11 +1200,11 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     zIndex: 5,
   },
   resultScroll: {
@@ -1214,7 +1218,7 @@ const styles = StyleSheet.create({
   },
   successIconWrap: {
     marginBottom: 24,
-    backgroundColor: Colors.primary + '15',
+    backgroundColor: theme.primary + '15',
     width: 80,
     height: 80,
     borderRadius: 40,
@@ -1224,7 +1228,7 @@ const styles = StyleSheet.create({
   productName: {
     fontSize: 26,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textAlign: 'center',
     marginBottom: 6,
     textTransform: 'uppercase',
@@ -1237,7 +1241,7 @@ const styles = StyleSheet.create({
   productBrand: {
     fontSize: 15,
     fontWeight: '900',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     marginBottom: 28,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
@@ -1249,13 +1253,13 @@ const styles = StyleSheet.create({
   nutritionGrid: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 24,
     padding: 20,
     marginBottom: 28,
     width: '100%',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
   },
   nutritionItem: {
@@ -1265,19 +1269,19 @@ const styles = StyleSheet.create({
   nutritionValue: {
     fontSize: 20,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   nutritionLabel: {
     fontSize: 10,
     fontWeight: '900',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     marginTop: 6,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   healthLoadingBox: {
     width: '100%',
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 20,
     padding: 16,
     flexDirection: 'row',
@@ -1285,14 +1289,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
     marginBottom: 20,
   },
   healthLoadingText: {
     fontSize: 14,
     fontWeight: '800',
-    color: Colors.text,
+    color: theme.text,
   },
   healthBox: {
     width: '100%',
@@ -1308,7 +1312,7 @@ const styles = StyleSheet.create({
   verdictLabel: {
     fontSize: 12,
     fontWeight: '900',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
@@ -1321,7 +1325,7 @@ const styles = StyleSheet.create({
     width: '100%',
     fontSize: 13,
     fontWeight: '800',
-    color: Colors.text,
+    color: theme.text,
     lineHeight: 18,
     marginBottom: 8,
   },
@@ -1331,24 +1335,24 @@ const styles = StyleSheet.create({
   healthSummary: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.text,
+    color: theme.text,
     lineHeight: 20,
     marginBottom: 12,
   },
   flagsBox: {
     width: '100%',
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 20,
     padding: 16,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
     marginBottom: 12,
   },
   flagsTitle: {
     fontSize: 12,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 12,
@@ -1371,42 +1375,42 @@ const styles = StyleSheet.create({
   flagTitle: {
     fontSize: 13,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginBottom: 2,
   },
   flagReason: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     lineHeight: 16,
   },
   flagDetail: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     lineHeight: 16,
     marginTop: 6,
   },
   flagDetailLabel: {
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   disclaimerText: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     opacity: 0.8,
   },
   nutritionDivider: {
     width: 2,
     height: 34,
-    backgroundColor: Colors.border,
+    backgroundColor: theme.border,
     borderRadius: 1,
     opacity: 0.6,
   },
   nextStepText: {
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textAlign: 'center',
     fontWeight: '800',
     lineHeight: 22,
@@ -1430,17 +1434,17 @@ const styles = StyleSheet.create({
   },
   portionInput: {
     width: '100%',
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingRight: 48,
     paddingVertical: 14,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
     fontSize: 18,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   voiceMicButton: {
     position: 'absolute',
@@ -1448,11 +1452,11 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -1465,11 +1469,11 @@ const styles = StyleSheet.create({
   },
   unitToggle: {
     flexDirection: 'row',
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 20,
     padding: 6,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
     alignItems: 'center',
   },
@@ -1479,36 +1483,36 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   unitOptionActive: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   unitText: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
   unitTextActive: {
-    color: Colors.primary,
+    color: theme.primary,
   },
   heightSpacer: {
     height: 40,
   },
   transcriptBox: {
     width: '100%',
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 20,
     padding: 14,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
   },
   transcriptLabel: {
     fontSize: 11,
     fontWeight: '900',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 6,
@@ -1516,7 +1520,7 @@ const styles = StyleSheet.create({
   transcriptText: {
     fontSize: 13,
     fontWeight: '800',
-    color: Colors.text,
+    color: theme.text,
     lineHeight: 18,
   },
   cancelLink: {
@@ -1526,13 +1530,13 @@ const styles = StyleSheet.create({
   cancelLinkText: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.primary,
+    color: theme.primary,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
   text: {
     fontSize: 16,
-    color: Colors.white,
+    color: theme.white,
     marginTop: 20,
     marginBottom: 24,
     fontWeight: '800',
@@ -1540,14 +1544,14 @@ const styles = StyleSheet.create({
   },
   // Contribution Modal styles
   contributionCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 36,
     padding: 32,
     width: '100%',
     height: '90%',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 12,
   },
   contributionContent: {
@@ -1557,7 +1561,7 @@ const styles = StyleSheet.create({
   },
   contributionIconWrap: {
     marginBottom: 24,
-    backgroundColor: Colors.primary + '15',
+    backgroundColor: theme.primary + '15',
     width: 100,
     height: 100,
     borderRadius: 50,
@@ -1567,7 +1571,7 @@ const styles = StyleSheet.create({
   contributionTitle: {
     fontSize: 26,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textAlign: 'center',
     marginBottom: 12,
     textTransform: 'uppercase',
@@ -1576,7 +1580,7 @@ const styles = StyleSheet.create({
   contributionSubtitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textAlign: 'center',
     marginBottom: 12,
     textTransform: 'uppercase',
@@ -1585,7 +1589,7 @@ const styles = StyleSheet.create({
   contributionText: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.text,
+    color: theme.text,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 20,
@@ -1593,18 +1597,18 @@ const styles = StyleSheet.create({
   },
   contributionInstructions: {
     width: '100%',
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 20,
     padding: 16,
     marginBottom: 24,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
   },
   contribInstructionTitle: {
     fontSize: 13,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 12,
@@ -1618,12 +1622,12 @@ const styles = StyleSheet.create({
   contribInstructionText: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.text,
+    color: theme.text,
   },
   contribInstructionHint: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontStyle: 'italic',
     marginTop: 8,
     textAlign: 'center',
@@ -1640,7 +1644,7 @@ const styles = StyleSheet.create({
   photoRowTitle: {
     fontSize: 12,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 8,
@@ -1665,25 +1669,25 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 14,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   photoChipActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary + '10',
+    borderColor: theme.primary,
+    backgroundColor: theme.primary + '10',
   },
   photoChipText: {
     fontSize: 13,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
   photoCountText: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textAlign: 'right',
   },
   photoThumbList: {
@@ -1699,14 +1703,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 14,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   photoThumbText: {
     fontSize: 13,
     fontWeight: '800',
-    color: Colors.text,
+    color: theme.text,
   },
   photoRemoveText: {
     fontSize: 12,
@@ -1729,15 +1733,15 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 0.85,
     borderRadius: 16,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
   uploadSlotFilled: {
-    borderColor: Colors.primary,
+    borderColor: theme.primary,
   },
   uploadImage: {
     width: '100%',
@@ -1752,7 +1756,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 12,
     fontWeight: '900',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
@@ -1765,14 +1769,15 @@ const styles = StyleSheet.create({
   uploadSlotLabel: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.text,
+    color: theme.text,
   },
   uploadTipText: {
     marginTop: 10,
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textAlign: 'center',
     lineHeight: 16,
   },
-});
+  });
+}

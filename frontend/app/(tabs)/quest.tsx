@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert, ActivityIndicator, TextInput } from 'react-native';
 import { Colors } from '../../constants/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import { fontStyles } from '../../constants/Fonts';
 import PageHeader from '../../components/PageHeader';
 import { Ionicons } from '@expo/vector-icons';
@@ -74,6 +75,8 @@ interface UserSearchResult {
 }
 
 export default function QuestScreen() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const { user, showXpPopup } = useUser();
   const [activeTab, setActiveTab] = useState<'quests' | 'leaderboard' | 'badges'>('quests');
   const [leaderboardScope, setLeaderboardScope] = useState<'global' | 'friends'>('global');
@@ -231,7 +234,7 @@ export default function QuestScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
         }
       >
         <PillTabs
@@ -305,7 +308,7 @@ export default function QuestScreen() {
                                 disabled={claimingId === quest.id}
                               >
                                 {claimingId === quest.id ? (
-                                  <ActivityIndicator size="small" color={Colors.white} />
+                                  <ActivityIndicator size="small" color={theme.white} />
                                 ) : (
                                   <Text style={styles.claimButtonText}>CLAIM +{quest.xp} XP</Text>
                                 )}
@@ -366,11 +369,11 @@ export default function QuestScreen() {
             <AnimatedCard delay={100} type="pop" style={styles.section}>
               <SectionTitle title="Find Friends" />
               <View style={styles.searchContainer}>
-                <Ionicons name="search" size={20} color={Colors.textLight} />
+                <Ionicons name="search" size={20} color={theme.textLight} />
                 <TextInput
                   style={styles.searchInput}
                   placeholder="Search username..."
-                  placeholderTextColor={Colors.textLight}
+                  placeholderTextColor={theme.textLight}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   autoCapitalize="none"
@@ -378,7 +381,7 @@ export default function QuestScreen() {
                 />
                 {searchQuery.length > 0 && (
                   <TouchableOpacity onPress={() => setSearchQuery('')}>
-                    <Ionicons name="close-circle" size={20} color={Colors.textLight} />
+                    <Ionicons name="close-circle" size={20} color={theme.textLight} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -440,12 +443,12 @@ export default function QuestScreen() {
                                 }}
                               >
                                 {followLoadingId === result.id ? (
-                                  <ActivityIndicator size="small" color={result.is_following ? Colors.white : Colors.primary} />
+                                  <ActivityIndicator size="small" color={result.is_following ? theme.white : theme.primary} />
                                 ) : (
                                   <Ionicons
                                     name={result.is_following ? 'checkmark' : 'add'}
                                     size={18}
-                                    color={result.is_following ? Colors.white : Colors.primary}
+                                    color={result.is_following ? theme.white : theme.primary}
                                   />
                                 )}
                               </TouchableOpacity>
@@ -561,7 +564,7 @@ export default function QuestScreen() {
                         <Ionicons
                           name={badge.icon as any}
                           size={32}
-                          color={badge.earned ? Colors.warning : Colors.textLight}
+                          color={badge.earned ? Colors.warning : theme.textLight}
                         />
                       </View>
                       <View style={styles.badgeTextWrap}>
@@ -592,7 +595,7 @@ export default function QuestScreen() {
                         <Ionicons
                           name={badge.icon as any}
                           size={32}
-                          color={badge.earned ? Colors.warning : Colors.textLight}
+                          color={badge.earned ? Colors.warning : theme.textLight}
                         />
                       </View>
                       <View style={styles.badgeTextWrap}>
@@ -618,10 +621,11 @@ export default function QuestScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: theme.background,
   },
   scrollView: {
     flex: 1,
@@ -636,7 +640,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...fontStyles.h3,
-    color: Colors.text,
+    color: theme.text,
     marginBottom: 12,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -644,12 +648,12 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 20,
     padding: 4,
     marginBottom: 24,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
   },
   tab: {
@@ -659,24 +663,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   activeTab: {
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
   },
   tabText: {
     fontSize: 13,
     fontWeight: '900',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   activeTabText: {
-    color: Colors.white,
+    color: theme.white,
   },
   card: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 28,
     padding: 20,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 8,
   },
   questTopRow: {
@@ -688,11 +692,11 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 18,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
   },
   questMain: {
@@ -707,7 +711,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 17,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginBottom: 2,
     flex: 1,
   },
@@ -715,14 +719,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 14,
-    backgroundColor: Colors.primary + '15',
+    backgroundColor: theme.primary + '15',
     borderWidth: 2,
-    borderColor: Colors.primary + '25',
+    borderColor: theme.primary + '25',
   },
   xpText: {
     fontSize: 13,
     fontWeight: '900',
-    color: Colors.primary,
+    color: theme.primary,
   },
   questMetaRow: {
     flexDirection: 'row',
@@ -734,13 +738,13 @@ const styles = StyleSheet.create({
   questMeta: {
     fontSize: 14,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
   },
   questPercent: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   progressTrack: {
     height: 16,
@@ -753,7 +757,7 @@ const styles = StyleSheet.create({
   progressFill: {
     height: '100%',
     borderRadius: 8,
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
     borderBottomWidth: 4,
     borderBottomColor: 'rgba(0,0,0,0.15)',
   },
@@ -770,10 +774,10 @@ const styles = StyleSheet.create({
   },
   badgeCard: {
     width: '48%',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 28,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     padding: 16,
     flexDirection: 'column',
     alignItems: 'center',
@@ -788,11 +792,11 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 22,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
     marginBottom: 4,
   },
@@ -802,32 +806,32 @@ const styles = StyleSheet.create({
   badgeTitle: {
     fontSize: 15,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginBottom: 4,
     textAlign: 'center',
   },
   badgeSubtitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textAlign: 'center',
     lineHeight: 16,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     padding: 14,
     gap: 12,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 8,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: Colors.text,
+    color: theme.text,
     fontWeight: '700',
   },
   resultsList: {
@@ -836,11 +840,11 @@ const styles = StyleSheet.create({
   searchResultCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     padding: 16,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 8,
     gap: 16,
   },
@@ -848,9 +852,9 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 18,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
     alignItems: 'center',
     justifyContent: 'center',
@@ -858,7 +862,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 22,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   resultMain: {
     flex: 1,
@@ -866,11 +870,11 @@ const styles = StyleSheet.create({
   resultName: {
     fontSize: 17,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   resultBio: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontWeight: '700',
     marginTop: 2,
   },
@@ -878,16 +882,16 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderWidth: 2,
-    borderColor: Colors.primary,
+    borderColor: theme.primary,
     borderBottomWidth: 4,
     alignItems: 'center',
     justifyContent: 'center',
   },
   miniFollowBtnActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: theme.primary,
+    borderColor: theme.primary,
   },
   leaderRow: {
     position: 'relative',
@@ -908,16 +912,16 @@ const styles = StyleSheet.create({
     minWidth: 48,
     height: 36,
     borderRadius: 14,
-    backgroundColor: Colors.primary + '15',
+    backgroundColor: theme.primary + '15',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.primary + '25',
+    borderColor: theme.primary + '25',
   },
   rankText: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.primary,
+    color: theme.primary,
   },
   leaderMain: {
     flex: 1,
@@ -925,12 +929,12 @@ const styles = StyleSheet.create({
   leaderName: {
     fontSize: 17,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginBottom: 2,
   },
   leaderMeta: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontWeight: '800',
     textTransform: 'uppercase',
   },
@@ -944,34 +948,34 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
   },
   avatarTextSmall: {
     fontSize: 16,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   activityMain: {
     flex: 1,
   },
   activityText: {
     fontSize: 14,
-    color: Colors.text,
+    color: theme.text,
     fontWeight: '700',
     lineHeight: 20,
   },
   activityName: {
     fontWeight: '900',
-    color: Colors.primary,
+    color: theme.primary,
   },
   activityTime: {
     fontSize: 12,
-    color: Colors.textLight,
+    color: theme.textLight,
     fontWeight: '800',
     marginTop: 4,
     textTransform: 'uppercase',
@@ -997,25 +1001,25 @@ const styles = StyleSheet.create({
   emptyFriendsTitle: {
     fontSize: 20,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginTop: 16,
     marginBottom: 8,
     textTransform: 'uppercase',
   },
   emptyFriendsText: {
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     fontWeight: '700',
   },
   statsCard: {
     flexDirection: 'row',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     padding: 20,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
     justifyContent: 'space-around',
     alignItems: 'center',
@@ -1028,35 +1032,35 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.primary,
+    borderColor: theme.primary,
     borderBottomWidth: 4,
     borderBottomColor: 'rgba(0,0,0,0.2)',
   },
   levelText: {
     fontSize: 20,
     fontWeight: '900',
-    color: Colors.white,
+    color: theme.white,
   },
   statValue: {
     fontSize: 24,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   statLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   statDivider: {
     width: 2,
     height: 40,
-    backgroundColor: Colors.border,
+    backgroundColor: theme.border,
     borderRadius: 1,
   },
   streakBadgeSmall: {
@@ -1084,7 +1088,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
   },
   claimButton: {
     backgroundColor: Colors.success,
@@ -1101,7 +1105,7 @@ const styles = StyleSheet.create({
   claimButtonText: {
     fontSize: 11,
     fontWeight: '900',
-    color: Colors.white,
+    color: theme.white,
     letterSpacing: 0.5,
   },
   claimedPill: {
@@ -1127,11 +1131,11 @@ const styles = StyleSheet.create({
   },
   leaderboardScopeWrap: {
     flexDirection: 'row',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 20,
     padding: 4,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
   },
   scopePill: {
@@ -1141,16 +1145,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scopePillActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
   },
   scopePillText: {
     fontSize: 13,
     fontWeight: '900',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   scopePillTextActive: {
-    color: Colors.white,
+    color: theme.white,
   },
-});
+  });
+}

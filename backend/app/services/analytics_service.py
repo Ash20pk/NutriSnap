@@ -168,9 +168,12 @@ class AnalyticsService:
             if profile:
                 age = profile.get("age", 25)
                 gender = profile.get("gender", "male")
-                micro_targets = compute_micronutrient_targets(age, gender)
+                calorie_target = profile.get("daily_calorie_target")
+                micro_targets = compute_micronutrient_targets(
+                    age, gender, calorie_target=calorie_target
+                )
                 macro_targets = {
-                    "daily_calorie_target": profile.get("daily_calorie_target"),
+                    "daily_calorie_target": calorie_target,
                     "protein_target": profile.get("protein_target"),
                     "carbs_target": profile.get("carbs_target"),
                     "fat_target": profile.get("fat_target"),
@@ -343,7 +346,7 @@ class AnalyticsService:
             # Fetch user profile for personalized targets
             profile = await conn.fetchrow(
                 """
-                SELECT age, gender
+                SELECT age, gender, daily_calorie_target
                 FROM profiles
                 WHERE id = $1
                 """,
@@ -355,7 +358,10 @@ class AnalyticsService:
             if profile:
                 age = profile.get("age", 25)
                 gender = profile.get("gender", "male")
-                micro_targets = compute_micronutrient_targets(age, gender)
+                calorie_target = profile.get("daily_calorie_target")
+                micro_targets = compute_micronutrient_targets(
+                    age, gender, calorie_target=calorie_target
+                )
             
             # Check rate limiting - max 1 refresh per 5 minutes (unless cache is stale)
             cache = await conn.fetchrow(
@@ -620,7 +626,12 @@ class AnalyticsService:
     @staticmethod
     def _ttl_for_time_range(time_range: str) -> timedelta:
         if time_range == "daily":
-            return timedelta(hours=24)
+            # Expire at next UTC midnight so cache never bleeds into the following day
+            now = datetime.now(timezone.utc)
+            next_midnight = (now + timedelta(days=1)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            return next_midnight - now
         if time_range == "week":
             return timedelta(days=7)
         if time_range == "month":

@@ -13,6 +13,7 @@ import {
   Animated,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
 import { mealApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +28,8 @@ import AnimatedCard from '../../components/AnimatedCard';
 import LoadingState from '../../components/LoadingState';
 
 export default function LogScreen() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user } = useUser();
@@ -388,7 +391,7 @@ export default function LogScreen() {
               <Ionicons
                 name={type.icon as any}
                 size={28}
-                color={mealType === type.id ? Colors.primary : Colors.primaryLight}
+                color={mealType === type.id ? theme.primary : theme.primaryLight}
               />
               <Text
                 style={[
@@ -417,7 +420,7 @@ export default function LogScreen() {
                 }}
               >
                 <View style={styles.methodIconContainer}>
-                  <Ionicons name="camera" size={32} color={Colors.primary} />
+                  <Ionicons name="camera" size={32} color={theme.primary} />
                 </View>
                 <View style={styles.methodContent}>
                   <Text style={styles.methodTitle}>Take a Photo</Text>
@@ -425,7 +428,7 @@ export default function LogScreen() {
                     Snap a photo for instant AI meal recognition
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
+                <Ionicons name="chevron-forward" size={24} color={theme.textLight} />
               </TouchableOpacity>
             </AnimatedCard>
           )}
@@ -444,7 +447,7 @@ export default function LogScreen() {
               }}
             >
               <View style={styles.methodIconContainer}>
-                <Ionicons name="mic" size={32} color={Colors.primary} />
+                <Ionicons name="mic" size={32} color={theme.primary} />
               </View>
               <View style={styles.methodContent}>
                 <Text style={styles.methodTitle}>Voice Search</Text>
@@ -452,7 +455,7 @@ export default function LogScreen() {
                   Tap the mic on your keyboard and speak
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
+              <Ionicons name="chevron-forward" size={24} color={theme.textLight} />
             </TouchableOpacity>
           </AnimatedCard>
 
@@ -460,14 +463,14 @@ export default function LogScreen() {
           <AnimatedCard delay={300} type="slide" style={styles.methodCardWrapper}>
             <TouchableOpacity 
               activeOpacity={0.9}
-              style={[styles.methodCard, { borderColor: Colors.secondary }]} 
+              style={[styles.methodCard, { borderColor: theme.secondary }]} 
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                 router.push('/barcode');
               }}
             >
-              <View style={[styles.methodIconContainer, { backgroundColor: Colors.secondary + '15' }]}>
-                <Ionicons name="barcode" size={32} color={Colors.secondary} />
+              <View style={[styles.methodIconContainer, { backgroundColor: theme.secondary + '15' }]}>
+                <Ionicons name="barcode" size={32} color={theme.secondary} />
               </View>
               <View style={styles.methodContent}>
                 <Text style={styles.methodTitle}>Scan Barcode</Text>
@@ -475,7 +478,7 @@ export default function LogScreen() {
                   Scan packaged food, then photo your portion
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
+              <Ionicons name="chevron-forward" size={24} color={theme.textLight} />
             </TouchableOpacity>
           </AnimatedCard>
 
@@ -498,7 +501,7 @@ export default function LogScreen() {
                   Search and add foods manually
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={24} color={Colors.textLight} />
+              <Ionicons name="chevron-forward" size={24} color={theme.textLight} />
             </TouchableOpacity>
           </AnimatedCard>
         </View>
@@ -525,7 +528,7 @@ export default function LogScreen() {
                     }}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Ionicons name={configuringFood ? "arrow-back" : "close"} size={28} color={Colors.text} />
+                    <Ionicons name={configuringFood ? "arrow-back" : "close"} size={28} color={theme.text} />
                   </TouchableOpacity>
                 </View>
 
@@ -553,8 +556,8 @@ export default function LogScreen() {
                           onChangeText={setConfigQty}
                           keyboardType="numeric"
                           placeholder="0"
-                          placeholderTextColor={Colors.textLight}
-                          selectionColor={Colors.primary}
+                          placeholderTextColor={theme.textLight}
+                          selectionColor={theme.primary}
                         />
                       </View>
                       <View style={styles.unitToggle}>
@@ -581,7 +584,7 @@ export default function LogScreen() {
 
                     <View style={styles.macroPreview}>
                       {[
-                        { label: 'Calories', value: getCalculatedMacros().calories, color: Colors.primary },
+                        { label: 'Calories', value: getCalculatedMacros().calories, color: theme.primary },
                         { label: 'Protein', value: getCalculatedMacros().protein + 'g', color: Colors.protein },
                         { label: 'Carbs', value: getCalculatedMacros().carbs + 'g', color: Colors.carbs },
                         { label: 'Fat', value: getCalculatedMacros().fat + 'g', color: Colors.fat },
@@ -631,7 +634,7 @@ export default function LogScreen() {
                               <Ionicons
                                 name={isRecording ? 'stop' : 'mic'}
                                 size={32}
-                                color={isRecording ? Colors.white : Colors.primary}
+                                color={isRecording ? theme.white : theme.primary}
                               />
                             </TouchableOpacity>
                           </>
@@ -666,8 +669,8 @@ export default function LogScreen() {
                                 value={mealNotes}
                                 onChangeText={setMealNotes}
                                 placeholder="2 boiled eggs and a bowl of poha"
-                                placeholderTextColor={Colors.textLight}
-                                selectionColor={Colors.primary}
+                                placeholderTextColor={theme.textLight}
+                                selectionColor={theme.primary}
                                 multiline
                                 style={styles.manualInput}
                               />
@@ -680,7 +683,7 @@ export default function LogScreen() {
                                 disabled={!mealNotes.trim()}
                                 activeOpacity={0.8}
                               >
-                                <Ionicons name="sparkles" size={20} color={mealNotes.trim() ? Colors.white : Colors.textLight} />
+                                <Ionicons name="sparkles" size={20} color={mealNotes.trim() ? theme.white : theme.textLight} />
                               </TouchableOpacity>
                             </View>
                           </>
@@ -711,7 +714,7 @@ export default function LogScreen() {
                                 {food.calories_per_100g} cal • {food.protein_per_100g}g protein
                               </Text>
                             </View>
-                            <Ionicons name="add-circle" size={24} color={Colors.primary} />
+                            <Ionicons name="add-circle" size={24} color={theme.primary} />
                           </TouchableOpacity>
                         ))}
                       </View>
@@ -736,7 +739,7 @@ export default function LogScreen() {
                                 onPress={() => handleEditFood(index)}
                                 style={styles.actionButton}
                               >
-                                <Ionicons name="pencil" size={20} color={Colors.primary} />
+                                <Ionicons name="pencil" size={20} color={theme.primary} />
                               </TouchableOpacity>
                               <TouchableOpacity 
                                 onPress={() => removeFood(index)}
@@ -760,15 +763,15 @@ export default function LogScreen() {
                       <DuoButton
                         title="Cancel"
                         onPress={() => setConfiguringFood(null)}
-                        color={Colors.white}
-                        shadowColor={Colors.border}
-                        textStyle={{ color: Colors.text }}
+                        color={theme.white}
+                        shadowColor={theme.border}
+                        textStyle={{ color: theme.text }}
                         style={{ flex: 1 }}
                       />
                       <DuoButton
                         title={editingIndex !== null ? "Update Food" : "Add Food"}
                         onPress={confirmAddFood}
-                        color={Colors.primary}
+                        color={theme.primary}
                         style={{ flex: 2 }}
                       />
                     </View>
@@ -778,7 +781,7 @@ export default function LogScreen() {
                       onPress={saveMeal}
                       disabled={loading || selectedFoods.length === 0}
                       loading={loading}
-                      color={Colors.primary}
+                      color={theme.primary}
                       size="large"
                     />
                   )}
@@ -794,10 +797,11 @@ export default function LogScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: theme.background,
   },
   scrollView: {
     flex: 1,
@@ -809,7 +813,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginBottom: 16,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -822,9 +826,9 @@ const styles = StyleSheet.create({
   },
   mealTypeCard: {
     width: '48%',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderRadius: 24,
     padding: 24,
     alignItems: 'center',
@@ -832,19 +836,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 8,
   },
   mealTypeCardActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary + '08',
+    borderColor: theme.primary,
+    backgroundColor: theme.primary + '08',
     borderBottomWidth: 8,
   },
   mealTypeLabel: {
     fontSize: 15,
     fontWeight: '900',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   mealTypeLabelActive: {
-    color: Colors.primary,
+    color: theme.primary,
   },
   methodsContainer: {
     marginBottom: 24,
@@ -855,22 +859,22 @@ const styles = StyleSheet.create({
   methodCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 28,
     padding: 20,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 8,
   },
   methodIconContainer: {
     width: 64,
     height: 64,
     borderRadius: 20,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
   },
   methodContent: {
@@ -880,12 +884,12 @@ const styles = StyleSheet.create({
   methodTitle: {
     fontSize: 18,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginBottom: 4,
   },
   methodDescription: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontWeight: '700',
     lineHeight: 18,
   },
@@ -897,7 +901,7 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 34 : 24,
   },
   modalContent: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 32,
     paddingTop: 24,
     paddingHorizontal: 0,
@@ -905,7 +909,7 @@ const styles = StyleSheet.create({
     maxHeight: '85%',
     minHeight: 420,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
     overflow: 'hidden',
     display: 'flex',
@@ -920,13 +924,13 @@ const styles = StyleSheet.create({
   },
   modeToggleContainer: {
     flexDirection: 'row',
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 16,
     padding: 4,
     marginHorizontal: 24,
     marginBottom: 16,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   modeToggleButton: {
     flex: 1,
@@ -938,17 +942,17 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   modeToggleButtonActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
   },
   modeToggleText: {
     fontSize: 14,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   modeToggleTextActive: {
-    color: Colors.white,
+    color: theme.white,
   },
   modalScrollView: {
     flexGrow: 0, 
@@ -963,53 +967,53 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 24,
     borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
-    backgroundColor: Colors.white,
+    borderTopColor: theme.borderLight,
+    backgroundColor: theme.white,
   },
   modalTitle: {
     fontSize: 22,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 20,
     padding: 14,
     marginBottom: 20,
     gap: 10,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: Colors.text,
+    color: theme.text,
     fontWeight: '700',
   },
   voiceSearchCentered: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 32,
     padding: 32,
     marginBottom: 24,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 8,
     gap: 20,
   },
   manualEntryContainer: {
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 32,
     padding: 30,
     marginBottom: 24,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 8,
     gap: 20,
   },
@@ -1018,15 +1022,15 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   manualInput: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 20,
     padding: 16,
     paddingRight: 56,
     minHeight: 100,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
-    color: Colors.text,
+    color: theme.text,
     fontSize: 16,
     fontWeight: '600',
     textAlignVertical: 'top',
@@ -1038,17 +1042,17 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: Colors.primary,
+    shadowColor: theme.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 4,
   },
   analyzeButtonDisabled: {
-    backgroundColor: Colors.border,
+    backgroundColor: theme.border,
     shadowOpacity: 0,
   },
   voicePromptContainerCentered: {
@@ -1057,12 +1061,12 @@ const styles = StyleSheet.create({
   voicePromptTitle: {
     fontSize: 20,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textAlign: 'center',
   },
   voicePromptSub: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontWeight: '700',
     fontStyle: 'italic',
     textAlign: 'center',
@@ -1071,9 +1075,9 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderWidth: 3,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1082,20 +1086,20 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
     justifyContent: 'center',
     alignItems: 'center',
   },
   micButtonActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: theme.primary,
+    borderColor: theme.primary,
   },
   micButtonDisabled: {
-    backgroundColor: Colors.backgroundSecondary,
-    borderColor: Colors.border,
+    backgroundColor: theme.backgroundSecondary,
+    borderColor: theme.border,
     opacity: 0.6,
   },
   searchResults: {
@@ -1106,21 +1110,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 16,
     marginBottom: 8,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
   },
   foodName: {
     fontSize: 16,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   foodInfo: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     marginTop: 4,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -1131,7 +1135,7 @@ const styles = StyleSheet.create({
   selectedTitle: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginBottom: 12,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -1140,12 +1144,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 16,
     padding: 14,
     marginBottom: 10,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
   },
   selectedFoodInfo: {
@@ -1154,11 +1158,11 @@ const styles = StyleSheet.create({
   selectedFoodName: {
     fontSize: 16,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   selectedFoodDetails: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     marginTop: 4,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -1178,7 +1182,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   processingText: {
-    color: Colors.primary,
+    color: theme.primary,
     fontWeight: '900',
     fontSize: 18,
     textTransform: 'uppercase',
@@ -1194,12 +1198,12 @@ const styles = StyleSheet.create({
   configTitle: {
     fontSize: 24,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginBottom: 4,
   },
   configSubtitle: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontWeight: '700',
   },
   inputRow: {
@@ -1209,35 +1213,35 @@ const styles = StyleSheet.create({
   },
   qtyInputContainer: {
     flex: 1,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     justifyContent: 'center',
   },
   qtyLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     marginBottom: 2,
   },
   qtyInput: {
     fontSize: 24,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     height: 32,
     padding: 0,
   },
   unitToggle: {
     flexDirection: 'row',
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 20,
     padding: 6,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     alignItems: 'center',
   },
   unitOption: {
@@ -1247,7 +1251,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   unitOptionActive: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1257,10 +1261,10 @@ const styles = StyleSheet.create({
   unitText: {
     fontSize: 16,
     fontWeight: '800',
-    color: Colors.textLight,
+    color: theme.textLight,
   },
   unitTextActive: {
-    color: Colors.primary,
+    color: theme.primary,
   },
   macroPreview: {
     flexDirection: 'row',
@@ -1269,29 +1273,29 @@ const styles = StyleSheet.create({
   },
   macroCard: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 16,
     paddingVertical: 12,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   macroValue: {
     fontSize: 16,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginBottom: 4,
   },
   macroLabel: {
     fontSize: 10,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
   },
   voiceHint: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     marginTop: 10,
     marginBottom: 4,
   },
@@ -1300,4 +1304,5 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 8,
   },
-});
+  });
+}

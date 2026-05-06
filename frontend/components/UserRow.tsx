@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, StyleProp, ViewStyle, TextStyle, Image } from 'react-native';
-import { Colors, Spacing } from '../constants/Colors';
+import { Spacing, Colors } from '../constants/Colors';
+import { useTheme } from '../context/ThemeContext';
 
 type Avatar = {
   text: string;
@@ -37,12 +38,13 @@ export default function UserRow({
   titleStyle,
   subtitleStyle,
 }: Props) {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const [avatarImageFailed, setAvatarImageFailed] = React.useState(false);
 
   const dicebearUrl = React.useMemo(() => {
     if (!avatar) return null;
     const seed = encodeURIComponent((avatar.dicebearSeed || avatar.text || title).trim());
-    // PNG works well with React Native Image.
     return `https://api.dicebear.com/7.x/bottts/png?seed=${seed}`;
   }, [avatar, title]);
 
@@ -73,13 +75,9 @@ export default function UserRow({
       ) : null}
 
       <View style={styles.main}>
-        <Text style={[styles.title, titleStyle]} numberOfLines={1}>
-          {title}
-        </Text>
+        <Text style={[styles.title, titleStyle]} numberOfLines={1}>{title}</Text>
         {subtitle ? (
-          <Text style={[styles.subtitle, subtitleStyle]} numberOfLines={1}>
-            {subtitle}
-          </Text>
+          <Text style={[styles.subtitle, subtitleStyle]} numberOfLines={1}>{subtitle}</Text>
         ) : null}
       </View>
 
@@ -96,46 +94,26 @@ export default function UserRow({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    paddingVertical: Spacing.md,
-  },
-  left: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatar: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.backgroundSecondary,
-    borderWidth: 2,
-    borderColor: Colors.border,
-  },
-  avatarText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: Colors.text,
-  },
-  main: {
-    flex: 1,
-    minWidth: 0,
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: Colors.text,
-  },
-  subtitle: {
-    marginTop: 2,
-    fontSize: 12,
-    fontWeight: '800',
-    color: Colors.textSecondary,
-  },
-  right: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
+    container: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.md,
+      paddingVertical: Spacing.md,
+    },
+    left: { alignItems: 'center', justifyContent: 'center' },
+    avatar: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.backgroundSecondary,
+      borderWidth: 2,
+      borderColor: theme.border,
+    },
+    avatarText: { fontSize: 14, fontWeight: '900', color: theme.text },
+    main: { flex: 1, minWidth: 0 },
+    title: { fontSize: 15, fontWeight: '900', color: theme.text },
+    subtitle: { marginTop: 2, fontSize: 12, fontWeight: '800', color: theme.textSecondary },
+    right: { alignItems: 'center', justifyContent: 'center' },
+  });
+}

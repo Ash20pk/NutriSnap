@@ -56,7 +56,9 @@ def calculate_calorie_target(
     else:
         calories = tdee
 
-    calories = max(float(calories), 1000.0)
+    # Safe minimum floors: 1500 kcal for males, 1200 kcal for females (NIH/NHLBI guidance)
+    calorie_floor = 1500.0 if gender.lower() == "male" else 1200.0
+    calories = max(float(calories), calorie_floor)
 
     # Goal-based protein targets (g/kg bodyweight)
     goal_normalized = (goal or "").strip().lower()
@@ -82,15 +84,18 @@ def calculate_calorie_target(
 
     remaining_cal = max(0.0, calories - protein_cal)
 
-    # Fat defaults within AMDR (20-35%). Use 30% overall unless remaining calories are low
-    fat_cal_target = remaining_cal * 0.30
-    fat_cal_min = remaining_cal * 0.20
-    fat_cal_max = remaining_cal * 0.35
-    fat_cal = min(max(fat_cal_target, fat_cal_min), fat_cal_max)
+    # Fat: 30% of total calories, clamped within AMDR 20-35% of total calories.
+    # Using total calories (not remaining) so fat % is meaningful.
+    fat_cal = min(max(calories * 0.30, calories * 0.20), calories * 0.35)
+    # Never exceed remaining calories
+    fat_cal = min(fat_cal, remaining_cal)
     fat = fat_cal / 9.0
 
     carbs_cal = max(0.0, remaining_cal - fat_cal)
     carbs = carbs_cal / 4.0
+
+    # AMDR minimum for carbs: 130g/day (IOM EAR) — floor it if deficit pushes lower
+    carbs = max(carbs, 130.0)
     
     return {
         "daily_calorie_target": round(calories, 2),

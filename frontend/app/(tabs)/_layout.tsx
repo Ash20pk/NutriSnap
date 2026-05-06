@@ -1,18 +1,21 @@
 import { Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import { View, Platform, StyleSheet, Pressable } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
 export default function TabsLayout() {
+  const { theme } = useTheme();
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: Colors.white,
+          backgroundColor: theme.white,
           borderTopWidth: 2,
-          borderTopColor: Colors.border,
+          borderTopColor: theme.border,
           height: Platform.OS === 'ios' ? 100 : 80,
           paddingBottom: Platform.OS === 'ios' ? 35 : 15,
           paddingTop: 12,
@@ -22,14 +25,14 @@ export default function TabsLayout() {
           borderTopLeftRadius: 32,
           borderTopRightRadius: 32,
           borderWidth: 2,
-          borderColor: Colors.border,
+          borderColor: theme.border,
           borderBottomWidth: 0,
-          shadowColor: Colors.black,
+          shadowColor: theme.black,
           shadowOffset: { width: 0, height: -4 },
           shadowOpacity: 0.1,
           shadowRadius: 12,
         },
-        tabBarActiveTintColor: Colors.primary,
+        tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: Colors.gray400,
         tabBarLabelStyle: {
           fontSize: 11,
@@ -49,12 +52,12 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, focused }) => (
             <View style={[
               styles.iconContainer,
-              focused && { backgroundColor: Colors.primary + '15' }
+              focused && { backgroundColor: theme.primary + '15' }
             ]}>
-              <Ionicons 
-                name={focused ? "home" : "home-outline"} 
-                size={22} 
-                color={color} 
+              <Ionicons
+                name={focused ? "home" : "home-outline"}
+                size={22}
+                color={color}
               />
             </View>
           ),
@@ -69,10 +72,10 @@ export default function TabsLayout() {
               styles.iconContainer,
               focused && { backgroundColor: Colors.protein + '15' }
             ]}>
-              <Ionicons 
-                name={focused ? "stats-chart" : "stats-chart-outline"} 
-                size={22} 
-                color={focused ? Colors.protein : color} 
+              <Ionicons
+                name={focused ? "stats-chart" : "stats-chart-outline"}
+                size={22}
+                color={focused ? Colors.protein : color}
               />
             </View>
           ),
@@ -100,8 +103,12 @@ export default function TabsLayout() {
           ),
           tabBarIcon: ({ focused }) => (
             <View style={styles.centerButtonContainer}>
-              <View style={[styles.centerButton, focused && styles.centerButtonActive]}>
-                <Ionicons name="add" size={36} color={Colors.white} />
+              <View style={[
+                styles.centerButton,
+                { backgroundColor: theme.primary, shadowColor: theme.primary },
+                focused && styles.centerButtonActive,
+              ]}>
+                <Ionicons name="add" size={36} color={theme.white} />
               </View>
             </View>
           ),
@@ -116,10 +123,10 @@ export default function TabsLayout() {
               styles.iconContainer,
               focused && { backgroundColor: Colors.accent + '15' }
             ]}>
-              <Ionicons 
-                name={focused ? "restaurant" : "restaurant-outline"} 
-                size={22} 
-                color={focused ? Colors.accent : color} 
+              <Ionicons
+                name={focused ? "restaurant" : "restaurant-outline"}
+                size={22}
+                color={focused ? Colors.accent : color}
               />
             </View>
           ),
@@ -136,10 +143,10 @@ export default function TabsLayout() {
                 focused && { backgroundColor: Colors.warning + '15' },
               ]}
             >
-              <Ionicons 
-                name={focused ? 'trophy' : 'trophy-outline'} 
-                size={22} 
-                color={focused ? Colors.warning : color} 
+              <Ionicons
+                name={focused ? 'trophy' : 'trophy-outline'}
+                size={22}
+                color={focused ? Colors.warning : color}
               />
             </View>
           ),
@@ -154,10 +161,10 @@ export default function TabsLayout() {
               styles.iconContainer,
               focused && { backgroundColor: Colors.tertiary + '15' }
             ]}>
-              <Ionicons 
-                name={focused ? "person" : "person-outline"} 
-                size={22} 
-                color={color} 
+              <Ionicons
+                name={focused ? "person" : "person-outline"}
+                size={22}
+                color={color}
               />
             </View>
           ),
@@ -187,14 +194,12 @@ const styles = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
     borderColor: 'rgba(0,0,0,0.25)',
     borderBottomWidth: 10,
     borderBottomColor: 'rgba(0,0,0,0.25)',
-    shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 10,

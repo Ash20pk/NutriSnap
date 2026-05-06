@@ -103,11 +103,11 @@ export default function HomeScreen() {
       const chartData = days.map(day => ({
         label: day,
         value: dayTotals[day]?.calories || 0,
-        frontColor: Colors.primary,
-        gradientColor: Colors.primaryLight,
+        frontColor: theme.primary,
+        gradientColor: theme.primaryLight,
         showGradient: true,
         labelTextStyle: {
-          color: Colors.textSecondary,
+          color: theme.textSecondary,
           fontSize: 10,
           fontWeight: '900',
         },
@@ -257,13 +257,14 @@ export default function HomeScreen() {
       gradientCenterColor: Colors.fat,
     },
   ] : [
-    { value: 1, color: Colors.border }
+    { value: 1, color: theme.border }
   ];
 
   const { theme, isSpecialUser } = useTheme();
+  const styles = makeStyles(theme);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={styles.container}>
       <StreakCalendarModal
         visible={showStreakCalendar}
         onClose={() => setShowStreakCalendar(false)}
@@ -291,7 +292,7 @@ export default function HomeScreen() {
               }}
               activeOpacity={0.8}
             >
-              <Ionicons name="person-outline" size={20} color={Colors.text} />
+              <Ionicons name="person-outline" size={20} color={theme.text} />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -317,8 +318,8 @@ export default function HomeScreen() {
               fetchStats();
               fetchWeeklyData();
             }} 
-            tintColor={Colors.primary} 
-            colors={[Colors.primary]}
+            tintColor={theme.primary} 
+            colors={[theme.primary]}
           />
         }
       >
@@ -334,7 +335,7 @@ export default function HomeScreen() {
               activeOpacity={0.9}
             >
               <LinearGradient 
-                colors={[Colors.primary, Colors.accent]} 
+                colors={[theme.primary, Colors.accent]} 
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={StyleSheet.absoluteFill} 
@@ -367,7 +368,7 @@ export default function HomeScreen() {
               <View style={[styles.bannerCircle, { top: -30, right: -20, width: 120, height: 120 }]} />
               <View style={[styles.bannerCircle, { bottom: -40, left: 40, width: 150, height: 150 }]} />
               <View style={styles.bannerIconFloating}>
-                <Ionicons name="stats-chart" size={120} color={Colors.white} />
+                <Ionicons name="stats-chart" size={120} color={theme.white} />
               </View>
 
               <View style={styles.bannerBadge}>
@@ -415,13 +416,13 @@ export default function HomeScreen() {
 
               <View style={styles.caloriesFooter}>
                 <View style={styles.caloriesStat}>
-                  <Ionicons name="flame-outline" size={18} color={Colors.textSecondary} />
+                  <Ionicons name="flame-outline" size={18} color={theme.textSecondary} />
                   <Text style={styles.caloriesStatText}>
                     {Math.round((stats?.targets?.calories || 2000) - (stats?.total_calories || 0))} left
                   </Text>
                 </View>
                 <View style={styles.caloriesStat}>
-                  <Ionicons name="restaurant-outline" size={18} color={Colors.textSecondary} />
+                  <Ionicons name="restaurant-outline" size={18} color={theme.textSecondary} />
                   <Text style={styles.caloriesStatText}>
                     {stats?.meals_logged || 0} meals
                   </Text>
@@ -445,8 +446,8 @@ export default function HomeScreen() {
                     showText
                     centerLabelComponent={() => (
                       <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                        <Ionicons name="nutrition" size={20} color={Colors.white} />
-                        <Text style={{ marginTop: 4, color: Colors.primary, fontSize: 10, fontWeight: '900' }}>
+                        <Ionicons name="nutrition" size={20} color={theme.white} />
+                        <Text style={{ marginTop: 4, color: theme.primary, fontSize: 10, fontWeight: '900' }}>
                           Macros
                         </Text>
                       </View>
@@ -529,7 +530,7 @@ export default function HomeScreen() {
             
             <View style={styles.goalModalHeader}>
               <Text style={styles.goalModalTitle}>Daily Goal</Text>
-              <Text style={[styles.goalModalTitle, { color: Colors.primary }]}>Crushed!</Text>
+              <Text style={[styles.goalModalTitle, { color: theme.primary }]}>Crushed!</Text>
             </View>
 
             <Text style={styles.goalModalText}>
@@ -550,7 +551,7 @@ export default function HomeScreen() {
 
             <View style={styles.goalXpWrap}>
               <View style={styles.xpIconContainer}>
-                <Ionicons name="flash" size={20} color={Colors.white} />
+                <Ionicons name="flash" size={20} color={theme.white} />
               </View>
               <Text style={styles.goalXpText}>+50 XP BONUS</Text>
             </View>
@@ -558,7 +559,7 @@ export default function HomeScreen() {
             <DuoButton
               title="Awesome!"
               onPress={() => setShowGoalModal(false)}
-              color={Colors.primary}
+              color={theme.primary}
               size="medium"
               style={{ width: '100%' }}
             />
@@ -569,7 +570,7 @@ export default function HomeScreen() {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               }}
             >
-              <Ionicons name="share-outline" size={18} color={Colors.primary} />
+              <Ionicons name="share-outline" size={18} color={theme.primary} />
               <Text style={styles.shareLinkText}>SHARE SUCCESS</Text>
             </TouchableOpacity>
           </AnimatedCard>
@@ -579,10 +580,11 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: theme.background,
   },
   flex: {
     flex: 1,
@@ -600,15 +602,15 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     padding: 24,
     borderWidth: 2,
-    borderColor: Colors.whiteOverlay10,
+    borderColor: theme.whiteOverlay10,
     borderBottomWidth: 10,
-    borderBottomColor: Colors.shadowSubtle,
+    borderBottomColor: theme.shadowSubtle,
     position: 'relative',
     overflow: 'hidden',
   },
   bannerCircle: {
     position: 'absolute',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     opacity: 0.1,
     borderRadius: 100,
   },
@@ -620,11 +622,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginBottom: 16,
     borderWidth: 2,
-    borderColor: Colors.whiteOverlay20,
+    borderColor: theme.whiteOverlay20,
     borderBottomWidth: 4,
   },
   bannerBadgeText: {
-    color: Colors.white,
+    color: theme.white,
     fontSize: 10,
     fontWeight: '900',
     letterSpacing: 1,
@@ -640,25 +642,25 @@ const styles = StyleSheet.create({
   bannerTitle: {
     fontSize: 24,
     fontWeight: '900',
-    color: Colors.white,
+    color: theme.white,
     lineHeight: 28,
     marginBottom: 8,
   },
   bannerSubtitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.whiteOverlay80,
+    color: theme.whiteOverlay80,
     lineHeight: 20,
     marginBottom: 20,
   },
   bannerCTA: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 16,
     alignSelf: 'flex-start',
     borderBottomWidth: 4,
-    borderBottomColor: Colors.shadowLight,
+    borderBottomColor: theme.shadowLight,
   },
   bannerCTAText: {
     color: Colors.accent,
@@ -690,34 +692,34 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
   },
   streakBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     gap: 6,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
   },
   streakText: {
     fontSize: 16,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   standardCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     padding: 20,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
   },
   section: {
@@ -726,7 +728,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginBottom: 12,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -743,53 +745,53 @@ const styles = StyleSheet.create({
   caloriesValue: {
     fontSize: 32,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   caloriesTarget: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
   },
   caloriesCircle: {
     width: 76,
     height: 76,
     borderRadius: 22,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: Colors.primary,
+    borderColor: theme.primary,
     borderBottomWidth: 8,
-    borderBottomColor: Colors.primaryDark + '40',
+    borderBottomColor: theme.primaryDark + '40',
   },
   hollowCircle: {
-    borderColor: Colors.border,
-    borderBottomColor: Colors.border,
+    borderColor: theme.border,
+    borderBottomColor: theme.border,
     borderBottomWidth: 8,
   },
   hollowText: {
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
   },
   percentageText: {
     fontSize: 18,
     fontWeight: '900',
-    color: Colors.primary,
+    color: theme.primary,
   },
   progressBarContainer: {
     height: 18,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 9,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
-    borderBottomColor: Colors.border,
+    borderBottomColor: theme.border,
     overflow: 'hidden',
     marginBottom: 16,
   },
   caloriesProgressBar: {
     height: '100%',
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
     borderRadius: 8,
     borderBottomWidth: 4,
     borderBottomColor: 'rgba(0,0,0,0.1)',
@@ -803,17 +805,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   caloriesStatText: {
     fontSize: 13,
     fontWeight: '800',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
   },
   macroContent: {
@@ -832,15 +834,15 @@ const styles = StyleSheet.create({
   hollowPieWrapper: {
     borderRadius: 70,
     borderWidth: 3,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 10,
-    borderBottomColor: Colors.border,
-    backgroundColor: Colors.white,
+    borderBottomColor: theme.border,
+    backgroundColor: theme.white,
   },
   pieChartCenter: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
   },
   macroLegend: {
@@ -867,11 +869,11 @@ const styles = StyleSheet.create({
   legendLabel: {
     fontSize: 15,
     fontWeight: '800',
-    color: Colors.text,
+    color: theme.text,
   },
   legendValue: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontWeight: '800',
   },
   modalOverlay: {
@@ -882,25 +884,25 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   goalModalContent: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 32,
     padding: 32,
     width: '100%',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 12,
   },
   goalEmojiWrap: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
     borderWidth: 3,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     position: 'relative',
   },
   goalEmoji: {
@@ -916,7 +918,7 @@ const styles = StyleSheet.create({
   goalModalTitle: {
     fontSize: 28,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textAlign: 'center',
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -924,7 +926,7 @@ const styles = StyleSheet.create({
   },
   goalModalText: {
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     fontWeight: '700',
@@ -935,13 +937,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 20,
     paddingVertical: 16,
     paddingHorizontal: 24,
     marginBottom: 24,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   goalStatItem: {
     alignItems: 'center',
@@ -950,18 +952,18 @@ const styles = StyleSheet.create({
   goalStatValue: {
     fontSize: 20,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   goalStatLabel: {
     fontSize: 10,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     marginTop: 2,
   },
   goalStatDivider: {
     width: 2,
     height: 30,
-    backgroundColor: Colors.border,
+    backgroundColor: theme.border,
     marginHorizontal: 20,
   },
   goalXpWrap: {
@@ -999,7 +1001,7 @@ const styles = StyleSheet.create({
   shareLinkText: {
     fontSize: 13,
     fontWeight: '900',
-    color: Colors.primary,
+    color: theme.primary,
     letterSpacing: 1,
   },
   chartContent: {
@@ -1010,11 +1012,11 @@ const styles = StyleSheet.create({
   },
   hollowBar: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
-    borderBottomColor: Colors.border,
+    borderBottomColor: theme.border,
     borderRadius: 8,
     marginHorizontal: 2,
   },
@@ -1029,4 +1031,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.3,
   },
-});
+  });
+}

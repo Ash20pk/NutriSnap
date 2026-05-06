@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, StyleProp, ViewStyle, TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, Radius } from '../constants/Colors';
+import { Spacing, Radius, Colors } from '../constants/Colors';
+import { useTheme } from '../context/ThemeContext';
 
 type Props = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -16,7 +17,7 @@ type Props = {
 
 export default function ProfileRow({
   icon,
-  iconColor = Colors.primary,
+  iconColor,
   label,
   value,
   style,
@@ -24,12 +25,16 @@ export default function ProfileRow({
   valueStyle,
   showDivider = false,
 }: Props) {
+  const { theme } = useTheme();
+  const resolvedIconColor = iconColor ?? theme.primary;
+  const styles = makeStyles(theme);
+
   return (
     <View style={style}>
       <View style={styles.container}>
         <View style={styles.left}>
-          <View style={[styles.iconWrap, { backgroundColor: iconColor + '15' }]}>
-            <Ionicons name={icon} size={20} color={iconColor} />
+          <View style={[styles.iconWrap, { backgroundColor: resolvedIconColor + '15' }]}>
+            <Ionicons name={icon} size={20} color={resolvedIconColor} />
           </View>
           <Text style={[styles.label, labelStyle]}>{label}</Text>
         </View>
@@ -40,40 +45,30 @@ export default function ProfileRow({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Spacing.lg - 2,
-  },
-  left: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.sm + 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.borderSubtle,
-  },
-  label: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: Colors.text,
-  },
-  value: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: Colors.primary,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: Colors.border,
-    opacity: 0.3,
-  },
-});
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
+    container: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: Spacing.lg - 2,
+    },
+    left: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.md,
+    },
+    iconWrap: {
+      width: 36,
+      height: 36,
+      borderRadius: Radius.sm + 2,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: theme.borderSubtle,
+    },
+    label: { fontSize: 15, fontWeight: '800', color: theme.text },
+    value: { fontSize: 15, fontWeight: '900', color: theme.primary },
+    divider: { height: 1, backgroundColor: theme.border, opacity: 0.3 },
+  });
+}

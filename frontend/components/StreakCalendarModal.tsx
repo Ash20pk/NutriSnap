@@ -21,6 +21,7 @@ import {
 } from 'date-fns';
 import { Colors } from '../constants/Colors';
 import { questApi, ApiStreakCalendar } from '../utils/api';
+import { useTheme } from '../context/ThemeContext';
 
 interface StreakCalendarModalProps {
   visible: boolean;
@@ -33,6 +34,8 @@ export default function StreakCalendarModal({
   onClose,
   userId,
 }: StreakCalendarModalProps) {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const [loading, setLoading] = useState(false);
   const [calendar, setCalendar] = useState<ApiStreakCalendar | null>(null);
   const [currentViewDate, setCurrentViewDate] = useState(new Date());
@@ -113,7 +116,7 @@ export default function StreakCalendarModal({
             const loggedFood = !!item?.logged_food;
             const wasActive = !!item?.was_active;
             const bg = loggedFood
-              ? Colors.primary
+              ? theme.primary
               : wasActive
                 ? 'rgba(242,141,53,0.35)'
                 : 'transparent';
@@ -134,7 +137,7 @@ export default function StreakCalendarModal({
                       styles.cellText,
                       !isCurrentMonth ? styles.cellTextOut : null,
                       isCurrentMonth && (loggedFood || wasActive)
-                        ? { color: Colors.white }
+                        ? { color: theme.white }
                         : null,
                     ]}
                   >
@@ -167,7 +170,7 @@ export default function StreakCalendarModal({
                 onPress={() => changeMonth(-1)}
                 style={styles.navButton}
               >
-                <Ionicons name="chevron-back" size={20} color={Colors.text} />
+                <Ionicons name="chevron-back" size={20} color={theme.text} />
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => changeMonth(1)}
@@ -177,17 +180,17 @@ export default function StreakCalendarModal({
                 ]}
                 disabled={isSameMonth(currentViewDate, new Date())}
               >
-                <Ionicons name="chevron-forward" size={20} color={Colors.text} />
+                <Ionicons name="chevron-forward" size={20} color={theme.text} />
               </TouchableOpacity>
               <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-                <Ionicons name="close" size={20} color={Colors.text} />
+                <Ionicons name="close" size={20} color={theme.text} />
               </TouchableOpacity>
             </View>
           </View>
 
           <View style={styles.legend}>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: Colors.primary }]} />
+              <View style={[styles.legendDot, { backgroundColor: theme.primary }]} />
               <Text style={styles.legendText}>Logged food</Text>
             </View>
             <View style={styles.legendItem}>
@@ -209,150 +212,152 @@ export default function StreakCalendarModal({
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 18,
-  },
-  card: {
-    width: '90%',
-    maxWidth: 320,
-    backgroundColor: Colors.white,
-    borderRadius: 24,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  monthText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.textSecondary,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  navButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: Colors.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  navButtonDisabled: {
-    opacity: 0.3,
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: Colors.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginLeft: 4,
-  },
-  legend: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  legendDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-  },
-  legendText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.textSecondary,
-  },
-  body: {
-    width: '100%',
-  },
-  loadingContainer: {
-    paddingVertical: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    color: Colors.textSecondary,
-    fontWeight: '700',
-  },
-  emptyContainer: {
-    paddingVertical: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyText: {
-    color: Colors.textSecondary,
-    fontWeight: '700',
-  },
-  weekdayRow: {
-    flexDirection: 'row',
-    width: '100%',
-    marginBottom: 8,
-  },
-  weekdayText: {
-    width: `${100 / 7}%`,
-    textAlign: 'center',
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  calendarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    width: '100%',
-  },
-  cellWrap: {
-    width: `${100 / 7}%`,
-    padding: 3,
-  },
-  cell: {
-    width: '100%',
-    aspectRatio: 1,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.backgroundSecondary,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  cellOut: {
-    borderColor: 'transparent',
-  },
-  cellText: {
-    fontWeight: '900',
-    color: Colors.text,
-    fontSize: 12,
-  },
-  cellTextOut: {
-    color: Colors.textSecondary,
-    opacity: 0.35,
-  },
-});
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.4)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 18,
+    },
+    card: {
+      width: '90%',
+      maxWidth: 320,
+      backgroundColor: theme.white,
+      borderRadius: 24,
+      padding: 16,
+      borderWidth: 2,
+      borderColor: theme.border,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.1,
+      shadowRadius: 20,
+      elevation: 10,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 10,
+    },
+    monthText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: theme.textSecondary,
+    },
+    headerActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    navButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      backgroundColor: theme.backgroundSecondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    navButtonDisabled: {
+      opacity: 0.3,
+    },
+    closeButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      backgroundColor: theme.backgroundSecondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: theme.border,
+      marginLeft: 4,
+    },
+    legend: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+    },
+    legendItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    legendDot: {
+      width: 14,
+      height: 14,
+      borderRadius: 7,
+    },
+    legendText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: theme.textSecondary,
+    },
+    body: {
+      width: '100%',
+    },
+    loadingContainer: {
+      paddingVertical: 26,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    loadingText: {
+      color: theme.textSecondary,
+      fontWeight: '700',
+    },
+    emptyContainer: {
+      paddingVertical: 26,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emptyText: {
+      color: theme.textSecondary,
+      fontWeight: '700',
+    },
+    weekdayRow: {
+      flexDirection: 'row',
+      width: '100%',
+      marginBottom: 8,
+    },
+    weekdayText: {
+      width: `${100 / 7}%`,
+      textAlign: 'center',
+      color: theme.textSecondary,
+      fontSize: 12,
+      fontWeight: '800',
+    },
+    calendarGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      width: '100%',
+    },
+    cellWrap: {
+      width: `${100 / 7}%`,
+      padding: 3,
+    },
+    cell: {
+      width: '100%',
+      aspectRatio: 1,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.backgroundSecondary,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    cellOut: {
+      borderColor: 'transparent',
+    },
+    cellText: {
+      fontWeight: '900',
+      color: theme.text,
+      fontSize: 12,
+    },
+    cellTextOut: {
+      color: theme.textSecondary,
+      opacity: 0.35,
+    },
+  });
+}

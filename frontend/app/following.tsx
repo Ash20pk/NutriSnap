@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { Colors } from '../constants/Colors';
+import { useTheme } from '../context/ThemeContext';
 import PageHeader from '../components/PageHeader';
 import { socialApi } from '../utils/api';
 import UserRow from '../components/UserRow';
@@ -17,6 +18,8 @@ type UserListItem = {
 };
 
 export default function FollowingScreen() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const router = useRouter();
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -57,7 +60,7 @@ export default function FollowingScreen() {
                 setRefreshing(true);
                 fetchFollowing();
               }}
-              tintColor={Colors.primary}
+              tintColor={theme.primary}
             />
           }
           ListEmptyComponent={
@@ -86,13 +89,15 @@ export default function FollowingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: theme.background,
   },
   listContent: {
     paddingHorizontal: 24,
     paddingBottom: 24,
   },
-});
+  });
+}

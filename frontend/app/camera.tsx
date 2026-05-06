@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { CameraView, Camera } from 'expo-camera';
 import { Colors } from '../constants/Colors';
+import { useTheme } from '../context/ThemeContext';
 import { useUser } from '../context/UserContext';
 import { mealApi } from '../utils/api';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +24,8 @@ import AnimatedCard from '../components/AnimatedCard';
 const { width } = Dimensions.get('window');
 
 export default function CameraScreen() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user } = useUser();
@@ -153,7 +156,7 @@ export default function CameraScreen() {
   if (hasPermission === null) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={theme.primary} />
       </View>
     );
   }
@@ -163,7 +166,7 @@ export default function CameraScreen() {
       <View style={styles.container}>
         <Ionicons name="camera-outline" size={64} color={Colors.error} />
         <Text style={styles.permissionText}>No access to camera</Text>
-        <DuoButton title="Go Back" onPress={() => router.back()} color={Colors.primary} size="medium" />
+        <DuoButton title="Go Back" onPress={() => router.back()} color={theme.primary} size="medium" />
       </View>
     );
   }
@@ -179,7 +182,7 @@ export default function CameraScreen() {
               router.back();
             }}
           >
-            <Ionicons name="close" size={28} color={Colors.white} />
+            <Ionicons name="close" size={28} color={theme.white} />
           </TouchableOpacity>
           
           {hasLiDAR && (
@@ -193,7 +196,7 @@ export default function CameraScreen() {
               <Ionicons 
                 name={lidarEnabled ? "cube" : "cube-outline"} 
                 size={20} 
-                color={lidarEnabled ? Colors.white : 'rgba(255,255,255,0.6)'} 
+                color={lidarEnabled ? theme.white : 'rgba(255,255,255,0.6)'} 
               />
               <Text style={[styles.lidarText, lidarEnabled && styles.lidarTextActive]}>
                 LiDAR
@@ -208,7 +211,7 @@ export default function CameraScreen() {
               <Ionicons 
                 name={barcodeData ? "basket-outline" : "camera-outline"} 
                 size={24} 
-                color={Colors.white} 
+                color={theme.white} 
               />
             </View>
             <Text style={styles.instructionText}>
@@ -255,7 +258,7 @@ export default function CameraScreen() {
               setFacing(current => (current === 'back' ? 'front' : 'back'));
             }}
           >
-            <Ionicons name="camera-reverse-outline" size={28} color={Colors.white} />
+            <Ionicons name="camera-reverse-outline" size={28} color={theme.white} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -265,7 +268,7 @@ export default function CameraScreen() {
             activeOpacity={0.8}
           >
             {isProcessing ? (
-              <ActivityIndicator size="large" color={Colors.white} />
+              <ActivityIndicator size="large" color={theme.white} />
             ) : (
               <View style={styles.captureButtonInner} />
             )}
@@ -278,10 +281,11 @@ export default function CameraScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.black,
+    backgroundColor: theme.black,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -325,8 +329,8 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(0, 0, 0, 0.4)',
   },
   lidarBadgeActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: theme.primary,
+    borderColor: theme.primary,
     borderBottomColor: 'rgba(0, 0, 0, 0.2)',
   },
   lidarText: {
@@ -337,7 +341,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   lidarTextActive: {
-    color: Colors.white,
+    color: theme.white,
   },
   overlay: {
     flex: 1,
@@ -362,7 +366,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
     justifyContent: 'center',
     alignItems: 'center',
     borderBottomWidth: 3,
@@ -371,7 +375,7 @@ const styles = StyleSheet.create({
   instructionText: {
     flex: 1,
     fontSize: 15,
-    color: Colors.white,
+    color: theme.white,
     lineHeight: 22,
     fontWeight: '800',
   },
@@ -387,7 +391,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 50,
     height: 50,
-    borderColor: Colors.white,
+    borderColor: theme.white,
     borderWidth: 4,
     top: 0,
     left: 0,
@@ -437,7 +441,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   coinText: {
-    color: Colors.white,
+    color: theme.white,
     fontSize: 10,
     fontWeight: '900',
     letterSpacing: 1,
@@ -499,11 +503,11 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 12,
   },
   captureButtonDisabled: {
@@ -513,17 +517,18 @@ const styles = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
     borderBottomWidth: 6,
     borderBottomColor: 'rgba(0, 0, 0, 0.2)',
   },
   permissionText: {
     fontSize: 18,
-    color: Colors.white,
+    color: theme.white,
     marginTop: 20,
     marginBottom: 24,
     fontWeight: '900',
     textAlign: 'center',
     textTransform: 'uppercase',
   },
-});
+  });
+}

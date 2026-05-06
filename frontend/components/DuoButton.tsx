@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Colors, Spacing, Radius } from '../constants/Colors';
 import * as Haptics from 'expo-haptics';
+import { useTheme } from '../context/ThemeContext';
 
 interface DuoButtonProps {
   title: string;
@@ -29,7 +30,7 @@ export default function DuoButton({
   title,
   subtitle,
   onPress,
-  color = Colors.primary,
+  color,
   shadowColor,
   leftIcon,
   style,
@@ -38,6 +39,8 @@ export default function DuoButton({
   loading,
   size = 'medium',
 }: DuoButtonProps) {
+  const { theme } = useTheme();
+  const resolvedColor = color ?? theme.primary;
   const animatedValue = React.useRef(new Animated.Value(0)).current;
   const [dots, setDots] = React.useState('');
 
@@ -63,7 +66,7 @@ export default function DuoButton({
     };
   }, [loading]);
 
-  const finalShadowColor = shadowColor || (color === Colors.primary ? Colors.primaryDark : Colors.shadowSubtle);
+  const finalShadowColor = shadowColor || (resolvedColor === theme.primary ? theme.primaryDark : theme.shadowSubtle);
 
   const onPressIn = () => {
     if (disabled || loading) return;
@@ -122,7 +125,7 @@ export default function DuoButton({
           disabled={disabled || loading}
           style={[
             styles.button,
-            { backgroundColor: color, paddingVertical, borderRadius: Radius.xl },
+            { backgroundColor: resolvedColor, paddingVertical, borderRadius: Radius.xl },
             disabled && styles.disabled,
           ]}
         >
@@ -131,11 +134,11 @@ export default function DuoButton({
               {loading ? null : leftIcon}
             </View>
             <View style={styles.textColumn}>
-              <Text style={[styles.text, { fontSize }, textStyle]}>
+              <Text style={[styles.text, { fontSize, color: theme.white }, textStyle]}>
                 {loading ? `${title}${dots}` : title}
               </Text>
               {subtitle && !loading && (
-                <Text style={styles.subtitle}>{subtitle}</Text>
+                <Text style={[styles.subtitle, { color: theme.white }]}>{subtitle}</Text>
               )}
             </View>
             <View style={styles.rightIconSlot} />
@@ -182,13 +185,11 @@ const styles = StyleSheet.create({
     top: 4,
   },
   text: {
-    color: Colors.white,
     fontWeight: '900',
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   subtitle: {
-    color: Colors.white,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',

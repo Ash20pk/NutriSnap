@@ -14,6 +14,7 @@ import {
   Alert,
 } from 'react-native';
 import { Colors } from '../constants/Colors';
+import { useTheme } from '../context/ThemeContext';
 import { useUser } from '../context/UserContext';
 import { mealApi } from '../utils/api';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +32,8 @@ const { width, height: screenHeight } = Dimensions.get('window');
 const SLIDE_DURATION = 5000; // 5 seconds per slide
 
 export default function WeeklyWrapScreen() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useUser();
@@ -52,7 +55,7 @@ export default function WeeklyWrapScreen() {
       id: 'intro',
       title: 'Your Week\nin Review',
       subtitle: 'Loggr Wrapped 2024',
-      gradient: [Colors.primary, Colors.accent] as const,
+      gradient: [theme.primary, Colors.accent] as const,
       icon: 'sparkles',
     },
     {
@@ -72,7 +75,7 @@ export default function WeeklyWrapScreen() {
       description: weeklyStats?.avgCalories < (user?.daily_calorie_target || 2000) 
         ? "You're keeping it light! Great job." 
         : "Fueling that engine for greatness.",
-      gradient: [Colors.primary, Colors.primaryLight] as const,
+      gradient: [theme.primary, theme.primaryLight] as const,
       icon: 'flame',
     },
     {
@@ -101,7 +104,7 @@ export default function WeeklyWrapScreen() {
       value: weeklyStats?.archetype?.name,
       label: 'Archetype',
       description: weeklyStats?.archetype?.desc,
-      gradient: [Colors.primary, Colors.accent] as const,
+      gradient: [theme.primary, Colors.accent] as const,
       icon: (weeklyStats?.archetype?.icon as any) || 'person',
     },
     {
@@ -110,13 +113,13 @@ export default function WeeklyWrapScreen() {
       value: `${weeklyStats?.consistency || 0}%`,
       label: 'Weekly Goal Hit',
       description: (weeklyStats?.consistency || 0) > 80 ? "Unstoppable momentum!" : "Progress, not perfection.",
-      gradient: [Colors.success, Colors.primaryLight] as const,
+      gradient: [Colors.success, theme.primaryLight] as const,
       icon: 'checkmark-circle',
     },
     {
       id: 'summary',
       title: '',
-      gradient: [Colors.primary, Colors.black] as const,
+      gradient: [theme.primary, theme.black] as const,
       icon: 'trophy',
     }
   ], [weeklyStats, user?.daily_calorie_target]);
@@ -314,9 +317,9 @@ export default function WeeklyWrapScreen() {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <StatusBar barStyle="light-content" />
-        <LinearGradient colors={[Colors.primary, Colors.accent]} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={[theme.primary, Colors.accent]} style={StyleSheet.absoluteFill} />
         <View style={styles.loadingContent}>
-          <Ionicons name="nutrition" size={60} color={Colors.white} />
+          <Ionicons name="nutrition" size={60} color={theme.white} />
           <Text style={styles.loadingText}>Preparing your wrap...</Text>
         </View>
       </View>
@@ -441,7 +444,7 @@ export default function WeeklyWrapScreen() {
             styles.confetti,
             {
               left: `${Math.random() * 100}%`,
-              backgroundColor: [Colors.primary, Colors.accent, Colors.warning, Colors.protein, Colors.carbs][i % 5],
+              backgroundColor: [theme.primary, Colors.accent, Colors.warning, Colors.protein, Colors.carbs][i % 5],
               transform: [
                 {
                   translateY: confettiAnim.interpolate({
@@ -490,7 +493,7 @@ export default function WeeklyWrapScreen() {
 
           {/* Close Button */}
           <TouchableOpacity style={[styles.closeButton, { top: topOffset + 34 }]} onPress={() => router.back()}>
-            <Ionicons name="close" size={28} color={Colors.white} />
+            <Ionicons name="close" size={28} color={theme.white} />
           </TouchableOpacity>
         </>
       )}
@@ -528,7 +531,7 @@ export default function WeeklyWrapScreen() {
               ]}
             >
               <Ionicons name={slide.icon as any} size={iconSmFinal} color="rgba(255,255,255,0.3)" style={styles.floatingIcon} />
-              <Ionicons name={slide.icon as any} size={iconLgFinal} color={Colors.white} />
+              <Ionicons name={slide.icon as any} size={iconLgFinal} color={theme.white} />
             </Animated.View>
 
             {!!slide.title && (
@@ -624,7 +627,7 @@ export default function WeeklyWrapScreen() {
                 ]}
               >
               <LinearGradient 
-                colors={[Colors.primary, Colors.accent, Colors.secondary]} 
+                colors={[theme.primary, Colors.accent, theme.secondary]} 
                 style={styles.summaryGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -645,7 +648,7 @@ export default function WeeklyWrapScreen() {
                     <Text style={styles.summaryYear}>WEEKLY WRAPPED</Text>
                   </View>
                 </View>
-                <Ionicons name="nutrition" size={24} color={Colors.white} />
+                <Ionicons name="nutrition" size={24} color={theme.white} />
               </View>
               
               <View style={styles.summaryStats}>
@@ -695,9 +698,9 @@ export default function WeeklyWrapScreen() {
                 <DuoButton 
                   title={sharing ? 'PREPARING...' : 'SHARE WRAPPED'}
                   onPress={handleShare}
-                  color={Colors.white}
+                  color={theme.white}
                   shadowColor="rgba(0,0,0,0.1)"
-                  textStyle={{ color: Colors.primary }}
+                  textStyle={{ color: theme.primary }}
                   style={styles.shareButton}
                   disabled={sharing}
                 />
@@ -716,17 +719,18 @@ export default function WeeklyWrapScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.black,
+    backgroundColor: theme.black,
   },
   loadingContent: {
     alignItems: 'center',
     zIndex: 10,
   },
   loadingText: {
-    color: Colors.white,
+    color: theme.white,
     fontSize: 18,
     fontWeight: '900',
     marginTop: 20,
@@ -749,7 +753,7 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
   },
   closeButton: {
     position: 'absolute',
@@ -791,7 +795,7 @@ const styles = StyleSheet.create({
   slideTitle: {
     fontSize: 48,
     fontWeight: '900',
-    color: Colors.white,
+    color: theme.white,
     textAlign: 'center',
     lineHeight: 52,
     marginBottom: 20,
@@ -804,7 +808,7 @@ const styles = StyleSheet.create({
   slideValue: {
     fontSize: 80,
     fontWeight: '900',
-    color: Colors.white,
+    color: theme.white,
     textShadowColor: 'rgba(0,0,0,0.2)',
     textShadowOffset: { width: 0, height: 4 },
     textShadowRadius: 10,
@@ -819,7 +823,7 @@ const styles = StyleSheet.create({
   slideDescription: {
     fontSize: 20,
     fontWeight: '700',
-    color: Colors.white,
+    color: theme.white,
     textAlign: 'center',
     marginTop: 20,
     lineHeight: 28,
@@ -841,7 +845,7 @@ const styles = StyleSheet.create({
   macroVal: {
     fontSize: 20,
     fontWeight: '900',
-    color: Colors.white,
+    color: theme.white,
   },
   macroLab: {
     fontSize: 12,
@@ -868,12 +872,12 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     justifyContent: 'center',
     alignItems: 'center',
   },
   foodRankText: {
-    color: Colors.primary,
+    color: theme.primary,
     fontWeight: '900',
     fontSize: 18,
   },
@@ -881,7 +885,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 18,
     fontWeight: '800',
-    color: Colors.white,
+    color: theme.white,
     textTransform: 'uppercase',
   },
   summaryContainer: {
@@ -939,12 +943,12 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.3)',
   },
   smallAvatarText: {
-    color: Colors.white,
+    color: theme.white,
     fontSize: 18,
     fontWeight: '900',
   },
   summaryUser: {
-    color: Colors.white,
+    color: theme.white,
     fontSize: 16,
     fontWeight: '900',
     textTransform: 'uppercase',
@@ -975,12 +979,12 @@ const styles = StyleSheet.create({
   sumVal: {
     fontSize: 32,
     fontWeight: '900',
-    color: Colors.white,
+    color: theme.white,
   },
   sumValSmall: {
     fontSize: 24,
     fontWeight: '900',
-    color: Colors.white,
+    color: theme.white,
   },
   sumLab: {
     fontSize: 10,
@@ -1011,14 +1015,14 @@ const styles = StyleSheet.create({
   sumFoodRank: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.white,
+    color: theme.white,
     opacity: 0.5,
     width: 15,
   },
   sumFoodName: {
     fontSize: 15,
     fontWeight: '800',
-    color: Colors.white,
+    color: theme.white,
     textTransform: 'uppercase',
   },
   cardWatermark: {
@@ -1035,7 +1039,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   footerBrand: {
-    color: Colors.white,
+    color: theme.white,
     fontSize: 12,
     fontWeight: '900',
     letterSpacing: 2,
@@ -1085,4 +1089,5 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     zIndex: 100,
   },
-});
+  });
+}

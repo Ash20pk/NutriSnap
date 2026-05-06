@@ -4,10 +4,13 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { useUser } from '../context/UserContext';
 import { Colors } from '../constants/Colors';
+import { useTheme } from '../context/ThemeContext';
 import { userApi } from '../utils/api';
 import DuoButton from '../components/DuoButton';
 
 export default function Index() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const router = useRouter();
   const { user: authUser, isLoading: authLoading, logout: authLogout } = useAuth();
   const { user, setUser, isLoading, logout: userLogout } = useUser();
@@ -80,7 +83,7 @@ export default function Index() {
                 setProfileFetchError(null);
                 setProfileFetchAttempted(false);
               }}
-              color={Colors.primary}
+              color={theme.primary}
               size="medium"
               style={{ flex: 1 }}
             />
@@ -95,9 +98,9 @@ export default function Index() {
                   router.replace('/intro' as any);
                 }
               }}
-              color={Colors.white}
-              shadowColor={Colors.border}
-              textStyle={{ color: Colors.text }}
+              color={theme.white}
+              shadowColor={theme.border}
+              textStyle={{ color: theme.text }}
               size="medium"
               style={{ flex: 1 }}
             />
@@ -109,25 +112,26 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color={Colors.primary} />
+      <ActivityIndicator size="large" color={theme.primary} />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: theme.background,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
   },
   errorCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 28,
     padding: 24,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 10,
     alignItems: 'center',
     width: '100%',
@@ -135,7 +139,7 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 22,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginBottom: 8,
     textAlign: 'center',
     textTransform: 'uppercase',
@@ -144,7 +148,7 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 14,
     lineHeight: 20,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textAlign: 'center',
     maxWidth: 280,
     fontWeight: '700',
@@ -155,4 +159,5 @@ const styles = StyleSheet.create({
     gap: 12,
     width: '100%',
   },
-});
+  });
+}

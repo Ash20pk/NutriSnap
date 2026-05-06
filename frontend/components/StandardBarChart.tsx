@@ -3,6 +3,7 @@ import { View, StyleSheet, Dimensions } from 'react-native';
 import { useFont, Text as SkText } from '@shopify/react-native-skia';
 import { Bar, CartesianChart } from 'victory-native';
 import { Colors, Spacing, Radius } from '../constants/Colors';
+import { useTheme } from '../context/ThemeContext';
 
 type ChartDatum = {
   label: string;
@@ -35,11 +36,11 @@ export default function StandardBarChart({
   showValuesAsTopLabel,
   tickCount,
 }: Props) {
+  const { theme } = useTheme();
   const font = useFont(require('../assets/fonts/SpaceMono-Regular.ttf'), 10);
   const safeData = data.length > 0 ? data : [{ label: '', value: 0 }];
   const maxValue = Math.max(...safeData.map((d) => d.value), maxValueFallback);
 
-  // Follow victory-native-xl reference pattern: domainPadding controls gaps.
   const domainPadding = Math.max(18, Math.round(spacing * 1.5));
   const innerPadding = 0.33;
   const effectiveTickCount = tickCount ?? (safeData.length <= 12 ? safeData.length : 5);
@@ -47,7 +48,7 @@ export default function StandardBarChart({
   const chartData = safeData.map((d) => ({
     label: d.label,
     value: d.value,
-    color: d.frontColor ?? Colors.primary,
+    color: d.frontColor ?? theme.primary,
   }));
 
   return (
@@ -63,8 +64,8 @@ export default function StandardBarChart({
           axisOptions={{
             font,
             tickCount: effectiveTickCount,
-            lineColor: Colors.border,
-            labelColor: Colors.textSecondary,
+            lineColor: theme.border,
+            labelColor: theme.textSecondary,
             formatXLabel: (label) => String(label),
             formatYLabel: (v) => `${Math.round(Number(v))}`,
             labelOffset: { x: Math.round(labelWidth / 4), y: 8 },
@@ -84,7 +85,7 @@ export default function StandardBarChart({
                   <Bar
                     points={[p]}
                     chartBounds={chartBounds}
-                    color={chartData[i]?.color ?? Colors.primary}
+                    color={chartData[i]?.color ?? theme.primary}
                     barWidth={barWidth}
                     barCount={points.value.length}
                     innerPadding={innerPadding}
@@ -97,7 +98,7 @@ export default function StandardBarChart({
                       x={textX}
                       y={textY}
                       text={valStr}
-                      color={Colors.textSecondary}
+                      color={theme.textSecondary}
                     />
                   )}
                 </React.Fragment>
@@ -115,16 +116,5 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  axisLabel: {
-    color: Colors.textSecondary,
-    fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  topLabelText: {
-    color: Colors.textSecondary,
-    fontSize: 9,
-    fontWeight: '900',
   },
 });

@@ -3,6 +3,7 @@ import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { useFont, matchFont } from '@shopify/react-native-skia';
 import { Pie, PolarChart } from 'victory-native';
 import { Colors } from '../constants/Colors';
+import { useTheme } from '../context/ThemeContext';
 
 type DonutDatum = {
   value: number;
@@ -28,24 +29,25 @@ export default function StandardDonutChart({
   showText = false,
   centerLabelComponent,
   style,
-  innerCircleColor = Colors.white,
+  innerCircleColor,
 }: Props) {
-  // Use matchFont for synchronous, guaranteed font loading
+  const { theme } = useTheme();
+  const resolvedInnerCircleColor = innerCircleColor ?? theme.white;
+
   const font = matchFont({
     fontSize: 12,
     fontWeight: 'bold',
   });
 
-  // Ensure we have valid data and handle zero values gracefully
-  const safeData = data.length > 0 ? data : [{ value: 1, color: Colors.border, text: '' }];
+  const safeData = data.length > 0 ? data : [{ value: 1, color: theme.border, text: '' }];
   const totalValue = safeData.reduce((sum, d) => sum + (Number(d.value) > 0 ? Number(d.value) : 0), 0);
   const hasPositiveValues = totalValue > 0;
   const dataForChart: DonutDatum[] = hasPositiveValues
     ? safeData
-    : [{ value: 1, color: Colors.border, text: '' }];
+    : [{ value: 1, color: theme.border, text: '' }];
   const size = radius * 2;
 
-  const chartData = dataForChart.map((d, idx) => {
+  const chartData = dataForChart.map((d) => {
     const percentage = Math.round((d.value / totalValue) * 100);
     return {
       value: d.value,
@@ -69,13 +71,13 @@ export default function StandardDonutChart({
             <>
               <Pie.Slice animate={{ type: 'timing', duration: 900 }} opacity={1}>
                 {showText && hasPositiveValues ? (
-                  <Pie.Label font={font} color={Colors.white} />
+                  <Pie.Label font={font} color={theme.white} />
                 ) : null}
               </Pie.Slice>
               <Pie.SliceAngularInset
                 angularInset={{
                   angularStrokeWidth: 3,
-                  angularStrokeColor: innerCircleColor,
+                  angularStrokeColor: resolvedInnerCircleColor,
                 }}
               />
             </>
@@ -87,7 +89,7 @@ export default function StandardDonutChart({
         style={[
           styles.centerOverlay,
           {
-            backgroundColor: innerCircleColor,
+            backgroundColor: resolvedInnerCircleColor,
             borderRadius: innerRadius,
             width: innerRadius * 2,
             height: innerRadius * 2,

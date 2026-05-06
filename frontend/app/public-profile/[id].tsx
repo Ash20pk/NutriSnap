@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors } from '../../constants/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import PageHeader from '../../components/PageHeader';
 import DuoButton from '../../components/DuoButton';
@@ -29,6 +30,8 @@ type PublicUserStats = {
 };
 
 export default function PublicProfileScreen() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const params = useLocalSearchParams();
   const router = useRouter();
 
@@ -116,7 +119,7 @@ export default function PublicProfileScreen() {
             style={styles.closeButton}
             activeOpacity={0.9}
           >
-            <Ionicons name="close" size={24} color={Colors.text} />
+            <Ionicons name="close" size={24} color={theme.text} />
           </TouchableOpacity>
         }
       />
@@ -132,7 +135,7 @@ export default function PublicProfileScreen() {
               setRefreshing(true);
               fetchProfile();
             }}
-            tintColor={Colors.primary}
+            tintColor={theme.primary}
           />
         }
       >
@@ -187,9 +190,9 @@ export default function PublicProfileScreen() {
                 title={profile.is_followed_by_me ? 'Unfollow' : 'Follow'}
                 onPress={handleToggleFollow}
                 loading={followLoading}
-                color={profile.is_followed_by_me ? Colors.white : Colors.primary}
-                shadowColor={profile.is_followed_by_me ? Colors.border : undefined}
-                textStyle={{ color: profile.is_followed_by_me ? Colors.text : Colors.white }}
+                color={profile.is_followed_by_me ? theme.white : theme.primary}
+                shadowColor={profile.is_followed_by_me ? theme.border : undefined}
+                textStyle={{ color: profile.is_followed_by_me ? theme.text : theme.white }}
                 size="large"
                 style={styles.followButton}
               />
@@ -200,7 +203,7 @@ export default function PublicProfileScreen() {
               <AnimatedCard delay={200} type="slide">
                 <View style={styles.recipeCard}>
                   <View style={styles.recipeIconWrap}>
-                    <Ionicons name="trophy" size={24} color={Colors.primary} />
+                    <Ionicons name="trophy" size={24} color={theme.primary} />
                   </View>
                   <View style={styles.recipeInfo}>
                     <Text style={styles.recipeName}>Level {profile.level}</Text>
@@ -247,10 +250,11 @@ export default function PublicProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: theme.background,
   },
   scrollView: {
     flex: 1,
@@ -263,20 +267,20 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
   },
   profileCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 32,
     padding: 24,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 10,
     marginTop: 16,
   },
@@ -287,22 +291,22 @@ const styles = StyleSheet.create({
     width: 110,
     height: 110,
     borderRadius: 36,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 10,
   },
   avatarText: {
     fontSize: 40,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   userName: {
     fontSize: 26,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
     marginBottom: 6,
     textAlign: 'center',
@@ -311,7 +315,7 @@ const styles = StyleSheet.create({
   usernameText: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textAlign: 'center',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -319,7 +323,7 @@ const styles = StyleSheet.create({
   },
   userBio: {
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textAlign: 'center',
     fontWeight: '700',
     lineHeight: 22,
@@ -340,12 +344,12 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 22,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   statLabel: {
     fontSize: 13,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     marginTop: 4,
     letterSpacing: 0.5,
@@ -353,7 +357,7 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 2,
     height: 36,
-    backgroundColor: Colors.border,
+    backgroundColor: theme.border,
     opacity: 0.5,
   },
   followButton: {
@@ -366,7 +370,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginBottom: 18,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -374,23 +378,23 @@ const styles = StyleSheet.create({
   recipeCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 28,
     padding: 20,
     marginBottom: 16,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 8,
   },
   recipeIconWrap: {
     width: 56,
     height: 56,
     borderRadius: 18,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
   },
   recipeInfo: {
@@ -400,12 +404,12 @@ const styles = StyleSheet.create({
   recipeName: {
     fontSize: 17,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     marginBottom: 4,
   },
   recipeMeta: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontWeight: '800',
     textTransform: 'uppercase',
   },
@@ -419,10 +423,10 @@ const styles = StyleSheet.create({
   },
   badgeCard: {
     width: '100%',
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     padding: 16,
     flexDirection: 'column',
     alignItems: 'center',
@@ -433,18 +437,19 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 16,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
     marginBottom: 4,
   },
   badgeTitle: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textAlign: 'center',
   },
-});
+  });
+}

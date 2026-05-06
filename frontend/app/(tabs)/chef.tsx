@@ -12,6 +12,7 @@ import {
   Modal,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '../../context/UserContext';
 import { chefApi } from '../../utils/api';
@@ -64,6 +65,8 @@ const COOKING_MESSAGES = [
 ];
 
 export default function ChefScreen() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const { user } = useUser();
   const { width: screenWidth } = useWindowDimensions();
   const [loading, setLoading] = useState(false);
@@ -201,7 +204,7 @@ export default function ChefScreen() {
         router.push('/chef/saved');
       }}
     >
-      <Ionicons name="book" size={22} color={Colors.primary} />
+      <Ionicons name="book" size={22} color={theme.primary} />
     </TouchableOpacity>
   );
 
@@ -229,8 +232,8 @@ export default function ChefScreen() {
               value={ingredients}
               onChangeText={setIngredients}
               multiline
-              placeholderTextColor={Colors.textSecondary + '80'}
-              selectionColor={Colors.primary}
+              placeholderTextColor={theme.textSecondary + '80'}
+              selectionColor={theme.primary}
             />
             <Text style={styles.hintText}>Separate ingredients with commas for better results</Text>
           </AnimatedCard>
@@ -257,7 +260,7 @@ export default function ChefScreen() {
                 <Ionicons
                   name={type.icon as any}
                   size={28}
-                  color={targetMeal === type.id ? Colors.primary : Colors.primaryLight}
+                  color={targetMeal === type.id ? theme.primary : theme.primaryLight}
                 />
                 <Text
                   style={[
@@ -341,7 +344,7 @@ export default function ChefScreen() {
             onPress={generateRecipe}
             disabled={loading}
             loading={loading}
-            color={Colors.primary}
+            color={theme.primary}
             size="large"
           />
           <Text style={styles.disclaimerText}>
@@ -368,7 +371,7 @@ export default function ChefScreen() {
                 }
               ]}
             >
-              <Ionicons name="restaurant" size={48} color={Colors.white} />
+              <Ionicons name="restaurant" size={48} color={theme.white} />
             </Animated.View>
             <Text style={styles.loadingTitle}>Chef is Cooking!</Text>
             <Text style={styles.loadingMessage}>{loadingMessage}</Text>
@@ -379,20 +382,21 @@ export default function ChefScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: theme.background,
   },
   headerIconBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
   },
   scrollView: {
@@ -405,11 +409,11 @@ const styles = StyleSheet.create({
 
   // Input Card
   inputCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 28,
     padding: 20,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 8,
   },
   cardHeader: {
@@ -428,22 +432,22 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 18,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     flex: 1,
   },
   textInput: {
     fontSize: 16,
-    color: Colors.text,
+    color: theme.text,
     minHeight: 100,
     textAlignVertical: 'top',
     fontWeight: '600',
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 16,
     padding: 16,
   },
   hintText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     marginTop: 12,
     fontWeight: '700',
     opacity: 0.7,
@@ -456,7 +460,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 16,
@@ -469,9 +473,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   mealTypeCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderRadius: 24,
     padding: 24,
     alignItems: 'center',
@@ -479,26 +483,26 @@ const styles = StyleSheet.create({
     borderBottomWidth: 8,
   },
   mealTypeCardActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary + '08',
+    borderColor: theme.primary,
+    backgroundColor: theme.primary + '08',
     borderBottomWidth: 8,
   },
   mealTypeLabel: {
     fontSize: 15,
     fontWeight: '900',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   mealTypeLabelActive: {
-    color: Colors.primary,
+    color: theme.primary,
   },
 
   // Goal Cards (2-column grid like meal types)
   goalCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderRadius: 20,
     padding: 16,
     alignItems: 'center',
@@ -506,20 +510,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: 6,
   },
   goalCardActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary + '08',
+    borderColor: theme.primary,
+    backgroundColor: theme.primary + '08',
     borderBottomWidth: 6,
   },
   goalCardText: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     textAlign: 'center',
   },
   goalCardTextActive: {
-    color: Colors.primary,
+    color: theme.primary,
   },
 
   // Horizontal Scroll (Cuisine)
@@ -531,25 +535,25 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   cuisineChip: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 4,
   },
   cuisineChipActive: {
-    borderColor: Colors.secondary,
-    backgroundColor: Colors.secondary + '08',
+    borderColor: theme.secondary,
+    backgroundColor: theme.secondary + '08',
   },
   cuisineChipText: {
     fontSize: 13,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
   },
   cuisineChipTextActive: {
-    color: Colors.secondary,
+    color: theme.secondary,
   },
 
   // Action Section
@@ -559,7 +563,7 @@ const styles = StyleSheet.create({
   },
   disclaimerText: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textAlign: 'center',
     fontWeight: '600',
     opacity: 0.6,
@@ -582,31 +586,32 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: Colors.primary,
+    shadowColor: theme.primary,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
     elevation: 10,
     marginBottom: 10,
     borderWidth: 4,
-    borderColor: Colors.white,
+    borderColor: theme.white,
   },
   loadingTitle: {
     fontSize: 24,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   loadingMessage: {
     fontSize: 16,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontWeight: '600',
     textAlign: 'center',
-    minHeight: 24, // Prevent jumping
+    minHeight: 24,
     opacity: 0.8,
   },
-});
+  });
+}

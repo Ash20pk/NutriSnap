@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
 import { Colors } from '../constants/Colors';
+import { useTheme } from '../context/ThemeContext';
 
 function parseJsonParam<T>(value: unknown): T | null {
   if (!value || typeof value !== 'string') return null;
@@ -20,6 +21,8 @@ function parseJsonParam<T>(value: unknown): T | null {
 }
 
 export default function FoodDetailsScreen() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const router = useRouter();
   const params = useLocalSearchParams();
 
@@ -32,7 +35,7 @@ export default function FoodDetailsScreen() {
           title="Food details"
           rightComponent={
             <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="close" size={22} color={Colors.text} />
+              <Ionicons name="close" size={22} color={theme.text} />
             </TouchableOpacity>
           }
         />
@@ -56,7 +59,7 @@ export default function FoodDetailsScreen() {
         subtitle={food.driver ? `${food.driver} culprit` : undefined}
         rightComponent={
           <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="close" size={22} color={Colors.text} />
+            <Ionicons name="close" size={22} color={theme.text} />
           </TouchableOpacity>
         }
       />
@@ -97,10 +100,11 @@ export default function FoodDetailsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: theme.background,
   },
   scroll: {
     flex: 1,
@@ -115,28 +119,28 @@ const styles = StyleSheet.create({
     paddingTop: 24,
   },
   card: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     padding: 20,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 8,
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   emptyText: {
     marginTop: 8,
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
   },
   sectionTitle: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 10,
@@ -144,18 +148,18 @@ const styles = StyleSheet.create({
   paragraph: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     lineHeight: 20,
   },
   labelGrid: {
     gap: 12,
   },
   labelCard: {
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 18,
     padding: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   labelHeader: {
     flexDirection: 'row',
@@ -166,7 +170,7 @@ const styles = StyleSheet.create({
   labelTitle: {
     fontSize: 13,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     flex: 1,
   },
   statusBadge: {
@@ -174,7 +178,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   statusText: {
     fontSize: 11,
@@ -186,13 +190,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 16,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   labelDesc: {
     marginTop: 6,
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     lineHeight: 18,
   },
-});
+  });
+}

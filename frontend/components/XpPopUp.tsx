@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
 
 interface XpPopUpProps {
   xp: number;
@@ -9,6 +10,8 @@ interface XpPopUpProps {
 }
 
 export default function XpPopUp({ xp, onComplete }: XpPopUpProps) {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const animatedValue = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -34,65 +37,57 @@ export default function XpPopUp({ xp, onComplete }: XpPopUpProps) {
     inputRange: [0, 0.2, 1, 1.5, 2],
     outputRange: [0, 1, 1, 1, 0],
   });
-
   const translateY = animatedValue.interpolate({
     inputRange: [0, 1, 2],
     outputRange: [50, 0, -100],
   });
-
   const scale = animatedValue.interpolate({
     inputRange: [0, 1, 2],
     outputRange: [0.5, 1.2, 1],
   });
 
   return (
-    <Animated.View
-      style={[
-        styles.container,
-        {
-          opacity,
-          transform: [{ translateY }, { scale }],
-        },
-      ]}
-    >
+    <Animated.View style={[styles.container, { opacity, transform: [{ translateY }, { scale }] }]}>
       <View style={styles.card}>
-        <Ionicons name="sparkles" size={24} color={Colors.warning} />
+        <Ionicons name="sparkles" size={24} color={theme.warning} />
         <Text style={styles.text}>+{xp} XP</Text>
       </View>
     </Animated.View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    top: '40%',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    zIndex: 9999,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: Colors.white,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderRadius: 32,
-    borderWidth: 3,
-    borderColor: Colors.warning,
-    borderBottomWidth: 8,
-    shadowColor: Colors.black,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  text: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: Colors.warning,
-    textTransform: 'uppercase',
-  },
-});
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
+    container: {
+      position: 'absolute',
+      top: '40%',
+      left: 0,
+      right: 0,
+      alignItems: 'center',
+      zIndex: 9999,
+    },
+    card: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: theme.white,
+      paddingHorizontal: 24,
+      paddingVertical: 16,
+      borderRadius: 32,
+      borderWidth: 3,
+      borderColor: theme.warning,
+      borderBottomWidth: 8,
+      shadowColor: theme.black,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.2,
+      shadowRadius: 20,
+      elevation: 10,
+    },
+    text: {
+      fontSize: 24,
+      fontWeight: '900',
+      color: theme.warning,
+      textTransform: 'uppercase',
+    },
+  });
+}

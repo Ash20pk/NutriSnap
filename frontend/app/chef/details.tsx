@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text, Alert, ActivityIndicator } from 'react-native';
 import { Colors } from '../../constants/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import PageHeader from '../../components/PageHeader';
 import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '../../context/UserContext';
@@ -11,6 +12,8 @@ import * as Haptics from 'expo-haptics';
 import DuoButton from '../../components/DuoButton';
 
 export default function SavedRecipeDetailsScreen() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
     const { user } = useUser();
     const { id } = useLocalSearchParams();
     const [recipeItem, setRecipeItem] = useState<any>(null);
@@ -109,7 +112,7 @@ export default function SavedRecipeDetailsScreen() {
     if (loading) {
         return (
             <View style={[styles.container, styles.center]}>
-                <ActivityIndicator size="large" color={Colors.primary} />
+                <ActivityIndicator size="large" color={theme.primary} />
             </View>
         );
     }
@@ -119,7 +122,7 @@ export default function SavedRecipeDetailsScreen() {
             <View style={[styles.container, styles.center]}>
                 <Text style={styles.errorText}>Recipe not found</Text>
                 <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 16 }}>
-                    <Text style={{ color: Colors.primary, fontWeight: '700' }}>Go Back</Text>
+                    <Text style={{ color: theme.primary, fontWeight: '700' }}>Go Back</Text>
                 </TouchableOpacity>
             </View>
         );
@@ -131,11 +134,11 @@ export default function SavedRecipeDetailsScreen() {
                 <Ionicons
                     name={recipeItem.is_favorite ? "heart" : "heart-outline"}
                     size={24}
-                    color={recipeItem.is_favorite ? "#FF3B30" : Colors.text}
+                    color={recipeItem.is_favorite ? "#FF3B30" : theme.text}
                 />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleDelete} style={styles.iconBtn}>
-                <Ionicons name="trash-outline" size={24} color={Colors.text} />
+                <Ionicons name="trash-outline" size={24} color={theme.text} />
             </TouchableOpacity>
         </View>
     );
@@ -150,7 +153,7 @@ export default function SavedRecipeDetailsScreen() {
                     loading={logging}
                     disabled={logging}
                     size="medium"
-                    color={Colors.primary}
+                    color={theme.primary}
                 />
             </View>
         </View>
@@ -170,10 +173,11 @@ export default function SavedRecipeDetailsScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Colors.background,
+        backgroundColor: theme.background,
     },
     center: {
         justifyContent: 'center',
@@ -181,7 +185,7 @@ const styles = StyleSheet.create({
     },
     errorText: {
         fontSize: 16,
-        color: Colors.textSecondary,
+        color: theme.textSecondary,
         fontWeight: '700',
     },
     headerRight: {
@@ -192,14 +196,15 @@ const styles = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: Colors.white,
+        backgroundColor: theme.white,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 2,
-        borderColor: Colors.border,
+        borderColor: theme.border,
         borderBottomWidth: 4,
     },
     footer: {
         marginTop: 8,
     },
-});
+  });
+}

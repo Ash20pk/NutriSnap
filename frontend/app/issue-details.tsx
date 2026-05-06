@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
 import { Colors } from '../constants/Colors';
+import { useTheme } from '../context/ThemeContext';
 import { format } from 'date-fns';
 
 function parseJsonParam<T>(value: unknown): T | null {
@@ -21,6 +22,8 @@ function parseJsonParam<T>(value: unknown): T | null {
 }
 
 export default function IssueDetailsScreen() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const router = useRouter();
   const params = useLocalSearchParams();
 
@@ -39,7 +42,7 @@ export default function IssueDetailsScreen() {
               onPress={() => router.replace('/(tabs)/analytics' as any)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="close" size={22} color={Colors.text} />
+              <Ionicons name="close" size={22} color={theme.text} />
             </TouchableOpacity>
           }
         />
@@ -66,7 +69,7 @@ export default function IssueDetailsScreen() {
             onPress={() => router.replace('/(tabs)/analytics' as any)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="close" size={22} color={Colors.text} />
+            <Ionicons name="close" size={22} color={theme.text} />
           </TouchableOpacity>
         }
       />
@@ -118,7 +121,7 @@ export default function IssueDetailsScreen() {
                         {food.timestamp ? format(new Date(food.timestamp), 'h:mm a') : 'Today'}
                       </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
+                    <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
                   </TouchableOpacity>
                 ))}
               </View>
@@ -187,7 +190,7 @@ export default function IssueDetailsScreen() {
                 onPress={() => setSelectedFood(null)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Ionicons name="close-circle" size={26} color={Colors.border} />
+                <Ionicons name="close-circle" size={26} color={theme.border} />
               </TouchableOpacity>
             </View>
 
@@ -230,10 +233,11 @@ export default function IssueDetailsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: theme.background,
   },
   scroll: {
     flex: 1,
@@ -248,23 +252,23 @@ const styles = StyleSheet.create({
     paddingTop: 24,
   },
   card: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     padding: 20,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 8,
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   emptyText: {
     marginTop: 8,
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
   },
   statRow: {
     flexDirection: 'row',
@@ -275,7 +279,7 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
@@ -283,22 +287,22 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 18,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   scoreCircle: {
     width: 54,
     height: 54,
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
   },
   scoreText: {
     fontSize: 16,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   section: {
     marginTop: 18,
@@ -306,7 +310,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 10,
@@ -314,7 +318,7 @@ const styles = StyleSheet.create({
   paragraph: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     lineHeight: 20,
   },
   tagWrap: {
@@ -326,17 +330,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   tagText: {
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.text,
+    color: theme.text,
   },
   list: {
     gap: 10,
@@ -345,34 +349,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   foodName: {
     fontSize: 14,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   foodMeta: {
     marginTop: 2,
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
   },
   labelGrid: {
     gap: 12,
   },
   labelCard: {
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: theme.backgroundSecondary,
     borderRadius: 18,
     padding: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   labelHeader: {
     flexDirection: 'row',
@@ -383,7 +387,7 @@ const styles = StyleSheet.create({
   labelTitle: {
     fontSize: 13,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     flex: 1,
   },
   statusBadge: {
@@ -391,7 +395,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: theme.border,
   },
   statusText: {
     fontSize: 11,
@@ -403,13 +407,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 16,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   labelDesc: {
     marginTop: 6,
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     lineHeight: 18,
   },
   modalOverlay: {
@@ -419,11 +423,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 24,
     padding: 18,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 10,
     maxHeight: '80%',
   },
@@ -436,35 +440,36 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
   },
   modalSubtitle: {
     marginTop: 4,
     fontSize: 12,
     fontWeight: '800',
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     textTransform: 'uppercase',
   },
   modalSectionTitle: {
     fontSize: 13,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 10,
   },
   modalCloseBtn: {
     marginTop: 14,
-    backgroundColor: Colors.primary,
+    backgroundColor: theme.primary,
     borderRadius: 16,
     paddingVertical: 12,
     alignItems: 'center',
   },
   modalCloseBtnText: {
-    color: Colors.white,
+    color: theme.white,
     fontSize: 14,
     fontWeight: '900',
     textTransform: 'uppercase',
     letterSpacing: 0.7,
   },
-});
+  });
+}

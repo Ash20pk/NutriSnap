@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
 import { Colors } from '../../constants/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import PageHeader from '../../components/PageHeader';
 import { Ionicons } from '@expo/vector-icons';
 import EmptyState from '../../components/EmptyState';
@@ -10,6 +11,8 @@ import { router, Stack, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 export default function SavedRecipesScreen() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
     const { user } = useUser();
     const [recipes, setRecipes] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -78,7 +81,7 @@ export default function SavedRecipesScreen() {
                     <Ionicons
                         name={item.is_favorite ? "heart" : "heart-outline"}
                         size={22}
-                        color={item.is_favorite ? "#FF3B30" : Colors.textSecondary}
+                        color={item.is_favorite ? "#FF3B30" : theme.textSecondary}
                     />
                 </TouchableOpacity>
             </View>
@@ -87,11 +90,11 @@ export default function SavedRecipesScreen() {
             </Text>
             <View style={styles.metaRow}>
                 <View style={styles.metaItem}>
-                    <Ionicons name="time-outline" size={14} color={Colors.textSecondary} />
+                    <Ionicons name="time-outline" size={14} color={theme.textSecondary} />
                     <Text style={styles.metaText}>{item.recipe?.prepTime}m</Text>
                 </View>
                 <View style={styles.metaItem}>
-                    <Ionicons name="flame-outline" size={14} color={Colors.textSecondary} />
+                    <Ionicons name="flame-outline" size={14} color={theme.textSecondary} />
                     <Text style={styles.metaText}>{item.recipe?.calories} cal</Text>
                 </View>
                 <Text style={styles.dateText}>
@@ -117,7 +120,7 @@ export default function SavedRecipesScreen() {
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
                 }
                 ListEmptyComponent={
                     !loading ? (
@@ -133,10 +136,11 @@ export default function SavedRecipesScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Colors.background,
+        backgroundColor: theme.background,
     },
     listContent: {
         padding: 24,
@@ -144,11 +148,11 @@ const styles = StyleSheet.create({
         paddingBottom: 60,
     },
     card: {
-        backgroundColor: Colors.white,
+        backgroundColor: theme.white,
         borderRadius: 28,
         padding: 20,
         borderWidth: 2,
-        borderColor: Colors.border,
+        borderColor: theme.border,
         borderBottomWidth: 8,
     },
     cardHeader: {
@@ -160,14 +164,14 @@ const styles = StyleSheet.create({
     recipeName: {
         fontSize: 18,
         fontWeight: '900',
-        color: Colors.text,
+        color: theme.text,
         flex: 1,
         marginRight: 8,
         letterSpacing: -0.5,
     },
     description: {
         fontSize: 14,
-        color: Colors.textSecondary,
+        color: theme.textSecondary,
         marginBottom: 16,
         lineHeight: 20,
         fontWeight: '500',
@@ -181,24 +185,25 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: Colors.backgroundSecondary,
+        backgroundColor: theme.backgroundSecondary,
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: Colors.border,
+        borderColor: theme.border,
     },
     metaText: {
         fontSize: 12,
         fontWeight: '800',
-        color: Colors.textSecondary,
+        color: theme.textSecondary,
         textTransform: 'uppercase',
     },
     dateText: {
         fontSize: 12,
-        color: Colors.textSecondary,
+        color: theme.textSecondary,
         marginLeft: 'auto',
         fontWeight: '700',
         opacity: 0.5,
     },
-});
+  });
+}

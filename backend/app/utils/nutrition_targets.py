@@ -486,6 +486,7 @@ def compute_micronutrient_targets(
     sex: str,
     pregnant: bool = False,
     lactating: bool = False,
+    calorie_target: Optional[float] = None,
 ) -> Dict[str, Dict[str, Optional[float]]]:
     """
     Compute personalized micronutrient targets (RDA/AI and UL) based on user profile.
@@ -536,6 +537,16 @@ def compute_micronutrient_targets(
                 ul = adj.get("ul", ul)
 
         targets[nutrient] = {"rda": rda, "ul": ul}
+
+    # Scale energy-relative ULs to the user's actual calorie target.
+    # WHO guidelines: added sugars <10% of energy; saturated fat <10% of energy.
+    # The static table assumes 2000 kcal. Override when a real target is known.
+    if calorie_target and calorie_target > 0:
+        kcal = float(calorie_target)
+        if "sugar_g" in targets:
+            targets["sugar_g"] = {"rda": None, "ul": round(kcal * 0.10 / 4.0, 1)}
+        if "saturated_fat_g" in targets:
+            targets["saturated_fat_g"] = {"rda": None, "ul": round(kcal * 0.10 / 9.0, 1)}
 
     return targets
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text, Alert, Animated } from 'react-native';
 import { Colors } from '../../constants/Colors';
+import { useTheme } from '../../context/ThemeContext';
 import PageHeader from '../../components/PageHeader';
 import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '../../context/UserContext';
@@ -11,6 +12,8 @@ import * as Haptics from 'expo-haptics';
 import DuoButton from '../../components/DuoButton';
 
 export default function RecipeResultScreen() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
     const { user } = useUser();
     const params = useLocalSearchParams();
     const recipe = params.recipe ? JSON.parse(params.recipe as string) : null;
@@ -100,7 +103,7 @@ export default function RecipeResultScreen() {
                 <Ionicons
                     name={isSaved ? "bookmark" : "bookmark-outline"}
                     size={24}
-                    color={isSaved ? Colors.white : Colors.primary}
+                    color={isSaved ? theme.white : theme.primary}
                 />
             </Animated.View>
         </TouchableOpacity>
@@ -120,7 +123,7 @@ export default function RecipeResultScreen() {
                     <Ionicons
                         name={isSaved ? "bookmark" : "bookmark-outline"}
                         size={20}
-                        color={isSaved ? Colors.white : Colors.text}
+                        color={isSaved ? theme.white : theme.text}
                     />
                 </Animated.View>
                 <Text style={[
@@ -137,7 +140,7 @@ export default function RecipeResultScreen() {
                     loading={loading}
                     disabled={loading}
                     size="medium"
-                    color={Colors.primary}
+                    color={theme.primary}
                 />
             </View>
         </View>
@@ -157,25 +160,26 @@ export default function RecipeResultScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Colors.background,
+        backgroundColor: theme.background,
     },
     iconBtn: {
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: Colors.white,
+        backgroundColor: theme.white,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 2,
-        borderColor: Colors.border,
+        borderColor: theme.border,
         borderBottomWidth: 4,
     },
     iconBtnSaved: {
-        backgroundColor: Colors.primary,
-        borderColor: Colors.primaryDark,
+        backgroundColor: theme.primary,
+        borderColor: theme.primaryDark,
     },
     footer: {
         flexDirection: 'row',
@@ -183,29 +187,30 @@ const styles = StyleSheet.create({
         marginTop: 8,
     },
     saveBtn: {
-        backgroundColor: Colors.white,
+        backgroundColor: theme.white,
         paddingHorizontal: 20,
         justifyContent: 'center',
         alignItems: 'center',
         borderRadius: 18,
         borderWidth: 2,
-        borderColor: Colors.border,
+        borderColor: theme.border,
         borderBottomWidth: 6,
         flexDirection: 'row',
         gap: 10,
     },
     saveBtnSaved: {
-        backgroundColor: Colors.primary,
-        borderColor: Colors.primaryDark,
+        backgroundColor: theme.primary,
+        borderColor: theme.primaryDark,
     },
     saveBtnText: {
         fontSize: 14,
         fontWeight: '900',
-        color: Colors.text,
+        color: theme.text,
         textTransform: 'uppercase',
         letterSpacing: 1,
     },
     saveBtnTextSaved: {
-        color: Colors.white,
+        color: theme.white,
     },
-});
+  });
+}

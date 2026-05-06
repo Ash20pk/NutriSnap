@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, StyleProp, ViewStyle, TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, Radius } from '../constants/Colors';
+import { Spacing, Radius, Colors } from '../constants/Colors';
+import { useTheme } from '../context/ThemeContext';
 
 type Action = {
   label: string;
@@ -27,10 +28,13 @@ export default function EmptyState({
   titleStyle,
   subtitleStyle,
 }: Props) {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
+
   return (
     <View style={[styles.container, style]}>
       <View style={styles.iconWrap}>
-        <Ionicons name={icon} size={32} color={Colors.textSecondary} />
+        <Ionicons name={icon} size={32} color={theme.textSecondary} />
       </View>
       <Text style={[styles.title, titleStyle]}>{title}</Text>
       {subtitle ? <Text style={[styles.subtitle, subtitleStyle]}>{subtitle}</Text> : null}
@@ -43,52 +47,54 @@ export default function EmptyState({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.section,
-  },
-  iconWrap: {
-    width: Spacing.section,
-    height: Spacing.section,
-    borderRadius: Radius.round,
-    backgroundColor: Colors.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.xl,
-    borderWidth: 2,
-    borderColor: Colors.border,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: Colors.text,
-    marginBottom: Spacing.sm,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    maxWidth: 260,
-    fontWeight: '600',
-    lineHeight: 22,
-  },
-  actionButton: {
-    marginTop: Spacing.lg,
-    backgroundColor: Colors.white,
-    paddingHorizontal: Spacing.lg + 2,
-    paddingVertical: Spacing.sm + 2,
-    borderRadius: Radius.lg,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderBottomWidth: 6,
-  },
-  actionText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: Colors.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-});
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
+    container: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: Spacing.section,
+    },
+    iconWrap: {
+      width: Spacing.section,
+      height: Spacing.section,
+      borderRadius: Radius.round,
+      backgroundColor: theme.backgroundSecondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: Spacing.xl,
+      borderWidth: 2,
+      borderColor: theme.border,
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: '900',
+      color: theme.text,
+      marginBottom: Spacing.sm,
+    },
+    subtitle: {
+      fontSize: 15,
+      color: theme.textSecondary,
+      textAlign: 'center',
+      maxWidth: 260,
+      fontWeight: '600',
+      lineHeight: 22,
+    },
+    actionButton: {
+      marginTop: Spacing.lg,
+      backgroundColor: theme.white,
+      paddingHorizontal: Spacing.lg + 2,
+      paddingVertical: Spacing.sm + 2,
+      borderRadius: Radius.lg,
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderBottomWidth: 6,
+    },
+    actionText: {
+      fontSize: 13,
+      fontWeight: '900',
+      color: theme.primary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+  });
+}

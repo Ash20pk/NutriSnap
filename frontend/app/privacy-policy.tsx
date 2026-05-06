@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
+import { useTheme } from '../context/ThemeContext';
 import PageHeader from '../components/PageHeader';
 
 const LAST_UPDATED = 'May 3, 2026';
@@ -16,6 +17,8 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 );
 
 export default function PrivacyPolicyScreen() {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const router = useRouter();
 
   return (
@@ -28,7 +31,7 @@ export default function PrivacyPolicyScreen() {
             onPress={() => router.back()}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={24} color={Colors.text} />
+            <Ionicons name="close" size={24} color={theme.text} />
           </TouchableOpacity>
         }
       />
@@ -80,10 +83,11 @@ export default function PrivacyPolicyScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: theme.background,
   },
   scroll: {
     flex: 1,
@@ -94,17 +98,17 @@ const styles = StyleSheet.create({
   },
   section: {
     marginBottom: 28,
-    backgroundColor: Colors.white,
+    backgroundColor: theme.white,
     borderRadius: 20,
     padding: 20,
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: theme.border,
     borderBottomWidth: 6,
   },
   sectionTitle: {
     fontSize: 15,
     fontWeight: '900',
-    color: Colors.text,
+    color: theme.text,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 10,
@@ -112,7 +116,8 @@ const styles = StyleSheet.create({
   body: {
     fontSize: 14,
     lineHeight: 22,
-    color: Colors.textSecondary,
+    color: theme.textSecondary,
     fontWeight: '600',
   },
-});
+  });
+}

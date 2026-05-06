@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle, StyleProp } from 'react-native';
-import { Colors, Spacing, Radius } from '../constants/Colors';
+import { Spacing, Radius, Colors } from '../constants/Colors';
+import { useTheme } from '../context/ThemeContext';
 
 type Variant = 'default' | 'soft' | 'outline';
 
@@ -19,6 +20,8 @@ export default function AppCard({
   variant = 'default',
   padding,
 }: Props) {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const basePadding = typeof padding === 'number' ? padding : Spacing.xl;
 
   return (
@@ -35,20 +38,22 @@ export default function AppCard({
   );
 }
 
-const styles = StyleSheet.create({
-  base: {
-    backgroundColor: Colors.white,
-    borderRadius: Radius.xxxl,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderBottomWidth: Spacing.sm,
-  },
-  soft: {
-    backgroundColor: Colors.backgroundSecondary,
-    borderBottomWidth: 6,
-  },
-  outline: {
-    backgroundColor: 'transparent',
-    borderBottomWidth: 6,
-  },
-});
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
+    base: {
+      backgroundColor: theme.white,
+      borderRadius: Radius.xxxl,
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderBottomWidth: Spacing.sm,
+    },
+    soft: {
+      backgroundColor: theme.backgroundSecondary,
+      borderBottomWidth: 6,
+    },
+    outline: {
+      backgroundColor: 'transparent',
+      borderBottomWidth: 6,
+    },
+  });
+}

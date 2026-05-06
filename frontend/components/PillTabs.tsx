@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, StyleProp, ViewStyle, TextStyle } from 'react-native';
-import { Colors, Spacing, Radius } from '../constants/Colors';
+import { Spacing, Radius, Colors } from '../constants/Colors';
 import * as Haptics from 'expo-haptics';
+import { useTheme } from '../context/ThemeContext';
 
 type Tab<Key extends string> = {
   key: Key;
@@ -32,11 +33,13 @@ export default function PillTabs<Key extends string>({
   activeTextStyle,
   haptics = true,
 }: Props<Key>) {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
+
   return (
     <View style={[styles.container, style]}>
       {tabs.map((tab) => {
         const isActive = tab.key === activeKey;
-
         return (
           <TouchableOpacity
             key={tab.key}
@@ -45,9 +48,7 @@ export default function PillTabs<Key extends string>({
             disabled={tab.disabled}
             onPress={() => {
               if (tab.disabled) return;
-              if (haptics) {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-              }
+              if (haptics) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               onChange(tab.key);
             }}
           >
@@ -64,33 +65,35 @@ export default function PillTabs<Key extends string>({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    backgroundColor: Colors.white,
-    borderRadius: Radius.xxl,
-    padding: Spacing.xs,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderBottomWidth: 6,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: Spacing.sm + 2,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-  },
-  activeTab: {
-    backgroundColor: Colors.primary,
-  },
-  tabText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  activeTabText: {
-    color: Colors.white,
-  },
-});
+function makeStyles(theme: typeof Colors) {
+  return StyleSheet.create({
+    container: {
+      flexDirection: 'row',
+      backgroundColor: theme.white,
+      borderRadius: Radius.xxl,
+      padding: Spacing.xs,
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderBottomWidth: 6,
+    },
+    tab: {
+      flex: 1,
+      paddingVertical: Spacing.sm + 2,
+      borderRadius: Radius.lg,
+      alignItems: 'center',
+    },
+    activeTab: {
+      backgroundColor: theme.primary,
+    },
+    tabText: {
+      fontSize: 13,
+      fontWeight: '900',
+      color: theme.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    activeTabText: {
+      color: theme.white,
+    },
+  });
+}
