@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
 import XpPopUp from '../components/XpPopUp';
+import { ThemeProvider } from './ThemeContext';
 
 interface XpState {
   showPopup: boolean;
@@ -26,6 +27,7 @@ interface UserProfile {
   carbs_target: number;
   fat_target: number;
   onboarding_completed: boolean;
+  is_special_user?: boolean;
 }
 
 interface UserContextType {
@@ -107,10 +109,12 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <UserContext.Provider value={{ user, setUser, logout, isLoading, showXpPopup }}>
-      {children}
-      {xpState.showPopup && (
-        <XpPopUp xp={xpState.amount} onComplete={dismissXpPopup} />
-      )}
+      <ThemeProvider isSpecialUser={user?.is_special_user ?? false}>
+        {children}
+        {xpState.showPopup && (
+          <XpPopUp xp={xpState.amount} onComplete={dismissXpPopup} />
+        )}
+      </ThemeProvider>
     </UserContext.Provider>
   );
 };

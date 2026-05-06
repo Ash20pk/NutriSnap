@@ -676,6 +676,22 @@ export default function ProfileScreen() {
         </AppCard>
       </AnimatedCard>
 
+      {/* Redeem Code */}
+      <AnimatedCard delay={680} type="pop" style={styles.section}>
+        <AppCard padding={16}>
+          <TouchableOpacity
+            style={styles.redeemRow}
+            onPress={() => router.push('/redeem' as any)}
+          >
+            <Ionicons name="gift-outline" size={20} color={Colors.primary} />
+            <Text style={styles.redeemText}>
+              {user?.is_special_user ? '🌸 Special Access Active' : 'Redeem a Code'}
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
+          </TouchableOpacity>
+        </AppCard>
+      </AnimatedCard>
+
       {/* Logout Button */}
       <AnimatedCard delay={700} type="pop" style={styles.section}>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -1203,5 +1219,17 @@ const styles = StyleSheet.create({
     color: Colors.error,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  redeemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 4,
+  },
+  redeemText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text,
   },
 });

@@ -23,6 +23,7 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="camera" />
             <Stack.Screen name="privacy-policy" />
+            <Stack.Screen name="redeem" />
           </Stack>
         </View>
       </UserProvider>

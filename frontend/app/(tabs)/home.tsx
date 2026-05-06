@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useUser } from '../../context/UserContext';
+import { useTheme } from '../../context/ThemeContext';
 import { mealApi, questApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
@@ -259,13 +260,21 @@ export default function HomeScreen() {
     { value: 1, color: Colors.border }
   ];
 
+  const { theme, isSpecialUser } = useTheme();
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StreakCalendarModal
         visible={showStreakCalendar}
         onClose={() => setShowStreakCalendar(false)}
         userId={user?.id}
       />
+
+      {isSpecialUser && (
+        <View style={[styles.aayuBanner, { backgroundColor: theme.primaryLight }]}>
+          <Text style={styles.aayuBannerText}>🌸 Made with love, just for you Aayu 🌸</Text>
+        </View>
+      )}
 
       <PageHeader 
         title={`Hello, ${user?.name}`} 
@@ -1008,5 +1017,16 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
     borderRadius: 8,
     marginHorizontal: 2,
+  },
+  aayuBanner: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  aayuBannerText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
 });

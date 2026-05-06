@@ -52,6 +52,10 @@ class UsernameUpdateRequest(BaseModel):
     username: str
 
 
+class PromoCodeRequest(BaseModel):
+    code: str
+
+
 @router.post("/onboard")
 async def onboard_user(
     user_data: OnboardingRequest,
@@ -256,3 +260,15 @@ async def set_my_username(
         uid=uid,
         username=payload.username
     )
+
+
+@router.post("/me/redeem-code")
+async def redeem_promo_code(
+    payload: PromoCodeRequest,
+    uid: str = Depends(get_current_uid),
+    service: ProfileService = Depends(get_profile_service)
+):
+    """
+    Redeem a promo code. If the code grants special_user, the pink Aayu theme is unlocked.
+    """
+    return await service.redeem_promo_code(uid=uid, code=payload.code)

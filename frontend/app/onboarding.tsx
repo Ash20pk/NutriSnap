@@ -11,7 +11,7 @@ import {
   Alert,
   Modal,
   FlatList,
-  Dimensions,
+  Animated,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -19,11 +19,9 @@ import { Colors } from '../constants/Colors';
 import { userApi } from '../utils/api';
 import { useUser } from '../context/UserContext';
 import { Ionicons } from '@expo/vector-icons';
-import PageHeader from '../components/PageHeader';
 import AnimatedCard from '../components/AnimatedCard';
 import DuoButton from '../components/DuoButton';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const ITEM_HEIGHT = 50;
 
 // Generate arrays for DOB picker
@@ -48,12 +46,15 @@ const getDaysInMonth = (year: number, month: number) => {
   return new Date(year, month, 0).getDate();
 };
 
+const TOTAL_STEPS = 5; // steps 1–5 (step 0 is the welcome screen)
+
 export default function Onboarding() {
   const router = useRouter();
   const { setUser } = useUser();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(0); // 0 = welcome
   const [loading, setLoading] = useState(false);
   const [showDOBPicker, setShowDOBPicker] = useState(false);
+  const progressAnim = useRef(new Animated.Value(0)).current;
 
   const [formData, setFormData] = useState({
     name: '',
@@ -106,7 +107,21 @@ export default function Onboarding() {
     return `${month} ${formData.dobDay}, ${formData.dobYear}`;
   };
 
+  const animateProgress = (toStep: number) => {
+    Animated.timing(progressAnim, {
+      toValue: toStep / TOTAL_STEPS,
+      duration: 350,
+      useNativeDriver: false,
+    }).start();
+  };
+
   const handleNext = () => {
+    if (step === 0) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      setStep(1);
+      animateProgress(1);
+      return;
+    }
     if (step === 1 && !formData.name) {
       Alert.alert('Hey there!', "What's your name? We'd love to know!");
       return;
@@ -116,11 +131,18 @@ export default function Onboarding() {
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    if (step < 4) {
+    if (step < TOTAL_STEPS) {
       setStep(step + 1);
+      animateProgress(step + 1);
     } else {
       handleComplete();
     }
+  };
+
+  const handleBack = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setStep(step - 1);
+    animateProgress(step - 1);
   };
 
   const handleComplete = async () => {
@@ -158,30 +180,12 @@ export default function Onboarding() {
 
   const stepMeta = (() => {
     switch (step) {
-      case 1:
-        return {
-          title: "Let's get to know you!",
-          subtitle: 'Your journey to better health starts here',
-          emoji: '👋',
-        };
-      case 2:
-        return {
-          title: 'Your body, your stats',
-          subtitle: "We'll calculate your perfect daily targets",
-          emoji: '📊',
-        };
-      case 3:
-        return {
-          title: "What's your mission?",
-          subtitle: 'Pick your superpower goal',
-          emoji: '🎯',
-        };
-      default:
-        return {
-          title: 'How do you eat?',
-          subtitle: "We'll personalize your food suggestions",
-          emoji: '🍽️',
-        };
+      case 1: return { title: "Let's get to know you", subtitle: 'Tell us a little about yourself' };
+      case 2: return { title: 'Your body, your stats', subtitle: "We'll build your perfect daily targets" };
+      case 3: return { title: "What's your goal?", subtitle: 'Pick the one that drives you' };
+      case 4: return { title: 'How active are you?', subtitle: 'Be honest — we\'ll calibrate for you' };
+      case 5: return { title: 'Your food style', subtitle: "We'll personalize your suggestions" };
+      default: return { title: '', subtitle: '' };
     }
   })();
 
@@ -261,247 +265,319 @@ export default function Onboarding() {
     if (formData.dobDay > daysInSelectedMonth) {
       setFormData(prev => ({ ...prev, dobDay: daysInSelectedMonth }));
     }
-  }, [formData.dobMonth, formData.dobYear, daysInSelectedMonth]);
+  }, [formData.dobMonth, formData.dobYear, formData.dobDay, daysInSelectedMonth]);
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={styles.screen}>
-        <PageHeader
-          title={stepMeta.title}
-          subtitle={stepMeta.subtitle}
-          rightComponent={
-            <View style={styles.stepPill}>
-              <Text style={styles.stepPillText}>{step}/4</Text>
-            </View>
-          }
-        />
 
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${(step / 4) * 100}%` }]} />
-        </View>
+        {/* ── Welcome screen ── */}
+        {step === 0 && (
+          <View style={styles.welcomeContainer}>
+            <AnimatedCard type="pop" delay={0}>
+              <View style={styles.welcomeInner}>
+                <Text style={styles.welcomeEmoji}>🥗</Text>
+                <Text style={styles.welcomeTitle}>Welcome to Loggr</Text>
+                <Text style={styles.welcomeSubtitle}>
+                  {'Your personal nutrition companion.\nLet\'s set up your profile in under a minute.'}
+                </Text>
 
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {step === 1 && (
-            <AnimatedCard type="pop" delay={100} style={styles.stepContainer}>
-              <View style={styles.fieldCard}>
-                <Text style={styles.fieldLabel}>What should we call you?</Text>
-                <TextInput
-                  style={styles.fieldInput}
-                  placeholder="Your awesome name"
-                  placeholderTextColor={Colors.textLight}
-                  value={formData.name}
-                  onChangeText={(text) => setFormData({ ...formData, name: text })}
-                  autoFocus
+                <View style={styles.welcomeFeatures}>
+                  {[
+                    { emoji: '🎯', text: 'Personalised calorie & macro targets' },
+                    { emoji: '📸', text: 'AI-powered meal logging with your camera' },
+                    { emoji: '📈', text: 'Track progress and build streaks' },
+                  ].map((f) => (
+                    <View key={f.text} style={styles.welcomeFeatureRow}>
+                      <Text style={styles.welcomeFeatureEmoji}>{f.emoji}</Text>
+                      <Text style={styles.welcomeFeatureText}>{f.text}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                <DuoButton
+                  title="Let's get started →"
+                  onPress={handleNext}
+                  color={Colors.primary}
+                  size="large"
+                  style={{ marginTop: 32, width: '100%' }}
                 />
               </View>
-
-              <TouchableOpacity
-                style={styles.fieldCard}
-                onPress={() => setShowDOBPicker(true)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.fieldLabel}>When were you born?</Text>
-                <View style={styles.dobDisplayRow}>
-                  <Text style={styles.fieldInput}>{formatDOB()}</Text>
-                  <View style={styles.ageChip}>
-                    <Text style={styles.ageChipText}>{calculateAge()} years old</Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-
-              <Text style={styles.sectionLabel}>I am...</Text>
-              <View style={styles.genderContainer}>
-                <TouchableOpacity
-                  style={[styles.genderCard, formData.gender === 'male' && styles.genderCardActive]}
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    setFormData({ ...formData, gender: 'male' });
-                  }}
-                >
-                  <Text style={styles.genderEmoji}>👨</Text>
-                  <Text style={[styles.genderText, formData.gender === 'male' && styles.genderTextActive]}>
-                    Male
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.genderCard, formData.gender === 'female' && styles.genderCardActive]}
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    setFormData({ ...formData, gender: 'female' });
-                  }}
-                >
-                  <Text style={styles.genderEmoji}>👩</Text>
-                  <Text style={[styles.genderText, formData.gender === 'female' && styles.genderTextActive]}>
-                    Female
-                  </Text>
-                </TouchableOpacity>
-              </View>
             </AnimatedCard>
-          )}
+          </View>
+        )}
 
-          {step === 2 && (
-            <AnimatedCard type="pop" delay={100} style={styles.stepContainer}>
-              <View style={styles.measurementRow}>
-                <View style={[styles.measurementCard, { flex: 1 }]}>
-                  <Text style={styles.measurementEmoji}>📏</Text>
-                  <Text style={styles.fieldLabel}>Height</Text>
-                  <View style={styles.inputWithUnit}>
-                    <TextInput
-                      style={styles.measurementInput}
-                      placeholder="170"
-                      placeholderTextColor={Colors.textLight}
-                      value={formData.height}
-                      onChangeText={(text) => setFormData({ ...formData, height: text })}
-                      keyboardType="numeric"
+        {/* ── Steps 1–5 ── */}
+        {step > 0 && (
+          <>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.headerTop}>
+                <TouchableOpacity
+                  style={styles.backIconBtn}
+                  onPress={handleBack}
+                  disabled={loading}
+                >
+                  <Ionicons name="arrow-back" size={22} color={Colors.text} />
+                </TouchableOpacity>
+
+                <View style={styles.dotsRow}>
+                  {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+                    <View
+                      key={i}
+                      style={[
+                        styles.dot,
+                        i < step ? styles.dotActive : i === step - 1 ? styles.dotCurrent : styles.dotInactive,
+                      ]}
                     />
-                    <Text style={styles.unitText}>cm</Text>
-                  </View>
+                  ))}
                 </View>
 
-                <View style={[styles.measurementCard, { flex: 1 }]}>
-                  <Text style={styles.measurementEmoji}>⚖️</Text>
-                  <Text style={styles.fieldLabel}>Weight</Text>
-                  <View style={styles.inputWithUnit}>
+                <View style={styles.stepPill}>
+                  <Text style={styles.stepPillText}>{step}/{TOTAL_STEPS}</Text>
+                </View>
+              </View>
+
+              <View style={styles.progressTrack}>
+                <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
+              </View>
+
+              <View style={styles.stepTitleBlock}>
+                <Text style={styles.stepTitle}>{stepMeta.title}</Text>
+                <Text style={styles.stepSubtitle}>{stepMeta.subtitle}</Text>
+              </View>
+            </View>
+
+            <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Step 1 — Name, DOB, Gender */}
+              {step === 1 && (
+                <AnimatedCard type="pop" delay={80} style={styles.stepContainer}>
+                  <View style={styles.fieldCard}>
+                    <Text style={styles.fieldLabel}>WHAT SHOULD WE CALL YOU?</Text>
                     <TextInput
-                      style={styles.measurementInput}
-                      placeholder="70"
+                      style={styles.fieldInput}
+                      placeholder="Your name"
                       placeholderTextColor={Colors.textLight}
-                      value={formData.weight}
-                      onChangeText={(text) => setFormData({ ...formData, weight: text })}
-                      keyboardType="numeric"
+                      value={formData.name}
+                      onChangeText={(text) => setFormData({ ...formData, name: text })}
+                      autoFocus
                     />
-                    <Text style={styles.unitText}>kg</Text>
                   </View>
-                </View>
-              </View>
 
-              <View style={styles.funTip}>
-                <Text style={styles.funTipEmoji}>💡</Text>
-                <Text style={styles.funTipText}>
-                  We'll remind you to check your weight monthly to keep your targets accurate!
-                </Text>
-              </View>
-            </AnimatedCard>
-          )}
-
-          {step === 3 && (
-            <AnimatedCard type="pop" delay={100} style={styles.stepContainer}>
-              <View style={styles.goalsGrid}>
-                {goals.map((goal) => (
                   <TouchableOpacity
-                    key={goal.id}
-                    style={[styles.goalCard, formData.goal === goal.id && styles.goalCardActive]}
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      setFormData({ ...formData, goal: goal.id });
-                    }}
+                    style={styles.fieldCard}
+                    onPress={() => setShowDOBPicker(true)}
+                    activeOpacity={0.8}
                   >
-                    <Text style={styles.goalEmoji}>{goal.emoji}</Text>
-                    <Text style={[styles.goalLabel, formData.goal === goal.id && styles.goalLabelActive]}>
-                      {goal.label}
-                    </Text>
-                    <Text style={styles.goalDesc}>{goal.desc}</Text>
+                    <Text style={styles.fieldLabel}>DATE OF BIRTH</Text>
+                    <View style={styles.dobDisplayRow}>
+                      <Text style={styles.fieldInput}>{formatDOB()}</Text>
+                      <View style={styles.ageChip}>
+                        <Text style={styles.ageChipText}>{calculateAge()} yrs</Text>
+                      </View>
+                    </View>
                   </TouchableOpacity>
-                ))}
-              </View>
 
-              <Text style={styles.sectionLabel}>How active are you?</Text>
-              {activityLevels.map((level) => (
-                <TouchableOpacity
-                  key={level.id}
-                  style={[styles.activityCard, formData.activity_level === level.id && styles.activityCardActive]}
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    setFormData({ ...formData, activity_level: level.id });
-                  }}
-                >
-                  <Text style={styles.activityEmoji}>{level.emoji}</Text>
-                  <View style={styles.activityContent}>
-                    <Text style={[
-                      styles.activityLabel,
-                      formData.activity_level === level.id && styles.activityLabelActive
-                    ]}>
-                      {level.label}
-                    </Text>
-                    <Text style={styles.activityDesc}>{level.desc}</Text>
+                  <Text style={styles.sectionLabel}>I identify as</Text>
+                  <View style={styles.genderContainer}>
+                    {[
+                      { id: 'male', emoji: '👨', label: 'Male' },
+                      { id: 'female', emoji: '👩', label: 'Female' },
+                    ].map((g) => (
+                      <TouchableOpacity
+                        key={g.id}
+                        style={[styles.genderCard, formData.gender === g.id && styles.genderCardActive]}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          setFormData({ ...formData, gender: g.id });
+                        }}
+                      >
+                        <Text style={styles.genderEmoji}>{g.emoji}</Text>
+                        <Text style={[styles.genderText, formData.gender === g.id && styles.genderTextActive]}>
+                          {g.label}
+                        </Text>
+                        {formData.gender === g.id && (
+                          <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
+                        )}
+                      </TouchableOpacity>
+                    ))}
                   </View>
-                  {formData.activity_level === level.id && (
-                    <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </AnimatedCard>
-          )}
+                </AnimatedCard>
+              )}
 
-          {step === 4 && (
-            <AnimatedCard type="pop" delay={100} style={styles.stepContainer}>
-              <View style={styles.dietGrid}>
-                {dietaryPreferences.map((pref) => (
-                  <TouchableOpacity
-                    key={pref.id}
-                    style={[
-                      styles.dietCard,
-                      formData.dietary_preference === pref.id && styles.dietCardActive,
-                    ]}
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      setFormData({ ...formData, dietary_preference: pref.id });
-                    }}
-                  >
-                    <Text style={styles.dietEmoji}>{pref.emoji}</Text>
-                    <Text style={[
-                      styles.dietLabel,
-                      formData.dietary_preference === pref.id && styles.dietLabelActive
-                    ]}>
-                      {pref.label}
+              {/* Step 2 — Height & Weight */}
+              {step === 2 && (
+                <AnimatedCard type="pop" delay={80} style={styles.stepContainer}>
+                  <View style={styles.measurementRow}>
+                    <View style={[styles.measurementCard, { flex: 1 }]}>
+                      <Text style={styles.measurementEmoji}>📏</Text>
+                      <Text style={styles.fieldLabel}>HEIGHT</Text>
+                      <View style={styles.inputWithUnit}>
+                        <TextInput
+                          style={styles.measurementInput}
+                          placeholder="170"
+                          placeholderTextColor={Colors.textLight}
+                          value={formData.height}
+                          onChangeText={(text) => setFormData({ ...formData, height: text })}
+                          keyboardType="numeric"
+                        />
+                        <Text style={styles.unitText}>cm</Text>
+                      </View>
+                    </View>
+
+                    <View style={[styles.measurementCard, { flex: 1 }]}>
+                      <Text style={styles.measurementEmoji}>⚖️</Text>
+                      <Text style={styles.fieldLabel}>WEIGHT</Text>
+                      <View style={styles.inputWithUnit}>
+                        <TextInput
+                          style={styles.measurementInput}
+                          placeholder="70"
+                          placeholderTextColor={Colors.textLight}
+                          value={formData.weight}
+                          onChangeText={(text) => setFormData({ ...formData, weight: text })}
+                          keyboardType="numeric"
+                        />
+                        <Text style={styles.unitText}>kg</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.funTip}>
+                    <Ionicons name="refresh-circle-outline" size={28} color={Colors.primary} />
+                    <Text style={styles.funTipText}>
+                      {'We\'ll remind you monthly to update your weight so targets stay accurate.'}
                     </Text>
-                    <Text style={styles.dietDesc}>{pref.desc}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+                  </View>
+                </AnimatedCard>
+              )}
 
-              <View style={styles.finalTip}>
-                <Text style={styles.finalTipEmoji}>🎉</Text>
-                <Text style={styles.finalTipTitle}>You're all set!</Text>
-                <Text style={styles.finalTipText}>
-                  Hit finish and let's start your health journey together
-                </Text>
-              </View>
-            </AnimatedCard>
-          )}
-        </ScrollView>
+              {/* Step 3 — Goal */}
+              {step === 3 && (
+                <AnimatedCard type="pop" delay={80} style={styles.stepContainer}>
+                  <View style={styles.goalsGrid}>
+                    {goals.map((goal) => (
+                      <TouchableOpacity
+                        key={goal.id}
+                        style={[styles.goalCard, formData.goal === goal.id && styles.goalCardActive]}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          setFormData({ ...formData, goal: goal.id });
+                        }}
+                      >
+                        <Text style={styles.goalEmoji}>{goal.emoji}</Text>
+                        <Text style={[styles.goalLabel, formData.goal === goal.id && styles.goalLabelActive]}>
+                          {goal.label}
+                        </Text>
+                        <Text style={styles.goalDesc}>{goal.desc}</Text>
+                        {formData.goal === goal.id && (
+                          <View style={styles.goalCheck}>
+                            <Ionicons name="checkmark" size={14} color={Colors.white} />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </AnimatedCard>
+              )}
 
-        <View style={styles.bottomBar}>
-          <DuoButton
-            title="Back"
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-              setStep(step - 1);
-            }}
-            disabled={step === 1 || loading}
-            color={Colors.white}
-            shadowColor={Colors.border}
-            textStyle={{ color: Colors.primary }}
-            style={{ flex: 1 }}
-            size="medium"
-          />
+              {/* Step 4 — Activity Level */}
+              {step === 4 && (
+                <AnimatedCard type="pop" delay={80} style={styles.stepContainer}>
+                  {activityLevels.map((level) => (
+                    <TouchableOpacity
+                      key={level.id}
+                      style={[styles.activityCard, formData.activity_level === level.id && styles.activityCardActive]}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        setFormData({ ...formData, activity_level: level.id });
+                      }}
+                    >
+                      <Text style={styles.activityEmoji}>{level.emoji}</Text>
+                      <View style={styles.activityContent}>
+                        <Text style={[styles.activityLabel, formData.activity_level === level.id && styles.activityLabelActive]}>
+                          {level.label}
+                        </Text>
+                        <Text style={styles.activityDesc}>{level.desc}</Text>
+                      </View>
+                      {formData.activity_level === level.id && (
+                        <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </AnimatedCard>
+              )}
 
-          <DuoButton
-            title={step === 4 ? "Let's Go!" : 'Next'}
-            onPress={handleNext}
-            disabled={loading}
-            loading={loading}
-            color={Colors.primary}
-            style={{ flex: 2 }}
-            size="medium"
-          />
-        </View>
+              {/* Step 5 — Diet + Finish */}
+              {step === 5 && (
+                <AnimatedCard type="pop" delay={80} style={styles.stepContainer}>
+                  <View style={styles.dietGrid}>
+                    {dietaryPreferences.map((pref) => (
+                      <TouchableOpacity
+                        key={pref.id}
+                        style={[styles.dietCard, formData.dietary_preference === pref.id && styles.dietCardActive]}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          setFormData({ ...formData, dietary_preference: pref.id });
+                        }}
+                      >
+                        <Text style={styles.dietEmoji}>{pref.emoji}</Text>
+                        <Text style={[styles.dietLabel, formData.dietary_preference === pref.id && styles.dietLabelActive]}>
+                          {pref.label}
+                        </Text>
+                        <Text style={styles.dietDesc}>{pref.desc}</Text>
+                        {formData.dietary_preference === pref.id && (
+                          <View style={styles.goalCheck}>
+                            <Ionicons name="checkmark" size={14} color={Colors.white} />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <View style={styles.finalTip}>
+                    <Text style={styles.finalTipEmoji}>🎉</Text>
+                    <Text style={styles.finalTipTitle}>{"You're all set!"}</Text>
+                    <Text style={styles.finalTipText}>
+                      {'Tap Finish and let\'s start your health journey!'}
+                    </Text>
+                  </View>
+                </AnimatedCard>
+              )}
+            </ScrollView>
+
+            <View style={styles.bottomBar}>
+              <DuoButton
+                title="Back"
+                onPress={handleBack}
+                disabled={loading}
+                color={Colors.white}
+                shadowColor={Colors.border}
+                textStyle={{ color: Colors.primary }}
+                style={{ flex: 1 }}
+                size="medium"
+              />
+              <DuoButton
+                title={step === TOTAL_STEPS ? 'Finish 🎉' : 'Continue'}
+                onPress={handleNext}
+                disabled={loading}
+                loading={loading}
+                color={Colors.primary}
+                style={{ flex: 2 }}
+                size="medium"
+              />
+            </View>
+          </>
+        )}
       </View>
 
       {/* DOB Picker Modal */}
@@ -514,7 +590,7 @@ export default function Onboarding() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>When's your birthday?</Text>
+              <Text style={styles.modalTitle}>{"When's your birthday?"}</Text>
               <Text style={styles.modalSubtitle}>Scroll to select</Text>
             </View>
 
@@ -552,7 +628,7 @@ export default function Onboarding() {
 
             <View style={styles.agePreview}>
               <Text style={styles.agePreviewText}>
-                You'll be <Text style={styles.agePreviewBold}>{calculateAge()} years old</Text>
+                {"You'll be "}<Text style={styles.agePreviewBold}>{calculateAge()} years old</Text>
               </Text>
             </View>
 
@@ -581,52 +657,170 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
-  scrollView: {
+
+  // ── Welcome ──────────────────────────────────────
+  welcomeContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+  },
+  welcomeInner: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 8,
+  },
+  welcomeEmoji: {
+    fontSize: 72,
+    marginBottom: 20,
+  },
+  welcomeTitle: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: Colors.text,
+    textAlign: 'center',
+    marginBottom: 12,
+    letterSpacing: -0.5,
+  },
+  welcomeSubtitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  welcomeFeatures: {
+    width: '100%',
+    gap: 14,
+  },
+  welcomeFeatureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: Colors.white,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderBottomWidth: 4,
+  },
+  welcomeFeatureEmoji: {
+    fontSize: 22,
+  },
+  welcomeFeatureText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
     flex: 1,
   },
-  scrollContent: {
-    flexGrow: 1,
+
+  // ── Step header ──────────────────────────────────
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 56 : 32,
     paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 140,
+    paddingBottom: 8,
   },
-  stepPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  backIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.border,
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+  },
+  dot: {
+    height: 8,
+    borderRadius: 4,
+  },
+  dotActive: {
+    width: 20,
     backgroundColor: Colors.primary,
   },
+  dotCurrent: {
+    width: 20,
+    backgroundColor: Colors.primary,
+  },
+  dotInactive: {
+    width: 8,
+    backgroundColor: Colors.border,
+  },
+  stepPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: Colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
   stepPillText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: Colors.white,
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.textSecondary,
   },
   progressTrack: {
-    marginTop: 8,
-    marginBottom: 10,
-    height: 8,
+    height: 6,
     borderRadius: 10,
     backgroundColor: Colors.borderLight,
     overflow: 'hidden',
-    marginHorizontal: 24,
+    marginBottom: 20,
   },
   progressFill: {
     height: '100%',
     borderRadius: 10,
     backgroundColor: Colors.primary,
   },
+  stepTitleBlock: {
+    marginBottom: 4,
+  },
+  stepTitle: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: Colors.text,
+    marginBottom: 4,
+    letterSpacing: -0.3,
+  },
+  stepSubtitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 140,
+  },
   stepContainer: {
-    marginTop: 8,
+    marginTop: 4,
     paddingBottom: 12,
   },
   sectionLabel: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '900',
-    color: Colors.text,
+    color: Colors.textSecondary,
     marginBottom: 12,
-    marginTop: 8,
+    marginTop: 16,
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 1.2,
   },
 
   // Field Cards
@@ -701,6 +895,17 @@ const styles = StyleSheet.create({
   genderTextActive: {
     color: Colors.primary,
   },
+  goalCheck: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   // Measurements
   measurementRow: {
@@ -746,9 +951,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginTop: 20,
-  },
-  funTipEmoji: {
-    fontSize: 24,
   },
   funTipText: {
     flex: 1,
@@ -914,13 +1116,13 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingTop: 14,
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
     flexDirection: 'row',
     gap: 12,
     backgroundColor: Colors.white,
-    borderTopWidth: 2,
-    borderTopColor: Colors.border,
+    borderTopWidth: 1.5,
+    borderTopColor: Colors.borderLight,
   },
 
   // Modal Styles

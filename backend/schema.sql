@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     avatar_url              text NULL,
     last_weight_check       timestamptz,
     weight_check_reminder   boolean DEFAULT true,
+    is_special_user         boolean NOT NULL DEFAULT false,  -- unlocks pink Aayu theme
     created_at              timestamptz NOT NULL DEFAULT now()
 );
 
@@ -488,3 +489,27 @@ CREATE POLICY IF NOT EXISTS "weight_history_own"  ON public.weight_history  FOR 
 CREATE POLICY IF NOT EXISTS "follows_select_own" ON public.user_follows FOR SELECT USING (auth.uid() = follower_id OR auth.uid() = following_id);
 CREATE POLICY IF NOT EXISTS "follows_insert_own" ON public.user_follows FOR INSERT WITH CHECK (auth.uid() = follower_id);
 CREATE POLICY IF NOT EXISTS "follows_delete_own" ON public.user_follows FOR DELETE USING (auth.uid() = follower_id);
+
+-- ── Promo codes ───────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.promo_codes (
+    code                    text PRIMARY KEY,              -- e.g. 'AAYU2025'
+    label                   text,                          -- human-readable description
+    is_special_user         boolean NOT NULL DEFAULT false, -- grants special user flag
+    max_uses                integer,                       -- NULL = unlimited
+    use_count               integer NOT NULL DEFAULT 0,
+    expires_at              timestamptz,                   -- NULL = never expires
+    created_at              timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.promo_code_redemptions (
+    id                      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id                 uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    code                    text NOT NULL REFERENCES public.promo_codes(code),
+    redeemed_at             timestamptz NOT NULL DEFAULT now(),
+    UNIQUE(user_id, code)
+);
+
+ALTER TABLE public.promo_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.promo_code_redemptions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY IF NOT EXISTS "promo_codes_read" ON public.promo_codes FOR SELECT USING (true);
+CREATE POLICY IF NOT EXISTS "promo_redemptions_own" ON public.promo_code_redemptions FOR ALL USING (auth.uid() = user_id);

@@ -174,7 +174,7 @@ export interface VoiceToMealResult {
   meal_type?: string;
   needs_clarification?: boolean;
   follow_up_question?: string;
-  options?: Array<{
+  options?: {
     food_id: string;
     name: string;
     category?: string | null;
@@ -183,7 +183,7 @@ export interface VoiceToMealResult {
     carbs_per_100g?: number;
     fat_per_100g?: number;
     score?: number;
-  }>;
+  }[];
   requested_food_name?: string;
   requested_quantity_grams?: number;
 }
@@ -488,6 +488,10 @@ export const userApi = {
   },
   getWeightHistory: async (limit: number = 12): Promise<WeightHistoryEntry[]> => {
     const response = await api.get('/user/me/weight-history', { params: { limit } });
+    return response.data;
+  },
+  redeemCode: async (code: string): Promise<UserProfile & { redeemed_code: string; special_user_unlocked: boolean }> => {
+    const response = await api.post('/user/me/redeem-code', { code });
     return response.data;
   },
 };

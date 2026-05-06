@@ -424,6 +424,55 @@ class ProfileService:
 
         return {"user_id": str(row["id"]), "username": row["username"]}
 
+    async def redeem_promo_code(self, uid: str, code: str) -> Dict[str, Any]:
+        """
+        Redeem a promo code for the current user.
+        Sets is_special_user=True on the profile if the code grants it.
+        """
+        code = code.strip().upper()
+        async with self.pool.acquire() as conn:
+            promo = await conn.fetchrow(
+                "SELECT * FROM promo_codes WHERE code = $1",
+                code,
+            )
+            if not promo:
+                raise HTTPException(status_code=404, detail="Invalid promo code")
+
+            if promo["expires_at"] and promo["expires_at"] < datetime.utcnow().replace(tzinfo=promo["expires_at"].tzinfo):
+                raise HTTPException(status_code=410, detail="Promo code has expired")
+
+            if promo["max_uses"] is not None and promo["use_count"] >= promo["max_uses"]:
+                raise HTTPException(status_code=410, detail="Promo code has reached its usage limit")
+
+            existing = await conn.fetchrow(
+                "SELECT id FROM promo_code_redemptions WHERE user_id = $1 AND code = $2",
+                to_uuid(uid), code,
+            )
+            if existing:
+                raise HTTPException(status_code=409, detail="You have already redeemed this code")
+
+            await conn.execute(
+                "INSERT INTO promo_code_redemptions (user_id, code) VALUES ($1, $2)",
+                to_uuid(uid), code,
+            )
+            await conn.execute(
+                "UPDATE promo_codes SET use_count = use_count + 1 WHERE code = $1",
+                code,
+            )
+
+            if promo["is_special_user"]:
+                await conn.execute(
+                    "UPDATE profiles SET is_special_user = true WHERE id = $1",
+                    to_uuid(uid),
+                )
+
+            row = await conn.fetchrow("SELECT * FROM profiles WHERE id = $1", to_uuid(uid))
+            return {
+                **profile_from_record(row),
+                "redeemed_code": code,
+                "special_user_unlocked": bool(promo["is_special_user"]),
+            }
+
     async def delete_account(self, uid: str) -> Dict[str, str]:
         """
         Permanently delete user account and all associated data.

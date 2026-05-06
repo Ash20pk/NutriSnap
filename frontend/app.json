@@ -41,6 +41,15 @@
     },
     "plugins": [
       "expo-router",
+      "expo-adi-registration",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "useLegacyPackaging": true
+          }
+        }
+      ],
       "react-native-vision-camera",
       [
         "react-native-fast-tflite",

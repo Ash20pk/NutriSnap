@@ -85,6 +85,7 @@ def profile_from_record(record: asyncpg.Record) -> Dict[str, Any]:
         "onboarding_completed": record["onboarding_completed"],
         "last_weight_check": last_weight_check,
         "weight_check_due": weight_check_due,
+        "is_special_user": record.get("is_special_user", False),
     }
 
 

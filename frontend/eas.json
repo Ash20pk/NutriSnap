@@ -15,13 +15,22 @@
     "preview": {
       "distribution": "internal",
       "node": "22.12.0",
+      "android": {
+        "buildType": "apk"
+      },
       "ios": {
         "simulator": true
       }
     },
     "production": {
       "autoIncrement": true,
-      "node": "22.12.0"
+      "node": "22.12.0",
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "ios": {
+        "simulator": false
+      }
     }
   },
   "submit": {
