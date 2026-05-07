@@ -377,13 +377,13 @@ Return ONLY valid JSON."""
                 id, name, brand, barcode, category,
                 calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g,
                 fiber_g_per_100g, sugar_g_per_100g, sodium_mg_per_100g,
-                ingredients, source, created_by_user_id, verified, review_status
+                ingredients, source, verified, review_status
             )
             VALUES (
                 $1, $2, $3, $4, $5,
                 $6, $7, $8, $9,
                 $10, $11, $12,
-                $13, $14, $15, $16, $17
+                $13, $14, $15, $16
             )
             ON CONFLICT (barcode) DO UPDATE SET
                 name = EXCLUDED.name,
@@ -395,8 +395,7 @@ Return ONLY valid JSON."""
                 fiber_g_per_100g = EXCLUDED.fiber_g_per_100g,
                 sugar_g_per_100g = EXCLUDED.sugar_g_per_100g,
                 sodium_mg_per_100g = EXCLUDED.sodium_mg_per_100g,
-                ingredients = EXCLUDED.ingredients,
-                updated_at = now()
+                ingredients = EXCLUDED.ingredients
             RETURNING id
             """,
             uuid.uuid4(),
@@ -413,7 +412,6 @@ Return ONLY valid JSON."""
             float(extracted.get("sodium_mg_per_100g") or 0),
             extracted.get("ingredients"),
             "label_scan",
-            to_uuid(user_id),
             False,
             "pending"
         )

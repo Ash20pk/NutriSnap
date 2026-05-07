@@ -28,7 +28,7 @@ import { FoodHealthCheckResult, foodApi, mealApi } from '../utils/api';
 import { useUser } from '../context/UserContext';
 import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 const { width, height } = Dimensions.get('window');
 const CONTRIBUTION_CARD_HEIGHT = Math.min(Math.round(height * 0.78), 840);
@@ -97,7 +97,7 @@ export default function BarcodeScreen() {
     // Read file directly — more reliable than relying on ImagePicker's in-memory base64
     // (which can be null on Android when the image is large)
     const b64 = await FileSystem.readAsStringAsync(result.assets[0].uri, {
-      encoding: FileSystem.EncodingType.Base64,
+      encoding: 'base64' as any,
     });
     return b64 || null;
   };
