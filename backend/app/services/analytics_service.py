@@ -506,7 +506,8 @@ class AnalyticsService:
             analysis = await _generate_analytics_ai(
                 meals_list,
                 time_range,
-                micronutrient_targets=micro_targets
+                micronutrient_targets=micro_targets,
+                timezone_offset=timezone_offset,
             )
             duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 

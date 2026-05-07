@@ -23,7 +23,7 @@ class Settings:
     # OpenAI
     OPENAI_API_KEY: str = os.environ.get('OPENAI_API_KEY', '')
     OPENAI_MODEL: str = os.environ.get('OPENAI_MODEL', 'gpt-4o')
-    OPENAI_CHEAP_MODEL: str = os.environ.get('OPENAI_CHEAP_MODEL', 'gpt-4.1-mini')
+    OPENAI_CHEAP_MODEL: str = os.environ.get('OPENAI_CHEAP_MODEL', 'gpt-5.4-mini')
     
     # Supabase
     SUPABASE_URL: str = os.environ.get("SUPABASE_URL", "").strip()

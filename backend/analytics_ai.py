@@ -4,8 +4,11 @@ Analyzes meal data to generate insights, bio-impact scores, and recommendations.
 """
 
 import json
+import logging
 from typing import List, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+
+logger = logging.getLogger(__name__)
 
 
 async def _generate_analytics_ai(
@@ -13,6 +16,7 @@ async def _generate_analytics_ai(
     time_range: str,
     openai_client=None,
     micronutrient_targets: Dict[str, Dict] = None,
+    timezone_offset: int = 0,
 ) -> Dict[str, Any]:
     """
     Generate AI-powered analytics from meal data with token optimization.
@@ -64,7 +68,7 @@ async def _generate_analytics_ai(
             }
 
     # Aggregate meal data to reduce token usage
-    summary = _aggregate_meal_data(meals, time_range)
+    summary = _aggregate_meal_data(meals, time_range, timezone_offset=timezone_offset)
     
     # Build personalized health targets section
     if micronutrient_targets:
@@ -193,21 +197,19 @@ DAILY MODE RULES (CRITICAL):
 """
 
     try:
-        response = await openai_client.chat.completions.create(
-            model="gpt-4.1-mini",  # Cost-effective model
-            messages=[
+        response = await openai_client.responses.create(
+            model="gpt-5.5",
+            reasoning={"effort": "medium"},
+            input=[
                 {"role": "system", "content": "You are world's best nutrition analyst. Provide concise, actionable insights in JSON format only."},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ],
-            temperature=0.5,
-            max_tokens=800,  # Increased for health_insights, bio_alerts, and enhanced recommendations
-            response_format={"type": "json_object"}
+            text={"format": {"type": "json_object"}},
         )
-        
-        content = response.choices[0].message.content
+
+        content = response.output_text
         result = json.loads(content)
-        
-        # Track token usage for cost monitoring
+
         tokens_used = response.usage.total_tokens if hasattr(response, 'usage') else 0
         
         return {
@@ -220,7 +222,7 @@ DAILY MODE RULES (CRITICAL):
         }
         
     except Exception as e:
-        print(f"Error generating analytics: {e}")
+        logger.error("Error generating analytics: %s", e, exc_info=True)
         return {
             "insights": {},
             "bio_impact": {},
@@ -231,7 +233,7 @@ DAILY MODE RULES (CRITICAL):
         }
 
 
-def _aggregate_meal_data(meals: List[Dict], time_range: str) -> Dict[str, Any]:
+def _aggregate_meal_data(meals: List[Dict], time_range: str, timezone_offset: int = 0) -> Dict[str, Any]:
     """
     Aggregate meal data into compact summary to reduce token usage.
     Instead of sending full meal details, send aggregated statistics.
@@ -356,7 +358,7 @@ def _aggregate_meal_data(meals: List[Dict], time_range: str) -> Dict[str, Any]:
     top_foods = sorted(food_counts.items(), key=lambda x: x[1], reverse=True)[:10]
     top_foods = [name for name, _ in top_foods]
     
-    # Late meal count (after 9pm)
+    # Late meal count (after 9pm local time)
     late_meals = 0
     for m in meals:
         ts = m.get("timestamp")
@@ -366,7 +368,10 @@ def _aggregate_meal_data(meals: List[Dict], time_range: str) -> Dict[str, Any]:
             except Exception:
                 ts = None
         if isinstance(ts, datetime):
-            if ts.hour >= 21:
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            local_ts = ts + timedelta(minutes=int(timezone_offset))
+            if local_ts.hour >= 21:
                 late_meals += 1
     
     # Consistency score (based on meal frequency and timing regularity)

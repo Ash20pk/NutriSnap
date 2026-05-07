@@ -105,129 +105,75 @@ def _safe_nonneg_float(value: Any) -> float:
     return v
 
 
-async def _estimate_usda_like_macros_per_100g(food_name: str) -> tuple[float, float, float, float]:
+_MICRO_KEYS = [
+    "fiber_g_per_100g",
+    "sugar_g_per_100g",
+    "saturated_fat_g_per_100g",
+    "trans_fat_g_per_100g",
+    "cholesterol_mg_per_100g",
+    "sodium_mg_per_100g",
+    "potassium_mg_per_100g",
+    "vitamin_a_ug_per_100g",
+    "calcium_mg_per_100g",
+    "iron_mg_per_100g",
+    "magnesium_mg_per_100g",
+    "phosphorus_mg_per_100g",
+    "zinc_mg_per_100g",
+    "copper_mg_per_100g",
+    "manganese_mg_per_100g",
+    "selenium_ug_per_100g",
+    "vitamin_c_mg_per_100g",
+    "vitamin_d_ug_per_100g",
+    "vitamin_e_mg_per_100g",
+    "vitamin_k_ug_per_100g",
+    "thiamin_b1_mg_per_100g",
+    "riboflavin_b2_mg_per_100g",
+    "niacin_b3_mg_per_100g",
+    "vitamin_b6_mg_per_100g",
+    "folate_ug_per_100g",
+    "vitamin_b12_ug_per_100g",
+    "caffeine_mg_per_100g",
+    "alcohol_g_per_100g",
+]
+
+
+async def _estimate_usda_like_nutrition_per_100g(
+    food_name: str,
+) -> tuple[float, float, float, float, Dict[str, float]]:
+    """Single API call returning macros + micros per 100 g for an unknown food."""
     client = _get_openai_client()
     name = (food_name or "").strip()
     if not name:
         raise ValueError("food_name is required")
 
+    macro_keys = "calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g"
     system_prompt = (
-        "You are estimating nutrition for a food item in a nutrition tracking app. "
-        "Return values as if they were USDA-style typical averages per 100 grams. "
-        "Return ONLY valid JSON with EXACT keys: "
-        "calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g. "
-        "All values must be numbers. No strings. No nulls. No extra keys. "
-        "Constraints: calories_per_100g must be > 0 and <= 900. "
-        "protein_per_100g, carbs_per_100g, fat_per_100g must be >= 0 and <= 100. "
-        "If unsure, choose a conservative but non-zero estimate."
+        "You are estimating USDA-style nutrition per 100 grams for a food item. "
+        "Return ONLY valid JSON with ALL of these exact keys: "
+        + macro_keys + ", " + ", ".join(_MICRO_KEYS) + ". "
+        "Rules: calories_per_100g > 0 and <= 900; protein/carbs/fat >= 0 and <= 100; "
+        "all micronutrient values >= 0; use 0 if unknown, never null or negative. "
+        "Units are encoded in each key name (g, mg, ug per 100g)."
     )
 
-    for _ in range(2):
-        response = await client.chat.completions.create(
-            model=settings.OPENAI_CHEAP_MODEL or settings.OPENAI_MODEL or "gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": name},
-            ],
-            temperature=0,
-            response_format={"type": "json_object"},
-        )
-
-        content = response.choices[0].message.content if response.choices else ""
+    def _parse(content: str) -> tuple[float, float, float, float, Dict[str, float]] | None:
         extracted = extract_json_from_text(content)
         parsed = json.loads(extracted) if extracted else {}
         if not isinstance(parsed, dict):
-            continue
-
+            return None
         cal = _clamp_float(parsed.get("calories_per_100g"), 0.0, 900.0)
-        p = _clamp_float(parsed.get("protein_per_100g"), 0.0, 100.0)
-        c = _clamp_float(parsed.get("carbs_per_100g"), 0.0, 100.0)
-        f = _clamp_float(parsed.get("fat_per_100g"), 0.0, 100.0)
+        p   = _clamp_float(parsed.get("protein_per_100g"), 0.0, 100.0)
+        c   = _clamp_float(parsed.get("carbs_per_100g"),   0.0, 100.0)
+        f   = _clamp_float(parsed.get("fat_per_100g"),     0.0, 100.0)
+        if not _valid_usda_macro_estimate(cal, p, c, f):
+            return None
+        micros = {k: _safe_nonneg_float(parsed.get(k)) for k in _MICRO_KEYS}
+        return cal, p, c, f, micros
 
-        if _valid_usda_macro_estimate(cal, p, c, f):
-            return cal, p, c, f
-
-        repair_prompt = (
-            "Your previous output did not meet constraints (non-zero calories, numeric values, plausible ranges). "
-            "Return corrected JSON ONLY with the same 4 keys and valid numbers within bounds."
-        )
-        response = await client.chat.completions.create(
-            model=settings.OPENAI_CHEAP_MODEL or settings.OPENAI_MODEL or "gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": name},
-                {"role": "user", "content": repair_prompt + "\n\nBad output:\n" + (content or "")},
-            ],
-            temperature=0,
-            response_format={"type": "json_object"},
-        )
-
-        content = response.choices[0].message.content if response.choices else ""
-        extracted = extract_json_from_text(content)
-        parsed = json.loads(extracted) if extracted else {}
-        if not isinstance(parsed, dict):
-            continue
-
-        cal = _clamp_float(parsed.get("calories_per_100g"), 0.0, 900.0)
-        p = _clamp_float(parsed.get("protein_per_100g"), 0.0, 100.0)
-        c = _clamp_float(parsed.get("carbs_per_100g"), 0.0, 100.0)
-        f = _clamp_float(parsed.get("fat_per_100g"), 0.0, 100.0)
-
-        if _valid_usda_macro_estimate(cal, p, c, f):
-            return cal, p, c, f
-
-    raise RuntimeError("Failed to produce valid USDA-like macro estimate")
-
-
-async def _estimate_usda_like_micros_per_100g(food_name: str) -> Dict[str, float]:
-    client = _get_openai_client()
-    name = (food_name or "").strip()
-    if not name:
-        raise ValueError("food_name is required")
-
-    keys = [
-        "fiber_g_per_100g",
-        "sugar_g_per_100g",
-        "saturated_fat_g_per_100g",
-        "trans_fat_g_per_100g",
-        "cholesterol_mg_per_100g",
-        "sodium_mg_per_100g",
-        "potassium_mg_per_100g",
-        "vitamin_a_ug_per_100g",
-        "calcium_mg_per_100g",
-        "iron_mg_per_100g",
-        "magnesium_mg_per_100g",
-        "phosphorus_mg_per_100g",
-        "zinc_mg_per_100g",
-        "copper_mg_per_100g",
-        "manganese_mg_per_100g",
-        "selenium_ug_per_100g",
-        "vitamin_c_mg_per_100g",
-        "vitamin_d_ug_per_100g",
-        "vitamin_e_mg_per_100g",
-        "vitamin_k_ug_per_100g",
-        "thiamin_b1_mg_per_100g",
-        "riboflavin_b2_mg_per_100g",
-        "niacin_b3_mg_per_100g",
-        "vitamin_b6_mg_per_100g",
-        "folate_ug_per_100g",
-        "vitamin_b12_ug_per_100g",
-        "caffeine_mg_per_100g",
-        "alcohol_g_per_100g",
-    ]
-
-    system_prompt = (
-        "You are estimating nutrition for a food item in a nutrition tracking app. "
-        "Return typical USDA-style per-100g micronutrients. "
-        "Return ONLY valid JSON with EXACT keys: "
-        + ", ".join(keys)
-        + ". "
-        "All values must be numbers (no strings/null). Use 0 if unknown, but never negative. "
-        "Units are encoded in the key (g_per_100g, mg_per_100g, ug_per_100g)."
-    )
+    model = settings.OPENAI_CHEAP_MODEL or settings.OPENAI_MODEL or "gpt-4o-mini"
 
     response = await client.chat.completions.create(
-        model=settings.OPENAI_CHEAP_MODEL or settings.OPENAI_MODEL or "gpt-4o-mini",
+        model=model,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": name},
@@ -235,17 +181,32 @@ async def _estimate_usda_like_micros_per_100g(food_name: str) -> Dict[str, float
         temperature=0,
         response_format={"type": "json_object"},
     )
-
     content = response.choices[0].message.content if response.choices else ""
-    extracted = extract_json_from_text(content)
-    parsed = json.loads(extracted) if extracted else {}
-    if not isinstance(parsed, dict):
-        parsed = {}
+    result = _parse(content)
+    if result:
+        return result
 
-    micros: Dict[str, float] = {}
-    for k in keys:
-        micros[k] = _safe_nonneg_float(parsed.get(k))
-    return micros
+    # Repair pass
+    repair_prompt = (
+        "Your previous output did not meet constraints (non-zero calories, numeric values, plausible ranges). "
+        "Return corrected JSON ONLY with all the same keys and valid numbers within bounds."
+    )
+    response = await client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": name},
+            {"role": "user", "content": repair_prompt + "\n\nBad output:\n" + (content or "")},
+        ],
+        temperature=0,
+        response_format={"type": "json_object"},
+    )
+    content = response.choices[0].message.content if response.choices else ""
+    result = _parse(content)
+    if result:
+        return result
+
+    raise RuntimeError("Failed to produce valid USDA-like nutrition estimate")
 
 
 async def transcribe_audio_file(audio: UploadFile) -> str:
@@ -268,7 +229,7 @@ async def infer_portion_from_text(transcript: str) -> Dict[str, Any]:
         return {"quantity": None, "unit": None}
 
     response = await client.chat.completions.create(
-        model=settings.OPENAI_MODEL or "gpt-4o",
+        model=settings.OPENAI_CHEAP_MODEL or settings.OPENAI_MODEL or "gpt-4o-mini",
         messages=[
             {
                 "role": "system",
@@ -317,7 +278,7 @@ async def parse_voice_meal_text(transcript: str) -> List[Dict[str, Any]]:
         return []
 
     response = await client.chat.completions.create(
-        model=settings.OPENAI_MODEL or "gpt-4o",
+        model=settings.OPENAI_CHEAP_MODEL or settings.OPENAI_MODEL or "gpt-4o-mini",
         messages=[
             {
                 "role": "system",
@@ -761,8 +722,9 @@ async def match_food_to_database_db(conn: asyncpg.Connection, name: str, quantit
     micros_per_100g: Dict[str, float] = {}
 
     try:
-        calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g = await _estimate_usda_like_macros_per_100g(original_name)
-        micros_per_100g = await _estimate_usda_like_micros_per_100g(original_name)
+        calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, micros_per_100g = (
+            await _estimate_usda_like_nutrition_per_100g(original_name)
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to estimate nutrition for '{original_name}': {type(e).__name__}: {str(e)}")
 

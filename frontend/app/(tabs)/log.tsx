@@ -34,7 +34,7 @@ export default function LogScreen() {
   const params = useLocalSearchParams();
   const { user } = useUser();
   const searchInputRef = useRef<TextInput>(null);
-  const ENABLE_CAMERA_LOGGING = true;
+  const ENABLE_CAMERA_LOGGING = false; // temporarily disabled
   const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
   const [logMethod, setLogMethod] = useState<'photo' | 'manual' | null>(null);
   const [loading, setLoading] = useState(false);

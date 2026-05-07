@@ -155,19 +155,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ color, focused }) => (
-            <View style={[
-              styles.iconContainer,
-              focused && { backgroundColor: Colors.tertiary + '15' }
-            ]}>
-              <Ionicons
-                name={focused ? "person" : "person-outline"}
-                size={22}
-                color={color}
-              />
-            </View>
-          ),
+          href: null,
         }}
       />
     </Tabs>

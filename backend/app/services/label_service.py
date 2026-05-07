@@ -10,6 +10,7 @@ import asyncpg
 from fastapi import HTTPException
 
 from app.db.queries import to_uuid
+from app.utils.parsers import _get_openai_client
 
 logger = logging.getLogger(__name__)
 
@@ -145,9 +146,8 @@ class LabelService:
     ) -> Dict[str, Any]:
         """Extract nutrition data from label images using AI."""
         from app.core.config import settings
-        import openai
-        
-        client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+
+        client = _get_openai_client()
         
         extraction_prompt = """Analyze this nutrition label image and extract the following information.
 Return a JSON object with these fields:
@@ -222,7 +222,7 @@ IMPORTANT:
         self,
         client,
         raw_text: str,
-        settings
+        settings,
     ) -> Dict[str, Any]:
         """Attempt to repair malformed JSON using AI."""
         repair_prompt = (
@@ -251,12 +251,11 @@ IMPORTANT:
     ) -> Dict[str, Any]:
         """Perform AI health check on food data."""
         from app.core.config import settings
-        import openai
-        
+
         if not settings.OPENAI_API_KEY:
             return {"flags": [], "summary": "Health check unavailable"}
-        
-        client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+
+        client = _get_openai_client()
         
         health_prompt = f"""Analyze this packaged food product for health concerns.
 

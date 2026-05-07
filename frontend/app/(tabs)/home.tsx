@@ -36,6 +36,8 @@ const WEEKLY_WRAP_RELEASE_HOUR = 22;
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useUser();
+  const { theme, isSpecialUser } = useTheme();
+  const styles = makeStyles(theme);
   const [stats, setStats] = useState<any>(null);
   const [questStats, setQuestStats] = useState<any>(null);
   const [showStreakCalendar, setShowStreakCalendar] = useState(false);
@@ -116,7 +118,7 @@ export default function HomeScreen() {
     } catch (error) {
       console.error('Error fetching weekly data:', error);
     }
-  }, [user]);
+  }, [user, theme]);
 
   useEffect(() => {
     if (user) {
@@ -260,8 +262,6 @@ export default function HomeScreen() {
     { value: 1, color: theme.border }
   ];
 
-  const { theme, isSpecialUser } = useTheme();
-  const styles = makeStyles(theme);
 
   return (
     <View style={styles.container}>
@@ -271,17 +271,13 @@ export default function HomeScreen() {
         userId={user?.id}
       />
 
-      {isSpecialUser && (
-        <View style={[styles.aayuBanner, { backgroundColor: theme.primaryLight }]}>
-          <Text style={styles.aayuBannerText}>🌸 Made with love, just for you Aayu 🌸</Text>
-        </View>
-      )}
-
       <PageHeader 
         title={`Hello, ${user?.name}`} 
-        subtitle={hasMetGoal 
-          ? "You've hit your calorie goal! 🎯" 
-          : `${Math.round((stats?.targets?.calories || 2000) - (stats?.total_calories || 0))} kcal remaining today`}
+        subtitle={isSpecialUser
+          ? '🌸 Made with love, just for you'
+          : hasMetGoal 
+            ? "You've hit your calorie goal! 🎯" 
+            : `${Math.round((stats?.targets?.calories || 2000) - (stats?.total_calories || 0))} kcal remaining today`}
         rightComponent={
           <View style={styles.headerRight}>
             <TouchableOpacity
@@ -1019,17 +1015,6 @@ function makeStyles(theme: typeof Colors) {
     borderBottomColor: theme.border,
     borderRadius: 8,
     marginHorizontal: 2,
-  },
-  aayuBanner: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-  },
-  aayuBannerText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
   },
   });
 }

@@ -94,8 +94,13 @@ def calculate_calorie_target(
     carbs_cal = max(0.0, remaining_cal - fat_cal)
     carbs = carbs_cal / 4.0
 
-    # AMDR minimum for carbs: 130g/day (IOM EAR) — floor it if deficit pushes lower
-    carbs = max(carbs, 130.0)
+    # AMDR minimum for carbs: 130g/day (IOM EAR) — floor it if deficit pushes lower.
+    # When the floor kicks in, reduce fat so total macro calories stay at the calorie target.
+    if carbs < 130.0:
+        carbs = 130.0
+        carbs_cal = carbs * 4.0
+        fat_cal = max(0.0, remaining_cal - carbs_cal)
+        fat = fat_cal / 9.0
     
     return {
         "daily_calorie_target": round(calories, 2),

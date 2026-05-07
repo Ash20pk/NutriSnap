@@ -47,7 +47,7 @@ class ChefGenerateRequest(BaseModel):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 async def _get_nutritional_gaps(pool, user_id: str) -> str:
-    """Calculate nutritional gaps from today's meals for the given user."""
+    """Calculate nutritional gaps from today's meals against the user's actual targets."""
     try:
         async with pool.acquire() as conn:
             rows = await conn.fetch(
@@ -59,6 +59,14 @@ async def _get_nutritional_gaps(pool, user_id: str) -> str:
                 """,
                 to_uuid(user_id),
             )
+            profile = await conn.fetchrow(
+                """
+                SELECT daily_calorie_target, protein_target, carbs_target, fat_target
+                FROM profiles WHERE id = $1
+                """,
+                to_uuid(user_id),
+            )
+
         totals = {"protein": 0.0, "carbs": 0.0, "fat": 0.0, "calories": 0.0}
         for r in rows:
             totals["protein"] += float(r["total_protein"] or 0)
@@ -66,14 +74,21 @@ async def _get_nutritional_gaps(pool, user_id: str) -> str:
             totals["fat"] += float(r["total_fat"] or 0)
             totals["calories"] += float(r["total_calories"] or 0)
 
+        # Use user's personalised targets; fall back to conservative minimums if missing
+        cal_target = float((profile and profile["daily_calorie_target"]) or 2000)
+        protein_target = float((profile and profile["protein_target"]) or 50)
+        carbs_target = float((profile and profile["carbs_target"]) or 250)
+        fat_target = float((profile and profile["fat_target"]) or 55)
+
+        # Flag as a gap when the user is below 50% of their daily target by now
         gaps = []
-        if totals["protein"] < 50:
+        if totals["protein"] < protein_target * 0.5:
             gaps.append("protein")
-        if totals["carbs"] < 100:
+        if totals["carbs"] < carbs_target * 0.5:
             gaps.append("carbs")
-        if totals["fat"] < 20:
+        if totals["fat"] < fat_target * 0.5:
             gaps.append("healthy fats")
-        if totals["calories"] < 1200:
+        if totals["calories"] < cal_target * 0.5:
             gaps.append("calories")
 
         return ", ".join(gaps) if gaps else "None identified"

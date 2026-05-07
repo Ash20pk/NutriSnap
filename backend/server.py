@@ -50,7 +50,7 @@ pg_pool: asyncpg.Pool | None = None
 # OpenAI Key for AI features
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 OPENAI_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-4o')
-OPENAI_CHEAP_MODEL = os.environ.get('OPENAI_CHEAP_MODEL', 'gpt-4.1-mini')
+OPENAI_CHEAP_MODEL = os.environ.get('OPENAI_CHEAP_MODEL', 'gpt-5.4-mini')
 openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 ADMIN_SYNC_KEY = os.environ.get("ADMIN_SYNC_KEY", "").strip()

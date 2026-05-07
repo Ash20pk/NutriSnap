@@ -215,7 +215,7 @@ class MealService:
                 
                 # Create meal record
                 meal_id = str(uuid_lib.uuid4())
-                meal_timestamp = timestamp or datetime.utcnow()
+                meal_timestamp = timestamp or datetime.now(timezone.utc)
                 
                 logger.info(f"[LOG_MEAL] Inserting meal with id={meal_id}")
                 
