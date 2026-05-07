@@ -369,41 +369,33 @@ Return ONLY valid JSON."""
         extracted: Dict[str, Any],
         front_image_base64: Optional[str]
     ) -> str:
-        """Save extracted food data to database."""
-        import uuid
-        
-        food_id = await conn.fetchval(
+        """Save user-contributed label data to the barcodes table."""
+        await conn.execute(
             """
-            INSERT INTO foods (
-                id, name, brand, barcode, category,
+            INSERT INTO barcodes (
+                barcode, product_name, brand,
                 calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g,
                 fiber_g_per_100g, sugar_g_per_100g, sodium_mg_per_100g,
-                ingredients, source, verified, review_status
+                ingredients, source, verified
             )
-            VALUES (
-                $1, $2, $3, $4, $5,
-                $6, $7, $8, $9,
-                $10, $11, $12,
-                $13, $14, $15, $16
-            )
-            ON CONFLICT (barcode) WHERE barcode IS NOT NULL DO UPDATE SET
-                name = EXCLUDED.name,
-                brand = EXCLUDED.brand,
-                calories_per_100g = EXCLUDED.calories_per_100g,
-                protein_per_100g = EXCLUDED.protein_per_100g,
-                carbs_per_100g = EXCLUDED.carbs_per_100g,
-                fat_per_100g = EXCLUDED.fat_per_100g,
-                fiber_g_per_100g = EXCLUDED.fiber_g_per_100g,
-                sugar_g_per_100g = EXCLUDED.sugar_g_per_100g,
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            ON CONFLICT (barcode) DO UPDATE SET
+                product_name       = EXCLUDED.product_name,
+                brand              = EXCLUDED.brand,
+                calories_per_100g  = EXCLUDED.calories_per_100g,
+                protein_per_100g   = EXCLUDED.protein_per_100g,
+                carbs_per_100g     = EXCLUDED.carbs_per_100g,
+                fat_per_100g       = EXCLUDED.fat_per_100g,
+                fiber_g_per_100g   = EXCLUDED.fiber_g_per_100g,
+                sugar_g_per_100g   = EXCLUDED.sugar_g_per_100g,
                 sodium_mg_per_100g = EXCLUDED.sodium_mg_per_100g,
-                ingredients = EXCLUDED.ingredients
-            RETURNING id
+                ingredients        = EXCLUDED.ingredients,
+                source             = EXCLUDED.source,
+                updated_at         = now()
             """,
-            uuid.uuid4(),
+            barcode,
             extracted.get("name", "Unknown Product"),
             extracted.get("brand"),
-            barcode,
-            "packaged",
             float(extracted.get("calories_per_100g", 0)),
             float(extracted.get("protein_per_100g", 0)),
             float(extracted.get("carbs_per_100g", 0)),
@@ -412,12 +404,10 @@ Return ONLY valid JSON."""
             float(extracted.get("sugar_g_per_100g") or 0),
             float(extracted.get("sodium_mg_per_100g") or 0),
             extracted.get("ingredients"),
-            "label_scan",
+            "user_contribution",
             False,
-            "pending"
         )
-        
-        return food_id
+        return barcode
     
     @staticmethod
     def _normalize_barcode(barcode: str) -> str:
