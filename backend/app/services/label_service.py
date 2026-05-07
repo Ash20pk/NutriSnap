@@ -317,18 +317,17 @@ Focus on: ultra-processed ingredients, excessive sugar/sodium, artificial additi
 Return ONLY valid JSON."""
 
         try:
-            response = await client.chat.completions.create(
-                model=settings.OPENAI_MODEL or "gpt-4o",
-                messages=[{
+            response = await client.responses.create(
+                model="gpt-5.5",
+                reasoning={"effort": "medium"},
+                input=[{
                     "role": "user",
-                    "content": health_prompt
+                    "content": health_prompt,
                 }],
-                response_format={"type": "json_object"},
-                max_tokens=1000,
-                temperature=0.3,
+                text={"format": {"type": "json_object"}},
             )
 
-            raw_text = (response.choices[0].message.content or "").strip()
+            raw_text = response.output_text
             return json.loads(raw_text)
 
         except Exception as e:
