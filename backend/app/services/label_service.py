@@ -385,7 +385,7 @@ Return ONLY valid JSON."""
                 $10, $11, $12,
                 $13, $14, $15, $16
             )
-            ON CONFLICT (barcode) DO UPDATE SET
+            ON CONFLICT (barcode) WHERE barcode IS NOT NULL DO UPDATE SET
                 name = EXCLUDED.name,
                 brand = EXCLUDED.brand,
                 calories_per_100g = EXCLUDED.calories_per_100g,
