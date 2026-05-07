@@ -23,24 +23,24 @@ export default function Intro() {
   const features = useMemo(
     () => [
       {
-        key: 'snap',
-        icon: 'camera',
-        title: 'Snap',
-        text: 'Log meals in seconds',
+        key: 'log',
+        icon: 'restaurant',
+        title: 'Log',
+        text: 'Search foods, scan barcodes, or use your voice',
         image: require('../assets/images/intro-snap.png'),
       },
       {
         key: 'understand',
         icon: 'sparkles',
-        title: 'Understand',
-        text: 'Clear macro breakdown',
+        title: 'Analyse',
+        text: 'AI insights on your macros, micros & bio impact',
         image: require('../assets/images/intro-macros.png'),
       },
       {
         key: 'leaderboard',
-        icon: 'stats-chart',
-        title: 'Leaderboard',
-        text: 'Compete with friends & climb the ranks',
+        icon: 'trophy',
+        title: 'Compete',
+        text: 'Quests, badges & leaderboard with friends',
         image: require('../assets/images/leaderboard.png'),
       },
     ],
@@ -147,7 +147,7 @@ export default function Intro() {
               },
             ]}
           >
-            Eat smarter,{"\n"}one snap at a time.
+            Eat smarter,{"\n"}every single day.
           </Text>
 
           <View

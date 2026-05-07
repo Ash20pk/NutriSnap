@@ -10,15 +10,6 @@ import { supabase } from '../utils/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
 
-// AppState listener for auto-refresh (from official Supabase tutorial)
-AppState.addEventListener('change', (state) => {
-  if (state === 'active') {
-    supabase.auth.startAutoRefresh();
-  } else {
-    supabase.auth.stopAutoRefresh();
-  }
-});
-
 type AuthContextType = {
   user: User | null;
   accessToken: string | null;
@@ -38,29 +29,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Handle deep link when app is opened via OAuth redirect
-  const url = Linking.useLinkingURL();
-  useEffect(() => {
-    if (url) {
-      const { params } = QueryParams.getQueryParams(url);
-      if (params?.access_token) {
-        supabase.auth.setSession({
-          access_token: params.access_token,
-          refresh_token: params.refresh_token,
-        });
-      }
-    }
-  }, [url]);
 
   useEffect(() => {
-    // Get initial session (from official tutorial pattern)
+    // Get initial session — catch so an expired/missing token never produces
+    // an unhandled promise rejection on cold start or dev refresh.
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setIsLoading(false);
+    }).catch((err) => {
+      if (__DEV__) console.warn('[Auth] getSession error on startup:', err?.message);
+      setSession(null);
+      setUser(null);
+      setIsLoading(false);
     });
 
-    // Listen for auth changes (from official tutorial pattern)
+    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
@@ -69,8 +53,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
     });
 
+    // AppState listener for token auto-refresh — registered here so it is
+    // cleaned up when the provider unmounts (avoids leaking on hot reload).
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        supabase.auth.startAutoRefresh();
+      } else {
+        supabase.auth.stopAutoRefresh();
+      }
+    });
+
     return () => {
       subscription.unsubscribe();
+      appStateSub.remove();
     };
   }, []);
 
@@ -99,6 +94,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const createSessionFromUrl = useCallback(async (url: string) => {
     const { params, errorCode } = QueryParams.getQueryParams(url);
     if (errorCode) throw new Error(errorCode);
+
+    // PKCE flow (default in supabase-js v2): exchange code for session
+    const { code } = params;
+    if (code) {
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) throw error;
+      return;
+    }
+
+    // Implicit flow fallback: set session from tokens in URL fragment
     const { access_token, refresh_token } = params;
     if (!access_token) return;
     const { error } = await supabase.auth.setSession({ access_token, refresh_token });
@@ -106,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInOAuth = useCallback(async (provider: Provider) => {
-    const redirectTo = makeRedirectUri();
+    const redirectTo = makeRedirectUri({ scheme: 'loggr', path: 'auth-callback' });
     if (__DEV__) console.log('[OAuth] redirectTo:', redirectTo);
 
     const { data, error } = await supabase.auth.signInWithOAuth({
@@ -136,8 +141,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // };
 
   const logout = useCallback(async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    try {
+      await supabase.auth.signOut();
+    } catch (err: any) {
+      // AuthSessionMissingError means the session was already gone — treat as
+      // signed out rather than propagating an error the caller can't handle.
+      if (err?.name !== 'AuthSessionMissingError') throw err;
+    }
   }, []);
 
   const value = useMemo<AuthContextType>(

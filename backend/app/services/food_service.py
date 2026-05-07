@@ -3,9 +3,11 @@ Food service for food database management.
 Handles food search, categories, barcode lookup, and USDA integration.
 """
 
+import asyncio
 import logging
 from typing import Dict, Any, List, Optional
 import asyncpg
+import httpx
 from fastapi import HTTPException
 
 from app.db.queries import to_uuid
@@ -140,7 +142,96 @@ class FoodService:
                     result["health_check"] = await self._run_health_check(result)
                 return result
 
+        # Fall back to OpenFood Facts API
+        off_data = await self._fetch_from_openfoodfacts(barcode)
+        if off_data:
+            # Cache async so we don't block the response
+            asyncio.create_task(self._cache_barcode(barcode, off_data))
+            if include_health_check:
+                off_data["health_check"] = await self._run_health_check(off_data)
+            return off_data
+
         raise HTTPException(status_code=404, detail="Product not found")
+
+    async def _fetch_from_openfoodfacts(self, barcode: str) -> Optional[Dict[str, Any]]:
+        """Query OpenFood Facts API and normalise the response."""
+        url = (
+            f"https://world.openfoodfacts.org/api/v2/product/{barcode}"
+            "?fields=product_name,brands,nutriments,ingredients_text,image_url,image_front_url"
+        )
+        try:
+            async with httpx.AsyncClient(timeout=8) as client:
+                resp = await client.get(url, headers={"User-Agent": "Loggr/1.0"})
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            if data.get("status") != 1:
+                return None
+            product = data.get("product", {})
+            n = product.get("nutriments", {})
+
+            def _f(key: str) -> Optional[float]:
+                val = n.get(key)
+                return float(val) if val is not None else None
+
+            # sodium in OFF is grams/100g; convert to mg
+            sodium_g = _f("sodium_100g")
+            sodium_mg = round(sodium_g * 1000, 2) if sodium_g is not None else None
+
+            name = (product.get("product_name") or "").strip() or None
+            if not name:
+                return None
+
+            return {
+                "name": name,
+                "brand": (product.get("brands") or "").split(",")[0].strip() or None,
+                "image_url": product.get("image_front_url") or product.get("image_url"),
+                "calories_per_100g": _f("energy-kcal_100g") or _f("energy_kcal_100g") or 0,
+                "protein_per_100g": _f("proteins_100g") or 0,
+                "carbs_per_100g": _f("carbohydrates_100g") or 0,
+                "fat_per_100g": _f("fat_100g") or 0,
+                "fiber_g_per_100g": _f("fiber_100g"),
+                "sugar_g_per_100g": _f("sugars_100g"),
+                "sodium_mg_per_100g": sodium_mg,
+                "ingredients": product.get("ingredients_text") or None,
+                "source": "openfoodfacts",
+                "barcode": barcode,
+            }
+        except Exception as e:
+            logger.warning(f"OpenFood Facts lookup failed for {barcode}: {e}")
+            return None
+
+    async def _cache_barcode(self, barcode: str, data: Dict[str, Any]) -> None:
+        """Persist OpenFood Facts data to barcodes table for future lookups."""
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO barcodes (
+                        barcode, product_name, brand, image_url,
+                        calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g,
+                        fiber_g_per_100g, sugar_g_per_100g, sodium_mg_per_100g,
+                        ingredients, source, verified
+                    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+                    ON CONFLICT (barcode) DO NOTHING
+                    """,
+                    barcode,
+                    data.get("name"),
+                    data.get("brand"),
+                    data.get("image_url"),
+                    float(data.get("calories_per_100g") or 0),
+                    float(data.get("protein_per_100g") or 0),
+                    float(data.get("carbs_per_100g") or 0),
+                    float(data.get("fat_per_100g") or 0),
+                    float(data.get("fiber_g_per_100g") or 0) if data.get("fiber_g_per_100g") is not None else None,
+                    float(data.get("sugar_g_per_100g") or 0) if data.get("sugar_g_per_100g") is not None else None,
+                    float(data.get("sodium_mg_per_100g") or 0) if data.get("sodium_mg_per_100g") is not None else None,
+                    data.get("ingredients"),
+                    "openfoodfacts",
+                    False,
+                )
+        except Exception as e:
+            logger.warning(f"Failed to cache barcode {barcode}: {e}")
 
     async def _run_health_check(self, food_data: Dict[str, Any]) -> Dict[str, Any]:
         """Delegate to LabelService health check."""

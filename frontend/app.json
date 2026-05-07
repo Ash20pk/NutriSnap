@@ -41,6 +41,7 @@
     },
     "plugins": [
       "expo-router",
+      ["expo-web-browser", { "experimentalLauncherActivity": false }],
       "expo-adi-registration",
       [
         "expo-build-properties",

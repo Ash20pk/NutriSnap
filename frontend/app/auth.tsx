@@ -166,31 +166,33 @@ export default function AuthScreen() {
             )}
 
             {mode === 'signup' && (
-              <TouchableOpacity
-                style={[styles.termsRow, isSmallScreen && styles.termsRowSmall]}
-                activeOpacity={0.8}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                  setAcceptedTerms((v) => !v);
-                }}
-                disabled={submitting || isLoading}
-              >
-                <View style={[styles.checkbox, acceptedTerms && styles.checkboxActive]}>
-                  {acceptedTerms && <Ionicons name="checkmark" size={14} color={Colors.white} />}
-                </View>
-                <Text style={styles.termsText}>
-                  I agree to the{' '}
-                  <Text
-                    style={styles.termsLink}
+              <View style={[styles.termsRow, isSmallScreen && styles.termsRowSmall]}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    setAcceptedTerms((v) => !v);
+                  }}
+                  disabled={submitting || isLoading}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <View style={[styles.checkbox, acceptedTerms && styles.checkboxActive]}>
+                    {acceptedTerms && <Ionicons name="checkmark" size={14} color={Colors.white} />}
+                  </View>
+                </TouchableOpacity>
+                <View style={styles.termsTextWrap}>
+                  <Text style={styles.termsText}>I agree to the </Text>
+                  <TouchableOpacity
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                       router.push('/privacy-policy' as any);
                     }}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
                   >
-                    Privacy Policy
-                  </Text>
-                </Text>
-              </TouchableOpacity>
+                    <Text style={styles.termsLink}>Privacy Policy</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             )}
 
             <DuoButton
@@ -347,6 +349,12 @@ const styles = StyleSheet.create({
   },
   termsRowSmall: {
     marginBottom: 14,
+  },
+  termsTextWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
   },
   checkbox: {
     width: 28,
