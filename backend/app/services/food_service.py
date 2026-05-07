@@ -3,7 +3,6 @@ Food service for food database management.
 Handles food search, categories, barcode lookup, and USDA integration.
 """
 
-import asyncio
 import logging
 from typing import Dict, Any, List, Optional
 import asyncpg
@@ -145,8 +144,6 @@ class FoodService:
         # Fall back to OpenFood Facts API
         off_data = await self._fetch_from_openfoodfacts(barcode)
         if off_data:
-            # Cache async so we don't block the response
-            asyncio.create_task(self._cache_barcode(barcode, off_data))
             if include_health_check:
                 off_data["health_check"] = await self._run_health_check(off_data)
             return off_data

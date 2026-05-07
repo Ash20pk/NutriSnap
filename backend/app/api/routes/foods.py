@@ -2,7 +2,7 @@
 Food routes for food database and search.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
@@ -80,23 +80,26 @@ async def get_categories(
 @router.get("/barcode/{barcode}")
 async def get_food_by_barcode(
     barcode: str,
+    background_tasks: BackgroundTasks,
     include_health_check: bool = Query(False),
     uid: str = Depends(get_current_uid),
     service: FoodService = Depends(get_food_service)
 ):
-    """
-    Get food by barcode from database or external sources.
+    result = await service.get_food_by_barcode(barcode, uid, include_health_check=include_health_check)
 
-    Args:
-        barcode: Product barcode
-        include_health_check: Whether to run AI health check on the product
-        uid: Current user ID (from auth)
-        service: Food service instance
+    # If sourced from OpenFood Facts, cache it in the background before responding
+    if result.get("source") == "openfoodfacts":
+        background_tasks.add_task(service._cache_barcode, barcode, result)
 
-    Returns:
-        Food data dictionary
-    """
-    return await service.get_food_by_barcode(barcode, uid, include_health_check=include_health_check)
+    health_check = result.pop("health_check", None)
+    cached = result.get("source") in ("cache", "database")
+
+    return {
+        "food": result,
+        "cached": cached,
+        "needs_contribution": False,
+        "health_check": health_check,
+    }
 
 
 @router.get("/{food_id}")
