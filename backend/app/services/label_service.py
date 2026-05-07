@@ -82,11 +82,12 @@ class LabelService:
             health_check = await self._perform_health_check(extracted)
             
             return {
-                "food_id": str(food_id),
-                "barcode": barcode,
-                "name": extracted.get("name"),
-                "brand": extracted.get("brand"),
-                "nutrition": {
+                "food": {
+                    "id": str(food_id),
+                    "name": extracted.get("name"),
+                    "brand": extracted.get("brand"),
+                    "barcode": barcode,
+                    "category": "packaged",
                     "calories_per_100g": extracted.get("calories_per_100g"),
                     "protein_per_100g": extracted.get("protein_per_100g"),
                     "carbs_per_100g": extracted.get("carbs_per_100g"),
@@ -94,8 +95,8 @@ class LabelService:
                     "fiber_g_per_100g": extracted.get("fiber_g_per_100g"),
                     "sugar_g_per_100g": extracted.get("sugar_g_per_100g"),
                     "sodium_mg_per_100g": extracted.get("sodium_mg_per_100g"),
+                    "ingredients": extracted.get("ingredients"),
                 },
-                "ingredients": extracted.get("ingredients"),
                 "health_check": health_check,
             }
     
