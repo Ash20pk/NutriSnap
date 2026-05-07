@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Colors, Spacing, Radius } from '../../constants/Colors';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
 import { useAuth } from '../../context/AuthContext';
@@ -339,19 +340,47 @@ export default function ProfileScreen() {
           <AppCard padding={24}>
             <View style={styles.headerCentered}>
               <View style={styles.avatarContainerLarge}>
-                <View style={styles.avatarLarge}>
-                  {!avatarImageFailed && resolvedAvatarUrl ? (
-                    <Image
-                      source={{ uri: resolvedAvatarUrl }}
-                      style={{ width: '100%', height: '100%', borderRadius: 36 }}
-                      onError={() => setAvatarImageFailed(true)}
-                    />
-                  ) : (
-                    <Text style={styles.avatarTextLarge}>
-                      {user?.name?.[0]?.toUpperCase() || 'U'}
-                    </Text>
-                  )}
-                </View>
+                {user?.is_special_user ? (
+                  <LinearGradient
+                    colors={['#FF6B8A', '#FF2D55', '#FF6B8A']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.avatarHeartFrame}
+                  >
+                    <View style={styles.avatarLargeSpecial}>
+                      {!avatarImageFailed && resolvedAvatarUrl ? (
+                        <Image
+                          source={{ uri: resolvedAvatarUrl }}
+                          style={{ width: '100%', height: '100%', borderRadius: 30 }}
+                          onError={() => setAvatarImageFailed(true)}
+                        />
+                      ) : (
+                        <Text style={styles.avatarTextLarge}>
+                          {user?.name?.[0]?.toUpperCase() || 'U'}
+                        </Text>
+                      )}
+                    </View>
+                  </LinearGradient>
+                ) : (
+                  <View style={styles.avatarLarge}>
+                    {!avatarImageFailed && resolvedAvatarUrl ? (
+                      <Image
+                        source={{ uri: resolvedAvatarUrl }}
+                        style={{ width: '100%', height: '100%', borderRadius: 36 }}
+                        onError={() => setAvatarImageFailed(true)}
+                      />
+                    ) : (
+                      <Text style={styles.avatarTextLarge}>
+                        {user?.name?.[0]?.toUpperCase() || 'U'}
+                      </Text>
+                    )}
+                  </View>
+                )}
+                {user?.is_special_user && (
+                  <View style={styles.heartBadge}>
+                    <Ionicons name="heart" size={12} color="#fff" />
+                  </View>
+                )}
                 <TouchableOpacity
                   style={styles.editBadgeLarge}
                   onPress={() => {
@@ -758,6 +787,42 @@ function makeStyles(theme: typeof Colors) {
     borderColor: theme.border,
     borderBottomWidth: Spacing.sm + 2,
     overflow: 'hidden',
+  },
+  avatarHeartFrame: {
+    width: 110,
+    height: 110,
+    borderRadius: 36,
+    padding: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarLargeSpecial: {
+    width: 100,
+    height: 100,
+    borderRadius: 30,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  heartBadge: {
+    position: 'absolute',
+    left: -6,
+    bottom: Spacing.xs,
+    backgroundColor: '#FF2D55',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: theme.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+    shadowColor: '#FF2D55',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 4,
   },
   avatarTextLarge: {
     fontSize: 40,

@@ -505,6 +505,7 @@ class QuestService:
         async with self.pool.acquire() as conn:
             await self._ensure_user_xp(conn, user_id)
 
+            # ── Gather stats needed for all requirement types ──────────────
             meal_count = await conn.fetchval(
                 "SELECT COUNT(*) FROM meals WHERE user_id = $1", to_uuid(user_id)
             )
@@ -515,6 +516,84 @@ class QuestService:
             )
             streak = user_stats["current_streak"] if user_stats else 0
             quests = user_stats["quests_completed"] if user_stats else 0
+
+            # Days user hit their protein target (>= profile protein_target)
+            protein_days = await conn.fetchval(
+                """
+                SELECT COUNT(DISTINCT DATE(m.timestamp AT TIME ZONE 'UTC'))
+                FROM meals m
+                JOIN profiles p ON p.id = m.user_id
+                WHERE m.user_id = $1
+                  AND p.protein_target IS NOT NULL
+                  AND m.total_protein >= p.protein_target
+                """,
+                to_uuid(user_id),
+            ) or 0
+
+            # Days user hit ALL macro targets within ±10 %
+            macro_days = await conn.fetchval(
+                """
+                WITH daily AS (
+                    SELECT
+                        DATE(m.timestamp AT TIME ZONE 'UTC') AS meal_date,
+                        SUM(m.total_protein) AS protein,
+                        SUM(m.total_carbs)   AS carbs,
+                        SUM(m.total_fat)     AS fat
+                    FROM meals m
+                    WHERE m.user_id = $1
+                    GROUP BY DATE(m.timestamp AT TIME ZONE 'UTC')
+                )
+                SELECT COUNT(*)
+                FROM daily d
+                JOIN profiles p ON p.id = $1
+                WHERE p.protein_target IS NOT NULL
+                  AND p.carbs_target   IS NOT NULL
+                  AND p.fat_target     IS NOT NULL
+                  AND d.protein BETWEEN p.protein_target * 0.9 AND p.protein_target * 1.1
+                  AND d.carbs   BETWEEN p.carbs_target   * 0.9 AND p.carbs_target   * 1.1
+                  AND d.fat     BETWEEN p.fat_target     * 0.9 AND p.fat_target     * 1.1
+                """,
+                to_uuid(user_id),
+            ) or 0
+
+            # Days user logged breakfast before 10 am (UTC meal_type = 'breakfast' or first meal < 10:00)
+            breakfast_days = await conn.fetchval(
+                """
+                SELECT COUNT(DISTINCT DATE(timestamp AT TIME ZONE 'UTC'))
+                FROM meals
+                WHERE user_id = $1
+                  AND (meal_type = 'breakfast' OR EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC') < 10)
+                """,
+                to_uuid(user_id),
+            ) or 0
+
+            # Count of unique food names ever logged
+            unique_foods = await conn.fetchval(
+                """
+                SELECT COUNT(DISTINCT f->>'name')
+                FROM meals m,
+                     jsonb_array_elements(
+                         CASE jsonb_typeof(m.foods::jsonb)
+                             WHEN 'array' THEN m.foods::jsonb
+                             ELSE '[]'::jsonb
+                         END
+                     ) AS f
+                WHERE m.user_id = $1
+                  AND (f->>'name') IS NOT NULL
+                  AND (f->>'name') <> ''
+                """,
+                to_uuid(user_id),
+            ) or 0
+
+            stat_map = {
+                "meal_count":     int(meal_count),
+                "streak":         int(streak),
+                "quest_count":    int(quests),
+                "protein_days":   int(protein_days),
+                "macro_days":     int(macro_days),
+                "breakfast_days": int(breakfast_days),
+                "unique_foods":   int(unique_foods),
+            }
 
             available = await conn.fetch(
                 """
@@ -533,18 +612,11 @@ class QuestService:
             total_xp_earned = 0
 
             for badge in available:
-                earned = False
                 req_type = badge["requirement_type"]
                 req_val = badge["requirement_value"]
+                current = stat_map.get(req_type, 0)
 
-                if req_type == "meal_count" and meal_count >= req_val:
-                    earned = True
-                elif req_type == "streak" and streak >= req_val:
-                    earned = True
-                elif req_type == "quest_count" and quests >= req_val:
-                    earned = True
-
-                if earned:
+                if current >= req_val:
                     await conn.execute(
                         "INSERT INTO user_badges (user_id, badge_definition_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
                         to_uuid(user_id),
