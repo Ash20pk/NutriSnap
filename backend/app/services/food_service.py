@@ -79,15 +79,17 @@ class FoodService:
     async def get_food_by_barcode(
         self,
         barcode: str,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        include_health_check: bool = False,
     ) -> Dict[str, Any]:
         """
         Get food by barcode from database or external sources.
-        
+
         Args:
             barcode: Product barcode
             user_id: Optional user ID for tracking
-        
+            include_health_check: Run AI health check and attach result
+
         Returns:
             Food data dictionary
         """
@@ -107,13 +109,15 @@ class FoodService:
                 """,
                 barcode
             )
-            
+
             if food:
                 result = dict(food)
                 result["id"] = str(result["id"])
                 result["source"] = "database"
+                if include_health_check:
+                    result["health_check"] = await self._run_health_check(result)
                 return result
-            
+
             # Check barcodes table (cached external data)
             cached = await conn.fetchrow(
                 """
@@ -127,16 +131,22 @@ class FoodService:
                 """,
                 barcode
             )
-            
+
             if cached:
                 result = dict(cached)
                 result["name"] = result.pop("product_name")
                 result["source"] = "cache"
+                if include_health_check:
+                    result["health_check"] = await self._run_health_check(result)
                 return result
-        
-        # If not found in database, would call external API here
-        # For now, return not found
+
         raise HTTPException(status_code=404, detail="Product not found")
+
+    async def _run_health_check(self, food_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Delegate to LabelService health check."""
+        from app.services.label_service import LabelService
+        svc = LabelService(self.pool)
+        return await svc._perform_health_check(food_data)
     
     async def submit_food_label(
         self,

@@ -80,21 +80,23 @@ async def get_categories(
 @router.get("/barcode/{barcode}")
 async def get_food_by_barcode(
     barcode: str,
+    include_health_check: bool = Query(False),
     uid: str = Depends(get_current_uid),
     service: FoodService = Depends(get_food_service)
 ):
     """
     Get food by barcode from database or external sources.
-    
+
     Args:
         barcode: Product barcode
+        include_health_check: Whether to run AI health check on the product
         uid: Current user ID (from auth)
         service: Food service instance
-    
+
     Returns:
         Food data dictionary
     """
-    return await service.get_food_by_barcode(barcode, uid)
+    return await service.get_food_by_barcode(barcode, uid, include_health_check=include_health_check)
 
 
 @router.get("/{food_id}")

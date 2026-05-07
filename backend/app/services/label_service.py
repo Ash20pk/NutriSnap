@@ -106,39 +106,53 @@ class LabelService:
     ) -> Dict[str, Any]:
         """
         Perform AI health check on a packaged food by barcode.
-        
+
         Args:
             user_id: User UUID
             barcode: Product barcode
-        
+
         Returns:
             Dictionary with health analysis and flags
         """
         barcode = self._normalize_barcode(barcode)
-        
+
         async with self.pool.acquire() as conn:
-            # Get food data
-            food = await conn.fetchrow(
+            # Check foods table first (covers label-scanned products)
+            food_row = await conn.fetchrow(
                 """
-                SELECT product_name, brand, ingredients,
+                SELECT name, brand, ingredients,
                        calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g,
                        fiber_g_per_100g, sugar_g_per_100g, sodium_mg_per_100g
-                FROM barcodes
+                FROM foods
                 WHERE barcode = $1
+                LIMIT 1
                 """,
-                barcode
+                barcode,
             )
-            
-            if not food:
-                raise HTTPException(status_code=404, detail="Product not found")
-            
-            food_data = dict(food)
-            food_data["name"] = food_data.pop("product_name")
-            
-            # Perform health check
-            health_check = await self._perform_health_check(food_data)
-            
-            return health_check
+
+            if food_row:
+                food_data = dict(food_row)
+            else:
+                # Fall back to barcodes table (cached external data)
+                barcode_row = await conn.fetchrow(
+                    """
+                    SELECT product_name, brand, ingredients,
+                           calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g,
+                           fiber_g_per_100g, sugar_g_per_100g, sodium_mg_per_100g
+                    FROM barcodes
+                    WHERE barcode = $1
+                    LIMIT 1
+                    """,
+                    barcode,
+                )
+
+                if not barcode_row:
+                    raise HTTPException(status_code=404, detail="Product not found")
+
+                food_data = dict(barcode_row)
+                food_data["name"] = food_data.pop("product_name")
+
+        return await self._perform_health_check(food_data)
     
     async def _extract_nutrition_data(
         self,
@@ -253,10 +267,16 @@ IMPORTANT:
         from app.core.config import settings
 
         if not settings.OPENAI_API_KEY:
-            return {"flags": [], "summary": "Health check unavailable"}
+            return {
+                "verdict": "caution",
+                "verdict_reason": "Health check unavailable",
+                "summary": "Health check unavailable",
+                "red_flags": [],
+                "positives": [],
+            }
 
         client = _get_openai_client()
-        
+
         health_prompt = f"""Analyze this packaged food product for health concerns.
 
 Product: {food_data.get('name', 'Unknown')}
@@ -272,25 +292,29 @@ Nutrition per 100g:
 - Sugar: {food_data.get('sugar_g_per_100g', 0)}g
 - Sodium: {food_data.get('sodium_mg_per_100g', 0)}mg
 
-Identify health concerns and return a JSON object:
+Return a JSON object:
 {{
-  "overall_score": number (1-10, where 10 is healthiest),
-  "summary": "Brief overall assessment",
-  "flags": [
+  "verdict": "good" | "caution" | "avoid",
+  "verdict_reason": "One sentence explaining the verdict",
+  "summary": "2-3 sentence overall assessment",
+  "red_flags": [
     {{
-      "title": "Concern title",
+      "title": "Concern title (max 5 words)",
       "severity": "low|medium|high",
-      "reason": "Why this is a concern",
-      "what_it_is": "Explanation of the ingredient/nutrient",
-      "why_it_matters": "Health implications",
-      "suggestion": "What to do about it"
+      "reason": "Why this is a concern (max 18 words)"
     }}
-  ]
+  ],
+  "positives": ["Short positive aspect", "Another positive"]
 }}
 
-Focus on: ultra-processed ingredients, excessive sugar/sodium, artificial additives, trans fats, etc.
+verdict rules:
+- "good": generally healthy, minimal concerns
+- "caution": moderate concerns, okay occasionally
+- "avoid": significant health concerns (high sugar/sodium, trans fats, harmful additives)
+
+Focus on: ultra-processed ingredients, excessive sugar/sodium, artificial additives, trans fats.
 Return ONLY valid JSON."""
-        
+
         try:
             response = await client.chat.completions.create(
                 model=settings.OPENAI_MODEL or "gpt-4o",
@@ -299,21 +323,21 @@ Return ONLY valid JSON."""
                     "content": health_prompt
                 }],
                 response_format={"type": "json_object"},
-                max_tokens=2000,
+                max_tokens=1000,
                 temperature=0.3,
             )
-            
+
             raw_text = (response.choices[0].message.content or "").strip()
-            health_check = json.loads(raw_text)
-            
-            return health_check
-            
+            return json.loads(raw_text)
+
         except Exception as e:
             logger.error(f"Health check failed: {str(e)}")
             return {
-                "overall_score": 5,
+                "verdict": "caution",
+                "verdict_reason": "Health check unavailable",
                 "summary": "Health check unavailable",
-                "flags": []
+                "red_flags": [],
+                "positives": [],
             }
     
     async def _get_existing_barcode(
