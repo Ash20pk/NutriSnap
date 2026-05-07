@@ -87,12 +87,29 @@ async def get_food_by_barcode(
 ):
     result = await service.get_food_by_barcode(barcode, uid, include_health_check=include_health_check)
 
-    # If sourced from OpenFood Facts, cache it in the background before responding
-    if result.get("source") == "openfoodfacts":
+    health_check = result.pop("health_check", None)
+    source = result.get("source", "")
+    cached = source in ("cache", "database")
+
+    # If sourced from OpenFood Facts, cache partial data and check completeness
+    if source == "openfoodfacts":
         background_tasks.add_task(service._cache_barcode, barcode, result)
 
-    health_check = result.pop("health_check", None)
-    cached = result.get("source") in ("cache", "database")
+        calories = result.get("calories_per_100g") or 0
+        protein  = result.get("protein_per_100g")  or 0
+        carbs    = result.get("carbs_per_100g")    or 0
+        fat      = result.get("fat_per_100g")      or 0
+        has_nutrition  = any(v > 0 for v in [calories, protein, carbs, fat])
+        has_ingredients = bool(result.get("ingredients"))
+
+        # Found in OFF but nutrition/ingredients missing — ask user to contribute label photos
+        if not has_nutrition or not has_ingredients:
+            return {
+                "food": result,
+                "cached": False,
+                "needs_contribution": True,
+                "health_check": None,
+            }
 
     return {
         "food": result,
