@@ -766,7 +766,7 @@ function makeStyles(theme: typeof Colors) {
   },
   contentContainer: {
     paddingHorizontal: Spacing.xxl,
-    paddingBottom: Spacing.xl,
+    paddingBottom: 100,
   },
   headerCentered: {
     alignItems: 'center',

@@ -632,7 +632,7 @@ function makeStyles(theme: typeof Colors) {
   },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingBottom: 20,
+    paddingBottom: 100,
   },
   section: {
     marginTop: 16,

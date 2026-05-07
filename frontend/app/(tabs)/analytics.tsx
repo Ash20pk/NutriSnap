@@ -1264,8 +1264,8 @@ function makeStyles(theme: typeof Colors) {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 24,
+    paddingBottom: 100,
   },
   timeRangeContainer: {
     flexDirection: 'row',

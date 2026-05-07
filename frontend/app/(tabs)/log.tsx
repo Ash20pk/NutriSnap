@@ -808,7 +808,7 @@ function makeStyles(theme: typeof Colors) {
   },
   contentContainer: {
     paddingHorizontal: 24,
-    paddingBottom: 20,
+    paddingBottom: 100,
   },
   sectionTitle: {
     fontSize: 16,
