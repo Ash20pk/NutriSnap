@@ -92,9 +92,12 @@ class LabelService:
                     "protein_per_100g": extracted.get("protein_per_100g"),
                     "carbs_per_100g": extracted.get("carbs_per_100g"),
                     "fat_per_100g": extracted.get("fat_per_100g"),
+                    "saturated_fat_g_per_100g": extracted.get("saturated_fat_g_per_100g"),
+                    "trans_fat_g_per_100g": extracted.get("trans_fat_g_per_100g"),
                     "fiber_g_per_100g": extracted.get("fiber_g_per_100g"),
                     "sugar_g_per_100g": extracted.get("sugar_g_per_100g"),
                     "sodium_mg_per_100g": extracted.get("sodium_mg_per_100g"),
+                    "cholesterol_mg_per_100g": extracted.get("cholesterol_mg_per_100g"),
                     "ingredients": extracted.get("ingredients"),
                 },
                 "health_check": health_check,
@@ -164,28 +167,45 @@ class LabelService:
 
         client = _get_openai_client()
         
-        extraction_prompt = """Analyze this nutrition label image and extract the following information.
-Return a JSON object with these fields:
+        extraction_prompt = """You are a precise nutrition data extraction specialist. Analyze the provided nutrition label image(s) and extract accurate data.
 
+You may receive 1-3 images. Use ALL images together:
+- Nutrition facts panel (values per serving or per 100g)
+- Ingredients list
+- Front-of-pack (product name, brand)
+
+STEP 1 — Identify serving size:
+Check whether the label shows values PER SERVING or PER 100g.
+If PER SERVING: multiply all nutrient values by (100 / serving_size_g) to convert to per-100g.
+If PER 100g: use values directly.
+
+STEP 2 — Extract and convert all values to PER 100g.
+
+Return ONLY this JSON object, no extra text:
 {
-  "name": "Product name if visible, otherwise describe the product",
-  "brand": "Brand name if visible, otherwise null",
-  "serving_size_g": 100,
-  "calories_per_100g": number,
-  "protein_per_100g": number (in grams),
-  "carbs_per_100g": number (in grams),
-  "fat_per_100g": number (in grams),
-  "fiber_g_per_100g": number or null,
-  "sugar_g_per_100g": number or null,
-  "sodium_mg_per_100g": number or null,
-  "ingredients": "Full ingredients list text if visible, otherwise null"
+  "name": "Exact product name from label",
+  "brand": "Brand name or null if not visible",
+  "serving_size_g": <number — the serving size in grams, or 100 if label is already per-100g>,
+  "calories_per_100g": <number>,
+  "protein_per_100g": <number in grams>,
+  "carbs_per_100g": <number in grams — total carbohydrates>,
+  "fat_per_100g": <number in grams — total fat>,
+  "saturated_fat_g_per_100g": <number or null — saturated fat>,
+  "trans_fat_g_per_100g": <number or null — trans fat>,
+  "fiber_g_per_100g": <number or null — dietary fiber>,
+  "sugar_g_per_100g": <number or null — total sugars>,
+  "sodium_mg_per_100g": <number in milligrams or null>,
+  "cholesterol_mg_per_100g": <number in milligrams or null>,
+  "ingredients": "Full ingredients list exactly as printed, or null if not visible"
 }
 
-IMPORTANT:
-- If the label shows values per serving, convert to per 100g
-- If any value is not visible or unclear, use 0 for required fields or null for optional
-- Extract the full ingredients list exactly as written
-- Return ONLY valid JSON, no other text"""
+FIELD RULES:
+- calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g: REQUIRED. Use 0 only if genuinely zero (e.g., water). Do NOT use 0 as a placeholder for missing data — use null for optional fields.
+- Sodium: if label shows in grams, multiply by 1000 to convert to mg.
+- If a value is blurry or partially obscured but estimable, provide your best estimate.
+- If truly unreadable, use null for optional fields.
+- Do NOT invent or estimate values that are completely absent from the label.
+- Ingredients: copy verbatim, preserving E-numbers, additives, and parenthetical info."""
         
         try:
             content_parts: List[Dict[str, Any]] = [
@@ -278,48 +298,92 @@ IMPORTANT:
 
         client = _get_openai_client()
 
-        health_prompt = f"""Analyze this packaged food product for health concerns.
+        health_prompt = f"""You are a registered dietitian and food safety expert. Analyze this packaged food for health implications.
 
-Product: {food_data.get('name', 'Unknown')}
-Brand: {food_data.get('brand', 'Unknown')}
-Ingredients: {food_data.get('ingredients', 'Not available')}
+PRODUCT:
+  Name: {food_data.get('name', 'Unknown')}
+  Brand: {food_data.get('brand', 'Unknown')}
 
-Nutrition per 100g:
-- Calories: {food_data.get('calories_per_100g', 0)}
-- Protein: {food_data.get('protein_per_100g', 0)}g
-- Carbs: {food_data.get('carbs_per_100g', 0)}g
-- Fat: {food_data.get('fat_per_100g', 0)}g
-- Fiber: {food_data.get('fiber_g_per_100g', 0)}g
-- Sugar: {food_data.get('sugar_g_per_100g', 0)}g
-- Sodium: {food_data.get('sodium_mg_per_100g', 0)}mg
+NUTRITION (per 100g):
+  Calories:      {food_data.get('calories_per_100g', 0)} kcal
+  Protein:       {food_data.get('protein_per_100g', 0)}g
+  Total Carbs:   {food_data.get('carbs_per_100g', 0)}g
+  Total Fat:     {food_data.get('fat_per_100g', 0)}g
+  Saturated Fat: {food_data.get('saturated_fat_g_per_100g') or food_data.get('saturated_fat_g_per_100g', 'unknown')}g
+  Trans Fat:     {food_data.get('trans_fat_g_per_100g', 'unknown')}g
+  Sugar:         {food_data.get('sugar_g_per_100g', 0)}g
+  Fiber:         {food_data.get('fiber_g_per_100g', 0)}g
+  Sodium:        {food_data.get('sodium_mg_per_100g', 0)}mg
+  Cholesterol:   {food_data.get('cholesterol_mg_per_100g', 'unknown')}mg
 
-Return a JSON object:
+INGREDIENTS:
+{food_data.get('ingredients', 'Not available')}
+
+INSTRUCTIONS:
+Analyze the product using BOTH the nutrition numbers AND the ingredients list.
+Base your verdict on the ACTUAL values provided — do NOT assume data not given above.
+
+INGREDIENT HAZARDS TO DETECT (flag only if present in the ingredients list):
+- High-fructose corn syrup (HFCS), glucose-fructose syrup → high glycemic burden
+- Hydrogenated or partially hydrogenated oils → trans fat source
+- Palm oil, palm kernel oil → high saturated fat, sustainability concern
+- Artificial colors (E102, E104, E110, E122, E124, E129, Red 40, Yellow 5/6) → hyperactivity risk
+- Artificial preservatives: sodium benzoate (E211), BHA (E320), BHT (E321), TBHQ → oxidative stress
+- Nitrates/nitrites (E249–E252) → processed meat carcinogens
+- Aspartame, acesulfame-K, sucralose → artificial sweeteners
+- Carrageenan (E407) → gut inflammation
+- MSG (E621) → flavor enhancer, sensitivity trigger for some
+- Excessive emulsifiers: polysorbate 80 (E433), carboxymethylcellulose (E466) → gut microbiome disruption
+
+NUTRITION THRESHOLDS (per 100g, for verdict calibration):
+- Sugar: >22.5g = HIGH | 5–22.5g = MEDIUM | <5g = LOW
+- Fat: >17.5g = HIGH | 3–17.5g = MEDIUM | <3g = LOW
+- Saturated Fat: >5g = HIGH | 1.5–5g = MEDIUM | <1.5g = LOW
+- Sodium: >600mg = HIGH | 120–600mg = MEDIUM | <120mg = LOW
+- Calories: >400kcal = HIGH | 100–400kcal = MEDIUM | <100kcal = LOW
+- Trans Fat: >0.5g = flag immediately
+
+VERDICT LOGIC:
+- "avoid": ANY of → trans fat >0.5g, sugar >30g, sodium >800mg, 2+ HIGH ratings on above thresholds, OR 2+ serious ingredient hazards
+- "caution": ANY of → sugar 15–30g, sodium 400–800mg, 1 HIGH threshold, OR 1 ingredient hazard
+- "good": all values LOW or MEDIUM, no serious ingredient hazards
+
+Return ONLY this JSON:
 {{
   "verdict": "good" | "caution" | "avoid",
-  "verdict_reason": "One sentence explaining the verdict",
-  "summary": "2-3 sentence overall assessment",
+  "verdict_reason": "One specific sentence citing the most critical finding with actual numbers",
+  "summary": "2-3 sentences covering: (1) what the product is and its overall profile, (2) main concern if any, (3) who it is suitable for",
   "red_flags": [
     {{
-      "title": "Concern title (max 5 words)",
-      "severity": "low|medium|high",
-      "reason": "Why this is a concern (max 18 words)"
+      "title": "Max 5 words",
+      "severity": "low" | "medium" | "high",
+      "reason": "Specific concern with actual value or ingredient name (max 20 words)"
     }}
   ],
-  "positives": ["Short positive aspect", "Another positive"]
+  "nutrient_highlights": [
+    {{
+      "nutrient": "Sugar",
+      "value": "12g per 100g",
+      "rating": "low" | "medium" | "high",
+      "note": "One brief note"
+    }}
+  ],
+  "positives": ["Specific positive backed by data, e.g. 'High protein at 24g/100g'"],
+  "suitable_for": "Who this product is suitable for (e.g., occasional treat, not for diabetics, etc.)"
 }}
 
-verdict rules:
-- "good": generally healthy, minimal concerns
-- "caution": moderate concerns, okay occasionally
-- "avoid": significant health concerns (high sugar/sodium, trans fats, harmful additives)
-
-Focus on: ultra-processed ingredients, excessive sugar/sodium, artificial additives, trans fats.
-Return ONLY valid JSON."""
+SEVERITY RULES:
+- "high" severity: only for trans fat, extremely high sugar/sodium (>30g/>800mg), known carcinogens
+- "medium" severity: for elevated thresholds or moderate hazard ingredients
+- "low" severity: minor concerns (e.g., artificial sweeteners, MSG)
+- NO red_flags for things that are fine (e.g., don't flag 3g sugar as a concern)
+- If no genuine concerns exist, return: "red_flags": []
+- nutrient_highlights: include 3–5 key nutrients relevant to the verdict
+- positives: back every item with a number ("Good fiber at 4g/100g"), not vague statements"""
 
         try:
             response = await client.responses.create(
                 model="gpt-5.5",
-                reasoning={"effort": "medium"},
                 input=[{
                     "role": "user",
                     "content": health_prompt,

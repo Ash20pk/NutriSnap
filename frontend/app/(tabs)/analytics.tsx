@@ -583,35 +583,40 @@ export default function AnalyticsScreen() {
       alcoholG += Number(micros.alcohol_g || 0);
     });
 
+    // Use 1-decimal precision for trace nutrients (small values like iron, zinc, B vitamins)
+    // to avoid Math.round() losing accuracy (e.g., 1.2mg iron → 1mg)
+    const r1 = (v: number) => parseFloat((v / daysForAverage).toFixed(1));
+    const r0 = (v: number) => Math.round(v / daysForAverage);
+
     setMicroAverages({
-      sodium_mg: Math.round(sodiumMg / daysForAverage),
-      sugar_g: Math.round(sugarG / daysForAverage),
-      fiber_g: Math.round(fiberG / daysForAverage),
-      saturated_fat_g: Math.round(saturatedFatG / daysForAverage),
-      trans_fat_g: Math.round(transFatG / daysForAverage),
-      cholesterol_mg: Math.round(cholesterolMg / daysForAverage),
-      potassium_mg: Math.round(potassiumMg / daysForAverage),
-      calcium_mg: Math.round(calciumMg / daysForAverage),
-      iron_mg: Math.round(ironMg / daysForAverage),
-      magnesium_mg: Math.round(magnesiumMg / daysForAverage),
-      phosphorus_mg: Math.round(phosphorusMg / daysForAverage),
-      zinc_mg: Math.round(zincMg / daysForAverage),
-      copper_mg: Math.round(copperMg / daysForAverage),
-      manganese_mg: Math.round(manganeseMg / daysForAverage),
-      selenium_ug: Math.round(seleniumUg / daysForAverage),
-      vitamin_a_ug: Math.round(vitaminAUg / daysForAverage),
-      vitamin_c_mg: Math.round(vitaminCMg / daysForAverage),
-      vitamin_d_ug: Math.round(vitaminDUg / daysForAverage),
-      vitamin_e_mg: Math.round(vitaminEMg / daysForAverage),
-      vitamin_k_ug: Math.round(vitaminKUg / daysForAverage),
-      thiamin_b1_mg: Math.round(thiaminB1Mg / daysForAverage),
-      riboflavin_b2_mg: Math.round(riboflavinB2Mg / daysForAverage),
-      niacin_b3_mg: Math.round(niacinB3Mg / daysForAverage),
-      vitamin_b6_mg: Math.round(vitaminB6Mg / daysForAverage),
-      folate_ug: Math.round(folateUg / daysForAverage),
-      vitamin_b12_ug: Math.round(vitaminB12Ug / daysForAverage),
-      caffeine_mg: Math.round(caffeineMg / daysForAverage),
-      alcohol_g: Math.round(alcoholG / daysForAverage),
+      sodium_mg: r0(sodiumMg),
+      sugar_g: r0(sugarG),
+      fiber_g: r0(fiberG),
+      saturated_fat_g: r0(saturatedFatG),
+      trans_fat_g: r1(transFatG),
+      cholesterol_mg: r0(cholesterolMg),
+      potassium_mg: r0(potassiumMg),
+      calcium_mg: r0(calciumMg),
+      iron_mg: r1(ironMg),
+      magnesium_mg: r0(magnesiumMg),
+      phosphorus_mg: r0(phosphorusMg),
+      zinc_mg: r1(zincMg),
+      copper_mg: r1(copperMg),
+      manganese_mg: r1(manganeseMg),
+      selenium_ug: r1(seleniumUg),
+      vitamin_a_ug: r0(vitaminAUg),
+      vitamin_c_mg: r0(vitaminCMg),
+      vitamin_d_ug: r1(vitaminDUg),
+      vitamin_e_mg: r1(vitaminEMg),
+      vitamin_k_ug: r0(vitaminKUg),
+      thiamin_b1_mg: r1(thiaminB1Mg),
+      riboflavin_b2_mg: r1(riboflavinB2Mg),
+      niacin_b3_mg: r1(niacinB3Mg),
+      vitamin_b6_mg: r1(vitaminB6Mg),
+      folate_ug: r0(folateUg),
+      vitamin_b12_ug: r1(vitaminB12Ug),
+      caffeine_mg: r0(caffeineMg),
+      alcohol_g: r1(alcoholG),
     });
   }, [timeRange, user?.daily_calorie_target]);
 
