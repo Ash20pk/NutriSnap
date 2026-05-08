@@ -56,8 +56,6 @@ class AIMealService:
                 matched_foods.append(matched)
         
         return {
-            "coin_detected": analysis.get("coin_detected", False),
-            "coin_type": analysis.get("coin_type"),
             "foods": matched_foods,
             "notes": analysis.get("notes", ""),
         }

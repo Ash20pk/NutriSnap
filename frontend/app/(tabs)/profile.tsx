@@ -29,8 +29,9 @@ import AppCard from '../../components/AppCard';
 import DuoButton from '../../components/DuoButton';
 import ProfileRow from '../../components/ProfileRow';
 import { useRouter } from 'expo-router';
-import { questApi, socialApi, userApi } from '../../utils/api';
+import { questApi, socialApi, userApi, WeightHistoryEntry } from '../../utils/api';
 import { supabase } from '../../utils/supabase';
+import { LineChart } from 'react-native-gifted-charts';
 
 interface QuestBadge {
   id: string;
@@ -105,6 +106,7 @@ export default function ProfileScreen() {
   const [badges, setBadges] = React.useState<QuestBadge[]>([]);
   const [followersCount, setFollowersCount] = React.useState(0);
   const [followingCount, setFollowingCount] = React.useState(0);
+  const [weightHistory, setWeightHistory] = React.useState<WeightHistoryEntry[]>([]);
 
   const [editVisible, setEditVisible] = React.useState(false);
   const [editUsernameDraft, setEditUsernameDraft] = React.useState('');
@@ -169,16 +171,18 @@ export default function ProfileScreen() {
     if (!user?.id) return;
     setProfileRefreshLoading(true);
     try {
-      const [statsRes, badgesRes, followersRes, followingRes] = await Promise.all([
+      const [statsRes, badgesRes, followersRes, followingRes, weightRes] = await Promise.all([
         questApi.getStats(user.id),
         questApi.getBadges(user.id),
         socialApi.getMyFollowers(),
         socialApi.getMyFollowing(),
+        userApi.getWeightHistory(12).catch(() => []),
       ]);
       setStats(statsRes);
       setBadges(badgesRes.badges || []);
       setFollowersCount((followersRes.followers || []).length);
       setFollowingCount((followingRes.following || []).length);
+      setWeightHistory(Array.isArray(weightRes) ? weightRes : []);
     } catch (e) {
       console.error('Error loading profile data:', e);
     } finally {
@@ -625,6 +629,39 @@ export default function ProfileScreen() {
             <Text style={styles.statLabel}>BMI</Text>
           </View>
         </AnimatedCard>
+
+        {weightHistory.length >= 2 && (
+          <AnimatedCard delay={350} type="slide" style={styles.section}>
+            <SectionTitle title="Weight Progress" />
+            <AppCard padding={16}>
+              <LineChart
+                data={weightHistory
+                  .slice()
+                  .reverse()
+                  .map((e) => ({ value: e.weight }))}
+                height={120}
+                width={280}
+                color={theme.primary}
+                thickness={2}
+                hideDataPoints={weightHistory.length > 8}
+                dataPointsColor={theme.primary}
+                startFillColor={theme.primary}
+                endFillColor={theme.background}
+                startOpacity={0.25}
+                endOpacity={0.02}
+                initialSpacing={8}
+                noOfSections={4}
+                yAxisTextStyle={{ color: theme.textSecondary, fontSize: 10 }}
+                xAxisLabelTextStyle={{ color: theme.textSecondary, fontSize: 10 }}
+                rulesColor={theme.border}
+                areaChart
+              />
+              <Text style={styles.weightChartSub}>
+                Last {weightHistory.length} entries · current {user?.weight ?? '—'} kg
+              </Text>
+            </AppCard>
+          </AnimatedCard>
+        )}
 
       <AnimatedCard delay={400} type="slide" style={styles.section}>
         <SectionTitle
@@ -1126,6 +1163,13 @@ function makeStyles(theme: typeof Colors) {
     fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  weightChartSub: {
+    fontSize: 11,
+    color: theme.textSecondary,
+    fontWeight: '600',
+    marginTop: 8,
+    textAlign: 'center',
   },
   section: {
     marginBottom: Spacing.xxl,

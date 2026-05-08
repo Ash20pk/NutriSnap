@@ -644,8 +644,29 @@ export const mealApi = {
     return response.data;
   },
   logMeal: async (mealData: MealLogData): Promise<Meal> => {
-    const response = await api.post('/meals/log', mealData);
-    return response.data;
+    try {
+      const response = await api.post('/meals/log', mealData);
+      // Connectivity is back — flush any meals that were queued while offline
+      import('./offlineMealQueue').then(({ flushOfflineMealQueue }) => {
+        flushOfflineMealQueue(mealApi.logMeal).catch(() => {});
+      });
+      return response.data;
+    } catch (err: any) {
+      const isNetworkError =
+        !err.response ||
+        err.code === 'ERR_NETWORK' ||
+        err.code === 'ECONNABORTED' ||
+        err.message === 'Network Error';
+      if (isNetworkError) {
+        import('./offlineMealQueue').then(({ enqueueOfflineMeal }) => {
+          enqueueOfflineMeal(mealData).catch(() => {});
+        });
+        throw Object.assign(new Error('Saved offline — will sync when connected'), {
+          offline: true,
+        });
+      }
+      throw err;
+    }
   },
   getHistory: async (userId: string, days: number = 7): Promise<{ meals: Meal[]; count: number }> => {
     // Get timezone offset in minutes (e.g., IST = 330, EST = -300)
@@ -670,7 +691,7 @@ export const analyticsApi = {
   },
   getAnalyticsBundle: async (
     userId: string,
-    timeRange: 'week' | 'month' = 'week',
+    timeRange: 'week' | 'month' | 'year' = 'week',
     timezoneOffset?: number
   ): Promise<{
     time_range?: string;

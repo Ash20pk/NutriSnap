@@ -34,7 +34,7 @@ export default function LogScreen() {
   const params = useLocalSearchParams();
   const { user } = useUser();
   const searchInputRef = useRef<TextInput>(null);
-  const ENABLE_CAMERA_LOGGING = false; // temporarily disabled
+  const ENABLE_CAMERA_LOGGING = true;
   const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
   const [logMethod, setLogMethod] = useState<'photo' | 'manual' | null>(null);
   const [loading, setLoading] = useState(false);
@@ -366,6 +366,18 @@ export default function LogScreen() {
       <PageHeader 
         title="Log Your Meal" 
         subtitle="Choose your meal type"
+        rightComponent={
+          <TouchableOpacity
+            style={styles.profileIconButton}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              router.push('/(tabs)/profile');
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="person-outline" size={20} color={theme.text} />
+          </TouchableOpacity>
+        }
       />
       <ScrollView 
         style={styles.scrollView}
@@ -1303,6 +1315,14 @@ function makeStyles(theme: typeof Colors) {
     flexDirection: 'row',
     gap: 12,
     marginTop: 8,
+  },
+  profileIconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   });
 }

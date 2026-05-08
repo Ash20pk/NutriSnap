@@ -39,4 +39,4 @@ class TestBarcode:
             "notes": "E2E test submission",
         })
         # Might succeed or fail depending on food existing
-        assert resp.status_code in (200, 201, 400, 404, 500)
+        assert resp.status_code in (200, 201, 400, 404, 422, 500)

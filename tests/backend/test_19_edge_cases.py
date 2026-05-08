@@ -201,9 +201,17 @@ class TestProfileEdgeCases:
 
 
 class TestConcurrency:
-    def test_concurrent_meal_logs(self, client, state):
-        """Multiple simultaneous meal logs should not corrupt data."""
+    def test_concurrent_meal_logs(self, auth_token, state):
+        """Multiple simultaneous meal logs should not corrupt data.
+
+        Each thread gets its own httpx.Client — sharing a single client across
+        threads can cause connection-reset errors under concurrent load.
+        """
+        import httpx
+        import os
         from concurrent.futures import ThreadPoolExecutor
+
+        BASE_URL = os.environ.get("TEST_BASE_URL", "http://localhost:8001")
 
         def log_one(i):
             data = make_meal_log_data(state.user_id, notes=f"concurrent-{i}", foods=[
@@ -216,7 +224,16 @@ class TestConcurrency:
                     "quantity": 100,
                 }
             ])
-            return client.post("/meals/log", json=data)
+            with httpx.Client(
+                base_url=f"{BASE_URL}/api",
+                headers={
+                    "Authorization": f"Bearer {auth_token}",
+                    "Content-Type": "application/json",
+                },
+                timeout=30.0,
+                follow_redirects=True,
+            ) as c:
+                return c.post("/meals/log", json=data)
 
         with ThreadPoolExecutor(max_workers=5) as pool:
             results = list(pool.map(log_one, range(5)))

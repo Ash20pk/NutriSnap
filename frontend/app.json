@@ -87,7 +87,8 @@
       "router": {},
       "eas": {
         "projectId": "c81eaf45-57e0-49c1-b331-7817d85e9d11"
-      }
+      },
+      "EXPO_PUBLIC_BACKEND_URL": ""
     }
   }
 }

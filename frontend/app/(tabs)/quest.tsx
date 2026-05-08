@@ -12,8 +12,10 @@ import LoadingState from '../../components/LoadingState';
 import PillTabs from '../../components/PillTabs';
 import UserRow from '../../components/UserRow';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 import { useUser } from '../../context/UserContext';
 import { questApi, socialApi } from '../../utils/api';
+import { notifyBadgesEarned, notifyQuestComplete } from '../../utils/notifications';
 
 interface Quest {
   id: string;
@@ -78,6 +80,7 @@ export default function QuestScreen() {
   const { theme } = useTheme();
   const styles = makeStyles(theme);
   const { user, showXpPopup } = useUser();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'quests' | 'leaderboard' | 'badges'>('quests');
   const [leaderboardScope, setLeaderboardScope] = useState<'global' | 'friends'>('global');
 
@@ -121,6 +124,7 @@ export default function QuestScreen() {
       // Check for new badges
       const badgeCheck = await questApi.checkBadges(user.id);
       if (badgeCheck.newly_earned?.length > 0) {
+        notifyBadgesEarned(badgeCheck.newly_earned);
         Alert.alert(
           '🏆 Badge Earned!',
           `You earned: ${badgeCheck.newly_earned.map((b: any) => b.title).join(', ')}\n+${badgeCheck.xp_earned} XP`,
@@ -213,8 +217,10 @@ export default function QuestScreen() {
       // Refresh leaderboard after claiming XP to reflect new score
       await refreshLeaderboard();
 
-      // Show XP popup
+      // Show XP popup and local notification
       showXpPopup(result.xp_earned);
+      const claimedQuest = quests.find((q) => q.id === questId);
+      if (claimedQuest) notifyQuestComplete(claimedQuest.title, result.xp_earned);
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.detail || 'Failed to claim XP');
     } finally {
@@ -227,6 +233,18 @@ export default function QuestScreen() {
       <PageHeader
         title="Quest"
         subtitle="Complete quests and climb the leaderboard."
+        rightComponent={
+          <TouchableOpacity
+            style={styles.profileIconButton}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              router.push('/(tabs)/profile');
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="person-outline" size={20} color={theme.text} />
+          </TouchableOpacity>
+        }
       />
 
       <ScrollView
@@ -1156,6 +1174,14 @@ function makeStyles(theme: typeof Colors) {
   },
   scopePillTextActive: {
     color: theme.white,
+  },
+  profileIconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   });
 }

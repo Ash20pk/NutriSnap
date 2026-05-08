@@ -556,13 +556,13 @@ class QuestService:
                 to_uuid(user_id),
             ) or 0
 
-            # Days user logged breakfast before 10 am (UTC meal_type = 'breakfast' or first meal < 10:00)
+            # Days user logged a meal with meal_type = 'breakfast'
             breakfast_days = await conn.fetchval(
                 """
                 SELECT COUNT(DISTINCT DATE(timestamp AT TIME ZONE 'UTC'))
                 FROM meals
                 WHERE user_id = $1
-                  AND (meal_type = 'breakfast' OR EXTRACT(HOUR FROM timestamp AT TIME ZONE 'UTC') < 10)
+                  AND meal_type = 'breakfast'
                 """,
                 to_uuid(user_id),
             ) or 0
@@ -673,7 +673,7 @@ class QuestService:
                         ux.total_xp,
                         ux.level,
                         ux.badges_earned,
-                        p.name,
+                        COALESCE(p.username, p.name) AS name,
                         ux.user_id = $1 AS is_current_user
                     FROM user_xp ux
                     JOIN profiles p ON ux.user_id = p.id
@@ -696,7 +696,7 @@ class QuestService:
                         ux.total_xp,
                         ux.level,
                         ux.badges_earned,
-                        p.name,
+                        COALESCE(p.username, p.name) AS name,
                         ux.user_id = $1 AS is_current_user
                     FROM user_xp ux
                     JOIN profiles p ON ux.user_id = p.id

@@ -17,6 +17,7 @@ import { useUser } from '../../context/UserContext';
 import { mealApi, analyticsApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import PageHeader from '../../components/PageHeader';
 import AnimatedCard from '../../components/AnimatedCard';
@@ -236,8 +237,9 @@ export default function AnalyticsScreen() {
   const { theme } = useTheme();
   const styles = makeStyles(theme);
   const { user } = useUser();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [timeRange, setTimeRange] = useState<'week' | 'month'>('week');
+  const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('week');
   const [weeklyData, setWeeklyData] = useState<any[]>([]);
   const [periodMealCount, setPeriodMealCount] = useState(0);
   const [macroDistribution, setMacroDistribution] = useState<any[]>([]);
@@ -753,6 +755,18 @@ export default function AnalyticsScreen() {
       <PageHeader
         title="Analytics"
         subtitle="Your nutrition insights"
+        rightComponent={
+          <TouchableOpacity
+            style={styles.profileIconButton}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              router.push('/(tabs)/profile');
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="person-outline" size={20} color={theme.text} />
+          </TouchableOpacity>
+        }
       />
       <ScrollView
         style={styles.scrollView}
@@ -803,6 +817,25 @@ export default function AnalyticsScreen() {
               ]}
             >
               Month
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.timeRangeButton,
+              timeRange === 'year' && styles.timeRangeButtonActive,
+            ]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+              setTimeRange('year');
+            }}
+          >
+            <Text
+              style={[
+                styles.timeRangeText,
+                timeRange === 'year' && styles.timeRangeTextActive,
+              ]}
+            >
+              Year
             </Text>
           </TouchableOpacity>
         </View>
@@ -2235,6 +2268,14 @@ function makeStyles(theme: typeof Colors) {
     fontSize: 16,
     fontWeight: '900',
     textTransform: 'uppercase',
+  },
+  profileIconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   });
 }

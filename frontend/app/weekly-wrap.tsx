@@ -54,7 +54,7 @@ export default function WeeklyWrapScreen() {
     {
       id: 'intro',
       title: 'Your Week\nin Review',
-      subtitle: 'Loggr Wrapped 2024',
+      subtitle: `Loggr Wrapped ${new Date().getFullYear()}`,
       gradient: [theme.primary, Colors.accent] as const,
       icon: 'sparkles',
     },

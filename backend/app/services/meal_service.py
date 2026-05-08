@@ -506,7 +506,155 @@ class MealService:
             )
         
         return {"message": "Meal deleted successfully"}
-    
+
+    async def update_meal(
+        self,
+        meal_id: str,
+        user_id: str,
+        meal_type: Optional[str],
+        foods: Optional[List[Dict[str, Any]]],
+        notes: Optional[str],
+    ) -> Dict[str, Any]:
+        """
+        Update an existing meal's type, foods, and/or notes.
+
+        Args:
+            meal_id: Meal UUID
+            user_id: User UUID (for ownership verification)
+            meal_type: Optional new meal type
+            foods: Optional new foods list (replaces existing)
+            notes: Optional new notes
+
+        Returns:
+            Updated meal dictionary
+        """
+        async with self.pool.acquire() as conn:
+            owner = await conn.fetchval(
+                "SELECT user_id FROM meals WHERE id = $1",
+                to_uuid(meal_id),
+            )
+            if not owner:
+                raise HTTPException(status_code=404, detail="Meal not found")
+            if str(owner) != user_id:
+                raise HTTPException(status_code=403, detail="Not authorized to edit this meal")
+
+            if foods is not None:
+                normalized_foods: List[Dict[str, Any]] = []
+                for f in foods:
+                    if not isinstance(f, dict):
+                        continue
+                    nf = dict(f)
+                    if not nf.get("food_id") and nf.get("id"):
+                        nf["food_id"] = nf.get("id")
+                    qty_raw = nf.get("quantity") if nf.get("quantity") is not None else nf.get("displayQuantity")
+                    try:
+                        qty = float(qty_raw) if qty_raw is not None else 0.0
+                    except Exception:
+                        qty = 0.0
+                    unit = str(nf.get("displayUnit") or nf.get("unit") or "g").strip().lower()
+                    grams = qty * 28.3495 if unit == "oz" else qty
+                    nf["quantity"] = grams
+                    nf["displayUnit"] = "g"
+                    nf["unit"] = "g"
+                    if nf.get("displayQuantity") is None or unit == "oz":
+                        nf["displayQuantity"] = grams
+                    ratio = grams / 100.0 if grams else 0.0
+                    for key in ("calories", "protein", "carbs", "fat"):
+                        per100 = nf.get(f"{key}_per_100g")
+                        if per100 is not None:
+                            try:
+                                nf[key] = round(float(per100) * ratio, 2)
+                            except Exception:
+                                nf[key] = 0.0
+                        elif nf.get(key) is None:
+                            nf[key] = 0.0
+                    normalized_foods.append(nf)
+
+                total_calories = sum(f.get("calories", 0) for f in normalized_foods)
+                total_protein = sum(f.get("protein", 0) for f in normalized_foods)
+                total_carbs = sum(f.get("carbs", 0) for f in normalized_foods)
+                total_fat = sum(f.get("fat", 0) for f in normalized_foods)
+
+                micros = create_empty_micros()
+                foods_for_micros = [f for f in normalized_foods if f.get("food_id") and f.get("quantity")]
+                if foods_for_micros:
+                    food_ids = []
+                    for f in foods_for_micros:
+                        try:
+                            food_ids.append(uuid_lib.UUID(str(f["food_id"])))
+                        except Exception:
+                            continue
+                    if food_ids:
+                        food_rows = await conn.fetch(
+                            """
+                            SELECT id,
+                                fiber_g_per_100g, sugar_g_per_100g,
+                                saturated_fat_g_per_100g, trans_fat_g_per_100g,
+                                cholesterol_mg_per_100g, sodium_mg_per_100g,
+                                potassium_mg_per_100g, vitamin_a_ug_per_100g,
+                                calcium_mg_per_100g, iron_mg_per_100g,
+                                magnesium_mg_per_100g, phosphorus_mg_per_100g,
+                                zinc_mg_per_100g, copper_mg_per_100g,
+                                manganese_mg_per_100g, selenium_ug_per_100g,
+                                vitamin_c_mg_per_100g, vitamin_d_ug_per_100g,
+                                vitamin_e_mg_per_100g, vitamin_k_ug_per_100g,
+                                thiamin_b1_mg_per_100g, riboflavin_b2_mg_per_100g,
+                                niacin_b3_mg_per_100g, vitamin_b6_mg_per_100g,
+                                folate_ug_per_100g, vitamin_b12_ug_per_100g,
+                                caffeine_mg_per_100g, alcohol_g_per_100g
+                            FROM foods WHERE id = ANY($1::uuid[])
+                            """,
+                            food_ids,
+                        )
+                        foods_by_id = {str(r["id"]): dict(r) for r in food_rows}
+                        micros = compute_meal_micros({"foods": normalized_foods}, foods_by_id)
+
+                row = await conn.fetchrow(
+                    """
+                    UPDATE meals
+                    SET
+                        meal_type       = COALESCE($2, meal_type),
+                        foods           = $3::jsonb,
+                        micros          = $4::jsonb,
+                        total_calories  = $5,
+                        total_protein   = $6,
+                        total_carbs     = $7,
+                        total_fat       = $8,
+                        notes           = COALESCE($9, notes),
+                        updated_at      = now()
+                    WHERE id = $1
+                    RETURNING *
+                    """,
+                    to_uuid(meal_id),
+                    meal_type,
+                    json.dumps(normalized_foods),
+                    json.dumps(micros),
+                    float(total_calories),
+                    float(total_protein),
+                    float(total_carbs),
+                    float(total_fat),
+                    notes,
+                )
+            else:
+                row = await conn.fetchrow(
+                    """
+                    UPDATE meals
+                    SET
+                        meal_type  = COALESCE($2, meal_type),
+                        notes      = COALESCE($3, notes),
+                        updated_at = now()
+                    WHERE id = $1
+                    RETURNING *
+                    """,
+                    to_uuid(meal_id),
+                    meal_type,
+                    notes,
+                )
+
+            if not row:
+                raise HTTPException(status_code=500, detail="Failed to update meal")
+            return meal_from_record(row)
+
     async def _compute_meal_micronutrients(
         self,
         conn: asyncpg.Connection,

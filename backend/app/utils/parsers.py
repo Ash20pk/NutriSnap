@@ -861,8 +861,7 @@ async def analyze_food_image(image_base64: str) -> Dict[str, Any]:
                         "text": (
                             "Analyze this food image and identify all food items. "
                             "Return ONLY a JSON response with format: "
-                            "{\"coin_detected\": true/false, \"coin_type\": \"₹10\" or null, "
-                            "\"foods\": [{\"name\": string, \"estimated_quantity_grams\": number, \"confidence\": \"high\"|\"medium\"|\"low\"}], "
+                            "{\"foods\": [{\"name\": string, \"estimated_quantity_grams\": number, \"confidence\": \"high\"|\"medium\"|\"low\"}], "
                             "\"notes\": string}."
                         ),
                     },
@@ -878,5 +877,5 @@ async def analyze_food_image(image_base64: str) -> Dict[str, Any]:
     extracted = extract_json_from_text(content)
     parsed = json.loads(extracted) if extracted else {}
     if not isinstance(parsed, dict):
-        return {"coin_detected": False, "coin_type": None, "foods": [], "notes": ""}
+        return {"foods": [], "notes": ""}
     return parsed

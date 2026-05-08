@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
 import XpPopUp from '../components/XpPopUp';
 import { ThemeProvider } from './ThemeContext';
+import { userApi } from '../utils/api';
 
 interface XpState {
   showPopup: boolean;
@@ -67,15 +68,27 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
           return;
         }
 
-        // Only load cached profile, don't call backend during auth flow
+        // Load cached profile immediately so the UI is responsive
         const userData = await AsyncStorage.getItem('user_profile');
         if (userData) {
           if (__DEV__) console.log('[UserContext] Found cached profile');
           setUserState(JSON.parse(userData));
-        } else {
-          if (__DEV__) console.log('[UserContext] No cached profile - will load from backend later');
-          setUserState(null);
         }
+
+        // Reconcile with backend in the background to pick up any server-side changes
+        // (recalculated targets, goal updates, weight check flags, etc.)
+        try {
+          const fresh = await userApi.getMe();
+          if (fresh) {
+            await AsyncStorage.setItem('user_profile', JSON.stringify(fresh));
+            setUserState(fresh as any);
+            if (__DEV__) console.log('[UserContext] Profile reconciled with backend');
+          }
+        } catch (err) {
+          // Non-fatal: cached profile is good enough if backend is unreachable
+          if (__DEV__) console.log('[UserContext] Backend reconcile failed, using cache', err);
+        }
+
         setIsLoading(false);
       } catch (error) {
         console.error('[UserContext] Error loading user:', error);

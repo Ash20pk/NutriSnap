@@ -174,6 +174,41 @@ async def get_daily_stats(
     return await service.get_daily_stats(user_id=user_id, date_str=date, timezone_offset=timezone_offset)
 
 
+class MealUpdate(BaseModel):
+    meal_type: Optional[str] = None
+    foods: Optional[List[FoodItem]] = None
+    notes: Optional[str] = None
+
+
+@router.put("/{meal_id}")
+async def update_meal(
+    meal_id: str,
+    meal_data: MealUpdate,
+    uid: str = Depends(get_current_uid),
+    service: MealService = Depends(get_meal_service)
+):
+    """
+    Update a meal's type, foods, and/or notes. Only the owner may update.
+
+    Args:
+        meal_id: Meal UUID
+        meal_data: Fields to update (all optional)
+        uid: Current user ID (from auth)
+        service: Meal service instance
+
+    Returns:
+        Updated meal
+    """
+    foods = [f.model_dump() for f in meal_data.foods] if meal_data.foods is not None else None
+    return await service.update_meal(
+        meal_id=meal_id,
+        user_id=uid,
+        meal_type=meal_data.meal_type,
+        foods=foods,
+        notes=meal_data.notes,
+    )
+
+
 @router.delete("/{meal_id}")
 async def delete_meal(
     meal_id: str,

@@ -1,0 +1,29 @@
+# ============================================================
+# NutriSnap — Local test stack
+# Starts only the DB; the API is run directly via uvicorn.
+#
+# Usage (managed by tests/run_local.sh):
+#   docker compose -f docker-compose.test.yml up -d
+#   docker compose -f docker-compose.test.yml down -v
+# ============================================================
+
+services:
+  db_test:
+    image: postgres:16-alpine
+    container_name: nutrisnap_test_db
+    environment:
+      POSTGRES_USER: nutrisnap_test
+      POSTGRES_PASSWORD: nutrisnap_test
+      POSTGRES_DB: nutrisnap_test
+    volumes:
+      - ./backend/schema_test.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    ports:
+      - "5435:5432"
+    tmpfs:
+      - /var/lib/postgresql/data   # ephemeral — wiped on container stop
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nutrisnap_test -d nutrisnap_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
