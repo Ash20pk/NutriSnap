@@ -18,6 +18,8 @@ export interface UserProfile {
   goal: string;
   activity_level: string;
   dietary_preference: string;
+  food_allergies?: string[];
+  water_goal_ml?: number;
   daily_calorie_target: number;
   protein_target: number;
   carbs_target: number;
@@ -42,6 +44,20 @@ export interface OnboardingData {
   goal: string;
   activity_level: string;
   dietary_preference: string;
+  food_allergies?: string[];
+}
+
+export interface WaterLog {
+  id: string;
+  amount_ml: number;
+  logged_at: string;
+}
+
+export interface WaterToday {
+  total_ml: number;
+  goal_ml: number;
+  percentage: number;
+  logs: WaterLog[];
 }
 
 export interface WeightCheckData {
@@ -864,6 +880,24 @@ export const socialApi = {
   },
   getMyFollowers: async (): Promise<{ followers: FollowUser[] }> => {
     const response = await api.get('/users/me/followers');
+    return response.data;
+  },
+};
+
+export const waterApi = {
+  logWater: async (userId: string, amountMl: number): Promise<WaterLog> => {
+    const response = await api.post('/water/log', { user_id: userId, amount_ml: amountMl });
+    return response.data;
+  },
+  getToday: async (userId: string): Promise<WaterToday> => {
+    const response = await api.get(`/water/today/${userId}`);
+    return response.data;
+  },
+  deleteLog: async (userId: string, logId: string): Promise<void> => {
+    await api.delete(`/water/${logId}`, { params: { user_id: userId } });
+  },
+  updateGoal: async (userId: string, goalMl: number): Promise<{ water_goal_ml: number }> => {
+    const response = await api.put('/water/goal', { user_id: userId, goal_ml: goalMl });
     return response.data;
   },
 };

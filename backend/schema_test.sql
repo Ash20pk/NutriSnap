@@ -34,12 +34,25 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     last_weight_check       timestamptz,
     weight_check_reminder   boolean DEFAULT true,
     is_special_user         boolean NOT NULL DEFAULT false,  -- unlocks pink Aayu theme
+    water_goal_ml           integer NOT NULL DEFAULT 2500,
+    food_allergies          text[]  NOT NULL DEFAULT '{}',
     created_at              timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_profiles_username_lower
     ON public.profiles (lower(username))
     WHERE username IS NOT NULL;
+
+
+CREATE TABLE IF NOT EXISTS public.water_logs (
+    id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     uuid        NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    amount_ml   integer     NOT NULL CHECK (amount_ml > 0),
+    logged_at   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_water_logs_user_date
+    ON public.water_logs (user_id, logged_at DESC);
 
 
 CREATE TABLE IF NOT EXISTS public.foods (

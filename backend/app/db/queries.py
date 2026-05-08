@@ -77,6 +77,8 @@ def profile_from_record(record: asyncpg.Record) -> Dict[str, Any]:
         "goal": record["goal"],
         "activity_level": record["activity_level"],
         "dietary_preference": record["dietary_preference"],
+        "food_allergies": list(record["food_allergies"]) if record.get("food_allergies") else [],
+        "water_goal_ml": record.get("water_goal_ml", 2500),
         "daily_calorie_target": record["daily_calorie_target"],
         "protein_target": record["protein_target"],
         "carbs_target": record["carbs_target"],

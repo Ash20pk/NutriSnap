@@ -46,7 +46,7 @@ const getDaysInMonth = (year: number, month: number) => {
   return new Date(year, month, 0).getDate();
 };
 
-const TOTAL_STEPS = 5; // steps 1–5 (step 0 is the welcome screen)
+const TOTAL_STEPS = 6; // steps 1–6 (step 0 is the welcome screen)
 
 export default function Onboarding() {
   const router = useRouter();
@@ -67,6 +67,7 @@ export default function Onboarding() {
     goal: 'maintain',
     activity_level: 'moderate',
     dietary_preference: 'no_restriction',
+    food_allergies: [] as string[],
   });
 
   const goals = [
@@ -85,10 +86,25 @@ export default function Onboarding() {
   ];
 
   const dietaryPreferences = [
-    { id: 'vegetarian', label: 'Vegetarian', icon: 'leaf', emoji: '🥬', desc: 'No meat' },
-    { id: 'vegan', label: 'Vegan', icon: 'leaf-outline', emoji: '🌱', desc: 'Plant power' },
-    { id: 'non_veg', label: 'Non-Veg', icon: 'restaurant', emoji: '🍖', desc: 'Everything goes' },
-    { id: 'no_restriction', label: 'Flexible', icon: 'fast-food', emoji: '🍽️', desc: 'I eat it all' },
+    { id: 'no_restriction', label: 'Flexible', emoji: '🍽️', desc: 'I eat it all' },
+    { id: 'vegetarian', label: 'Vegetarian', emoji: '🥬', desc: 'No meat or fish' },
+    { id: 'vegan', label: 'Vegan', emoji: '🌱', desc: 'Plant-based only' },
+    { id: 'non_veg', label: 'Non-Veg', emoji: '🍖', desc: 'Meat & everything' },
+    { id: 'jain', label: 'Jain', emoji: '🫘', desc: 'No root vegetables' },
+    { id: 'keto', label: 'Keto', emoji: '🥑', desc: 'Low carb, high fat' },
+    { id: 'paleo', label: 'Paleo', emoji: '🥩', desc: 'Whole & unprocessed' },
+    { id: 'mediterranean', label: 'Mediterranean', emoji: '🫒', desc: 'Heart-healthy' },
+  ];
+
+  const allergyOptions = [
+    { id: 'gluten', label: 'Gluten', emoji: '🌾' },
+    { id: 'dairy', label: 'Dairy', emoji: '🥛' },
+    { id: 'eggs', label: 'Eggs', emoji: '🥚' },
+    { id: 'nuts', label: 'Tree Nuts', emoji: '🥜' },
+    { id: 'peanuts', label: 'Peanuts', emoji: '🫘' },
+    { id: 'shellfish', label: 'Shellfish', emoji: '🦐' },
+    { id: 'soy', label: 'Soy', emoji: '🟢' },
+    { id: 'fish', label: 'Fish', emoji: '🐟' },
   ];
 
   const calculateAge = () => {
@@ -161,6 +177,7 @@ export default function Onboarding() {
         goal: formData.goal,
         activity_level: formData.activity_level,
         dietary_preference: formData.dietary_preference,
+        food_allergies: formData.food_allergies,
       };
 
       const response = await userApi.onboard(userData);
@@ -185,6 +202,7 @@ export default function Onboarding() {
       case 3: return { title: "What's your goal?", subtitle: 'Pick the one that drives you' };
       case 4: return { title: 'How active are you?', subtitle: 'Be honest — we\'ll calibrate for you' };
       case 5: return { title: 'Your food style', subtitle: "We'll personalize your suggestions" };
+      case 6: return { title: 'Any food allergies?', subtitle: 'Select all that apply — or skip if none' };
       default: return { title: '', subtitle: '' };
     }
   })();
@@ -517,7 +535,7 @@ export default function Onboarding() {
                 </AnimatedCard>
               )}
 
-              {/* Step 5 — Diet + Finish */}
+              {/* Step 5 — Dietary style */}
               {step === 5 && (
                 <AnimatedCard type="pop" delay={80} style={styles.stepContainer}>
                   <View style={styles.dietGrid}>
@@ -543,6 +561,60 @@ export default function Onboarding() {
                       </TouchableOpacity>
                     ))}
                   </View>
+                </AnimatedCard>
+              )}
+
+              {/* Step 6 — Food allergies + Finish */}
+              {step === 6 && (
+                <AnimatedCard type="pop" delay={80} style={styles.stepContainer}>
+                  <View style={styles.allergyGrid}>
+                    {allergyOptions.map((item) => {
+                      const selected = formData.food_allergies.includes(item.id);
+                      return (
+                        <TouchableOpacity
+                          key={item.id}
+                          style={[styles.allergyCard, selected && styles.allergyCardActive]}
+                          onPress={() => {
+                            Haptics.selectionAsync().catch(() => {});
+                            const next = selected
+                              ? formData.food_allergies.filter((a) => a !== item.id)
+                              : [...formData.food_allergies, item.id];
+                            setFormData({ ...formData, food_allergies: next });
+                          }}
+                        >
+                          <Text style={styles.allergyEmoji}>{item.emoji}</Text>
+                          <Text style={[styles.allergyLabel, selected && styles.allergyLabelActive]}>
+                            {item.label}
+                          </Text>
+                          {selected && (
+                            <View style={styles.allergyCheck}>
+                              <Ionicons name="checkmark" size={12} color={Colors.white} />
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.noAllergyBtn}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setFormData({ ...formData, food_allergies: [] });
+                    }}
+                  >
+                    <Ionicons
+                      name={formData.food_allergies.length === 0 ? 'checkmark-circle' : 'ellipse-outline'}
+                      size={20}
+                      color={formData.food_allergies.length === 0 ? Colors.primary : Colors.textSecondary}
+                    />
+                    <Text style={[
+                      styles.noAllergyText,
+                      formData.food_allergies.length === 0 && styles.noAllergyTextActive,
+                    ]}>
+                      None — I have no allergies
+                    </Text>
+                  </TouchableOpacity>
 
                   <View style={styles.finalTip}>
                     <Text style={styles.finalTipEmoji}>🎉</Text>
@@ -1049,16 +1121,16 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   dietCard: {
-    width: '48%',
+    width: '47%',
     backgroundColor: Colors.white,
     borderWidth: 2,
     borderColor: Colors.border,
-    borderRadius: 20,
-    paddingVertical: 20,
-    paddingHorizontal: 14,
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
     alignItems: 'center',
-    gap: 6,
-    borderBottomWidth: 5,
+    gap: 5,
+    borderBottomWidth: 4,
   },
   dietCardActive: {
     borderColor: Colors.primary,
@@ -1081,6 +1153,77 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.textSecondary,
     textAlign: 'center',
+  },
+
+  // Allergy Grid
+  allergyGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 16,
+  },
+  allergyCard: {
+    width: '47%',
+    backgroundColor: Colors.white,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderBottomWidth: 4,
+    position: 'relative',
+  },
+  allergyCardActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,
+  },
+  allergyEmoji: {
+    fontSize: 22,
+  },
+  allergyLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.text,
+    flex: 1,
+  },
+  allergyLabelActive: {
+    color: Colors.primary,
+  },
+  allergyCheck: {
+    position: 'absolute',
+    top: 6,
+    right: 8,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  noAllergyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: Colors.white,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    marginBottom: 16,
+    borderBottomWidth: 4,
+  },
+  noAllergyText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+  },
+  noAllergyTextActive: {
+    color: Colors.primary,
+    fontWeight: '900',
   },
 
   // Final Tip

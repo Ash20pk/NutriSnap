@@ -15,7 +15,7 @@ from app.core.middleware import AIRateLimitMiddleware, RequestSizeLimitMiddlewar
 from app.db.pool import init_pool, close_pool, check_pool_health
 
 # Import route modules
-from app.api.routes import analytics, users, meals, quests, social, foods, recipes, ai_meals, labels, admin, chef
+from app.api.routes import analytics, users, meals, quests, social, foods, recipes, ai_meals, labels, admin, chef, water
 
 # Setup logging
 setup_logging()
@@ -83,6 +83,7 @@ app.include_router(ai_meals.router, prefix="/api")
 app.include_router(labels.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(chef.router, prefix="/api")
+app.include_router(water.router, prefix="/api")
 
 
 # Health check endpoint

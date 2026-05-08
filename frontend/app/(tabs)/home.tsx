@@ -14,7 +14,7 @@ import {
 import { Colors } from '../../constants/Colors';
 import { useUser } from '../../context/UserContext';
 import { useTheme } from '../../context/ThemeContext';
-import { mealApi, questApi } from '../../utils/api';
+import { mealApi, questApi, waterApi, WaterToday } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { useRouter } from 'expo-router';
@@ -46,6 +46,8 @@ export default function HomeScreen() {
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [hasShownGoalToday, setHasShownGoalToday] = useState(false);
   const [showWeeklyWrapBanner, setShowWeeklyWrapBanner] = useState(false);
+  const [waterData, setWaterData] = useState<WaterToday | null>(null);
+  const [waterAdding, setWaterAdding] = useState(false);
   const sparkleAnims = useRef([...Array(6)].map(() => new Animated.Value(0))).current;
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -67,18 +69,48 @@ export default function HomeScreen() {
     if (!user) return;
     setLoading(true);
     try {
-      const [mealStats, qStats] = await Promise.all([
+      const [mealStats, qStats, water] = await Promise.all([
         mealApi.getStats(user.id),
         questApi.getStats(user.id),
+        waterApi.getToday(user.id).catch(() => null),
       ]);
       setStats(mealStats);
       setQuestStats(qStats);
+      if (water) setWaterData(water);
     } catch (error) {
       console.error('Error fetching stats:', error);
     } finally {
       setLoading(false);
     }
   }, [user]);
+
+  const addWater = React.useCallback(async (ml: number) => {
+    if (!user || waterAdding) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    setWaterAdding(true);
+    try {
+      await waterApi.logWater(user.id, ml);
+      const fresh = await waterApi.getToday(user.id);
+      setWaterData(fresh);
+    } catch (e) {
+      console.error('Water log failed:', e);
+    } finally {
+      setWaterAdding(false);
+    }
+  }, [user, waterAdding]);
+
+  const undoLastWater = React.useCallback(async () => {
+    if (!user || !waterData?.logs?.length) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    try {
+      const last = waterData.logs[0];
+      await waterApi.deleteLog(user.id, last.id);
+      const fresh = await waterApi.getToday(user.id);
+      setWaterData(fresh);
+    } catch (e) {
+      console.error('Undo water failed:', e);
+    }
+  }, [user, waterData]);
 
   const openStreakCalendar = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -480,6 +512,83 @@ export default function HomeScreen() {
                     </Text>
                   </View>
                 </View>
+              </View>
+            </View>
+          </AppCard>
+        </AnimatedCard>
+
+        {/* Water Tracker */}
+        <AnimatedCard delay={380} type="slide" style={styles.section}>
+          <SectionTitle title="Hydration" />
+          <AppCard style={styles.standardCard} padding={0}>
+            <View style={styles.waterContent}>
+              {/* Progress bar */}
+              <View style={styles.waterTopRow}>
+                <View>
+                  <Text style={styles.waterValue}>
+                    {waterData ? Math.round(waterData.total_ml / 100) / 10 : 0}
+                    <Text style={styles.waterUnit}> L</Text>
+                  </Text>
+                  <Text style={styles.waterGoalText}>
+                    of {waterData ? Math.round((waterData.goal_ml) / 100) / 10 : 2.5} L goal
+                  </Text>
+                </View>
+                <View style={styles.waterPercentBadge}>
+                  <Text style={styles.waterPercentText}>
+                    {waterData ? Math.round(waterData.percentage) : 0}%
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.waterBarTrack}>
+                <View
+                  style={[
+                    styles.waterBarFill,
+                    { width: `${Math.min(waterData?.percentage ?? 0, 100)}%` },
+                  ]}
+                />
+              </View>
+
+              {/* Glass icons — each represents 250ml */}
+              <View style={styles.waterGlasses}>
+                {Array.from({ length: 8 }).map((_, i) => {
+                  const threshold = (i + 1) * 250;
+                  const filled = (waterData?.total_ml ?? 0) >= threshold;
+                  return (
+                    <TouchableOpacity
+                      key={i}
+                      onPress={() => addWater(250)}
+                      disabled={waterAdding}
+                    >
+                      <Ionicons
+                        name={filled ? 'water' : 'water-outline'}
+                        size={28}
+                        color={filled ? '#3B9FE8' : theme.borderLight}
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Quick add buttons */}
+              <View style={styles.waterButtons}>
+                {[250, 500].map((ml) => (
+                  <TouchableOpacity
+                    key={ml}
+                    style={styles.waterAddBtn}
+                    onPress={() => addWater(ml)}
+                    disabled={waterAdding}
+                  >
+                    <Ionicons name="add" size={16} color={theme.primary} />
+                    <Text style={styles.waterAddBtnText}>{ml} ml</Text>
+                  </TouchableOpacity>
+                ))}
+                {(waterData?.logs?.length ?? 0) > 0 && (
+                  <TouchableOpacity style={styles.waterUndoBtn} onPress={undoLastWater}>
+                    <Ionicons name="arrow-undo" size={15} color={theme.textSecondary} />
+                    <Text style={styles.waterUndoText}>Undo</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           </AppCard>
@@ -1015,6 +1124,105 @@ function makeStyles(theme: typeof Colors) {
     borderBottomColor: theme.border,
     borderRadius: 8,
     marginHorizontal: 2,
+  },
+
+  // Water tracker
+  waterContent: {
+    padding: 18,
+    gap: 14,
+  },
+  waterTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  waterValue: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#3B9FE8',
+  },
+  waterUnit: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.textSecondary,
+  },
+  waterGoalText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  waterPercentBadge: {
+    backgroundColor: '#3B9FE820',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#3B9FE840',
+  },
+  waterPercentText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#3B9FE8',
+  },
+  waterBarTrack: {
+    height: 10,
+    backgroundColor: '#3B9FE815',
+    borderRadius: 5,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#3B9FE825',
+  },
+  waterBarFill: {
+    height: '100%',
+    backgroundColor: '#3B9FE8',
+    borderRadius: 5,
+  },
+  waterGlasses: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  waterButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  waterAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    backgroundColor: theme.primaryLight,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: theme.primary + '40',
+    borderBottomWidth: 4,
+    borderBottomColor: theme.primary + '30',
+  },
+  waterAddBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: theme.primary,
+  },
+  waterUndoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    backgroundColor: theme.backgroundSecondary ?? '#f5f5f5',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: theme.border,
+    borderBottomWidth: 4,
+    borderBottomColor: theme.border,
+    marginLeft: 'auto',
+  },
+  waterUndoText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.textSecondary,
   },
   });
 }

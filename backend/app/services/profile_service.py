@@ -33,7 +33,8 @@ class ProfileService:
         weight: float,
         goal: str,
         activity_level: str,
-        dietary_preference: str
+        dietary_preference: str,
+        food_allergies: Optional[list] = None,
     ) -> Dict[str, Any]:
         """
         Create or update user profile during onboarding.
@@ -48,7 +49,8 @@ class ProfileService:
             goal: "lose_weight", "gain_muscle", or "maintain"
             activity_level: Activity level string
             dietary_preference: Dietary preference string
-        
+            food_allergies: Optional list of allergy/intolerance strings
+
         Returns:
             User profile dictionary
         """
@@ -62,16 +64,17 @@ class ProfileService:
                 weight, height, age, gender, activity_level, goal
             )
             
+            allergies = list(food_allergies) if food_allergies else []
             async with self.pool.acquire() as conn:
                 row = await conn.fetchrow(
                     """
                     INSERT INTO profiles (
                         id, name, date_of_birth, age, gender, height, weight,
-                        goal, activity_level, dietary_preference,
+                        goal, activity_level, dietary_preference, food_allergies,
                         daily_calorie_target, protein_target, carbs_target, fat_target,
                         onboarding_completed, last_weight_check
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
                     ON CONFLICT (id) DO UPDATE
                     SET
                         name = EXCLUDED.name,
@@ -83,6 +86,7 @@ class ProfileService:
                         goal = EXCLUDED.goal,
                         activity_level = EXCLUDED.activity_level,
                         dietary_preference = EXCLUDED.dietary_preference,
+                        food_allergies = EXCLUDED.food_allergies,
                         daily_calorie_target = EXCLUDED.daily_calorie_target,
                         protein_target = EXCLUDED.protein_target,
                         carbs_target = EXCLUDED.carbs_target,
@@ -101,6 +105,7 @@ class ProfileService:
                     goal,
                     activity_level,
                     dietary_preference,
+                    allergies,
                     targets["daily_calorie_target"],
                     targets["protein_target"],
                     targets["carbs_target"],

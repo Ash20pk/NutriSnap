@@ -30,6 +30,7 @@ class OnboardingRequest(BaseModel):
     goal: str
     activity_level: str
     dietary_preference: str
+    food_allergies: Optional[list] = None
 
 
 class GoalsUpdateRequest(BaseModel):
@@ -82,7 +83,8 @@ async def onboard_user(
         weight=user_data.weight,
         goal=user_data.goal,
         activity_level=user_data.activity_level,
-        dietary_preference=user_data.dietary_preference
+        dietary_preference=user_data.dietary_preference,
+        food_allergies=user_data.food_allergies,
     )
 
 
