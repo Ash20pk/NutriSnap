@@ -2,6 +2,8 @@
 Admin routes for managing label submissions and reviews.
 """
 
+from datetime import timezone
+
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from typing import Optional
@@ -9,6 +11,7 @@ from typing import Optional
 from app.services.admin_service import AdminService
 from app.db.pool import get_pool
 from app.core.config import settings
+from app.core import scheduler as _scheduler_module
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -79,6 +82,51 @@ async def approve_label_review(
         action=payload.action,
         admin_notes=payload.notes
     )
+
+
+@router.get("/cron/status")
+async def get_cron_status(admin_key: str = Depends(verify_admin_key)):
+    """Return scheduler state and next fire times for all registered jobs."""
+    sched = _scheduler_module._scheduler
+    lock = _scheduler_module._lock_file
+
+    if sched is None or not sched.running:
+        return {
+            "running": False,
+            "this_worker": lock is not None,
+            "jobs": [],
+        }
+
+    jobs = []
+    for job in sched.get_jobs():
+        next_run = job.next_run_time
+        jobs.append({
+            "id": job.id,
+            "name": job.name,
+            "next_run_utc": next_run.astimezone(timezone.utc).isoformat() if next_run else None,
+        })
+
+    return {
+        "running": True,
+        "this_worker": lock is not None,
+        "jobs": jobs,
+    }
+
+
+@router.post("/cron/trigger/{job_id}")
+async def trigger_cron_job(job_id: str, admin_key: str = Depends(verify_admin_key)):
+    """Manually fire a scheduled job right now (for testing)."""
+    sched = _scheduler_module._scheduler
+    if sched is None or not sched.running:
+        raise HTTPException(status_code=503, detail="Scheduler not running on this worker")
+
+    job = sched.get_job(job_id)
+    if job is None:
+        valid = [j.id for j in sched.get_jobs()]
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found. Valid: {valid}")
+
+    job.modify(next_run_time=__import__("datetime").datetime.now(timezone.utc))
+    return {"triggered": job_id, "message": f"Job '{job.name}' will fire within seconds"}
 
 
 @router.get("/stats")
