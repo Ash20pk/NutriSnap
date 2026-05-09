@@ -232,12 +232,12 @@ export default function QuestScreen() {
     <View style={styles.container}>
       <PageHeader
         title="Quest"
-        subtitle="Complete quests and climb the leaderboard."
+        subtitle="Complete quests"
         rightComponent={
           <TouchableOpacity
             style={styles.profileIconButton}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
               router.push('/(tabs)/profile');
             }}
             activeOpacity={0.8}
@@ -405,7 +405,7 @@ export default function QuestScreen() {
               </View>
 
               {searchQuery.trim().length >= 2 && (
-                <View style={[styles.card, { marginTop: 12 }]}> 
+                <View style={[styles.card, { marginTop: 12 }]}>
                   {searching ? (
                     <LoadingState style={styles.loadingContainer} textStyle={styles.loadingText} size="small" label="Searching..." />
                   ) : searchResults.length === 0 ? (
@@ -439,7 +439,7 @@ export default function QuestScreen() {
                                 onPress={async () => {
                                   if (!user?.id) return;
                                   if (result.id === user.id) return;
-                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
 
                                   try {
                                     setFollowLoadingId(result.id);
@@ -483,73 +483,73 @@ export default function QuestScreen() {
 
             <AnimatedCard delay={120} type="pop" style={styles.section}>
               <SectionTitle title={leaderboardScope === 'global' ? 'Global Top 50' : 'Friends Ranking'} />
-            {loading ? (
-              <View style={styles.card}>
-                <LoadingState style={styles.loadingContainer} textStyle={styles.loadingText} label="Loading rankings..." />
-              </View>
-            ) : leaderboard.length === 0 ? (
-              <View style={styles.card}>
-                <EmptyState
-                  style={styles.emptyFriends}
-                  icon="podium-outline"
-                  title="No rankings yet"
-                  subtitle={
-                    leaderboardScope === 'friends'
-                      ? 'Follow friends to see their rankings here.'
-                      : 'Be the first to claim a spot on the leaderboard!'
-                  }
-                  titleStyle={styles.emptyFriendsTitle}
-                  subtitleStyle={styles.emptyFriendsText}
-                />
-              </View>
-            ) : (
-              <View style={styles.card}>
-                {leaderboard.map((entry, index) => (
-                  <View key={entry.user_id}>
-                    <UserRow
-                      style={styles.leaderRow}
-                      title={`${entry.name}${entry.is_current_user ? ' (You)' : ''}`}
-                      subtitle={`Level ${entry.level} • ${entry.badges_earned} Badges`}
-                      titleStyle={styles.leaderName}
-                      subtitleStyle={styles.leaderMeta}
-                      avatar={{
-                        text: entry.name.charAt(0),
-                        containerStyle: styles.avatarSmall,
-                        textStyle: styles.avatarTextSmall,
-                      }}
-                      left={(
-                        <View
-                          style={[
-                            styles.rankPill,
-                            index === 0 ? { backgroundColor: '#FFD70020', borderColor: '#FFD700' } :
-                              index === 1 ? { backgroundColor: '#C0C0C020', borderColor: '#C0C0C0' } :
-                                index === 2 ? { backgroundColor: '#CD7F3220', borderColor: '#CD7F32' } : null,
-                          ]}
-                        >
-                          <Text
+              {loading ? (
+                <View style={styles.card}>
+                  <LoadingState style={styles.loadingContainer} textStyle={styles.loadingText} label="Loading rankings..." />
+                </View>
+              ) : leaderboard.length === 0 ? (
+                <View style={styles.card}>
+                  <EmptyState
+                    style={styles.emptyFriends}
+                    icon="podium-outline"
+                    title="No rankings yet"
+                    subtitle={
+                      leaderboardScope === 'friends'
+                        ? 'Follow friends to see their rankings here.'
+                        : 'Be the first to claim a spot on the leaderboard!'
+                    }
+                    titleStyle={styles.emptyFriendsTitle}
+                    subtitleStyle={styles.emptyFriendsText}
+                  />
+                </View>
+              ) : (
+                <View style={styles.card}>
+                  {leaderboard.map((entry, index) => (
+                    <View key={entry.user_id}>
+                      <UserRow
+                        style={styles.leaderRow}
+                        title={`${entry.name}${entry.is_current_user ? ' (You)' : ''}`}
+                        subtitle={`Level ${entry.level} • ${entry.badges_earned} Badges`}
+                        titleStyle={styles.leaderName}
+                        subtitleStyle={styles.leaderMeta}
+                        avatar={{
+                          text: entry.name.charAt(0),
+                          containerStyle: styles.avatarSmall,
+                          textStyle: styles.avatarTextSmall,
+                        }}
+                        left={(
+                          <View
                             style={[
-                              styles.rankText,
-                              index === 0 ? { color: '#B8860B' } :
-                                index === 1 ? { color: '#7F7F7F' } :
-                                  index === 2 ? { color: '#A0522D' } :
-                                    null,
+                              styles.rankPill,
+                              index === 0 ? { backgroundColor: '#FFD70020', borderColor: '#FFD700' } :
+                                index === 1 ? { backgroundColor: '#C0C0C020', borderColor: '#C0C0C0' } :
+                                  index === 2 ? { backgroundColor: '#CD7F3220', borderColor: '#CD7F32' } : null,
                             ]}
                           >
-                            #{entry.rank}
-                          </Text>
-                        </View>
-                      )}
-                      right={(
-                        <View style={styles.activityXp}>
-                          <Text style={styles.activityXpText}>{entry.total_xp} XP</Text>
-                        </View>
-                      )}
-                    />
-                    {index !== leaderboard.length - 1 && <View style={styles.rowDivider} />}
-                  </View>
-                ))}
-              </View>
-            )}
+                            <Text
+                              style={[
+                                styles.rankText,
+                                index === 0 ? { color: '#B8860B' } :
+                                  index === 1 ? { color: '#7F7F7F' } :
+                                    index === 2 ? { color: '#A0522D' } :
+                                      null,
+                              ]}
+                            >
+                              #{entry.rank}
+                            </Text>
+                          </View>
+                        )}
+                        right={(
+                          <View style={styles.activityXp}>
+                            <Text style={styles.activityXpText}>{entry.total_xp} XP</Text>
+                          </View>
+                        )}
+                      />
+                      {index !== leaderboard.length - 1 && <View style={styles.rowDivider} />}
+                    </View>
+                  ))}
+                </View>
+              )}
             </AnimatedCard>
           </>
         ) : (
@@ -641,550 +641,550 @@ export default function QuestScreen() {
 
 function makeStyles(theme: typeof Colors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingBottom: 100,
-  },
-  section: {
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  sectionTitle: {
-    ...fontStyles.h3,
-    color: theme.text,
-    marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    fontSize: 16,
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: theme.white,
-    borderRadius: 20,
-    padding: 4,
-    marginBottom: 24,
-    borderWidth: 2,
-    borderColor: theme.border,
-    borderBottomWidth: 6,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  activeTab: {
-    backgroundColor: theme.primary,
-  },
-  tabText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: theme.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  activeTabText: {
-    color: theme.white,
-  },
-  card: {
-    backgroundColor: theme.white,
-    borderRadius: 28,
-    padding: 20,
-    borderWidth: 2,
-    borderColor: theme.border,
-    borderBottomWidth: 8,
-  },
-  questTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  cardIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: theme.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: theme.border,
-    borderBottomWidth: 4,
-  },
-  questMain: {
-    flex: 1,
-  },
-  questTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: theme.text,
-    marginBottom: 2,
-    flex: 1,
-  },
-  xpPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    backgroundColor: theme.primary + '15',
-    borderWidth: 2,
-    borderColor: theme.primary + '25',
-  },
-  xpText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: theme.primary,
-  },
-  questMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 10,
-    marginBottom: 12,
-  },
-  questMeta: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: theme.textSecondary,
-    textTransform: 'uppercase',
-  },
-  questPercent: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: theme.text,
-  },
-  progressTrack: {
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#F0F0F0',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 8,
-    backgroundColor: theme.primary,
-    borderBottomWidth: 4,
-    borderBottomColor: 'rgba(0,0,0,0.15)',
-  },
-  divider: {
-    height: 2,
-    backgroundColor: '#F0F0F0',
-    marginVertical: 24,
-    borderRadius: 1,
-  },
-  badgesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  badgeCard: {
-    width: '48%',
-    backgroundColor: theme.white,
-    borderRadius: 28,
-    borderWidth: 2,
-    borderColor: theme.border,
-    padding: 16,
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 12,
-    borderBottomWidth: 8,
-  },
-  badgeCardLocked: {
-    opacity: 0.6,
-    backgroundColor: '#F8F9FA',
-  },
-  badgeIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 22,
-    backgroundColor: theme.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: theme.border,
-    borderBottomWidth: 4,
-    marginBottom: 4,
-  },
-  badgeTextWrap: {
-    alignItems: 'center',
-  },
-  badgeTitle: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: theme.text,
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  badgeSubtitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: theme.textSecondary,
-    textAlign: 'center',
-    lineHeight: 16,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.white,
-    borderRadius: 24,
-    padding: 14,
-    gap: 12,
-    borderWidth: 2,
-    borderColor: theme.border,
-    borderBottomWidth: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: theme.text,
-    fontWeight: '700',
-  },
-  resultsList: {
-    gap: 16,
-  },
-  searchResultCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.white,
-    borderRadius: 24,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: theme.border,
-    borderBottomWidth: 8,
-    gap: 16,
-  },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
-    backgroundColor: theme.white,
-    borderWidth: 2,
-    borderColor: theme.border,
-    borderBottomWidth: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: theme.text,
-  },
-  resultMain: {
-    flex: 1,
-  },
-  resultName: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: theme.text,
-  },
-  resultBio: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  miniFollowBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: theme.white,
-    borderWidth: 2,
-    borderColor: theme.primary,
-    borderBottomWidth: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  miniFollowBtnActive: {
-    backgroundColor: theme.primary,
-    borderColor: theme.primary,
-  },
-  leaderRow: {
-    position: 'relative',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    paddingVertical: 20,
-  },
-  rowDivider: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 2,
-    backgroundColor: '#F0F0F0',
-  },
-  rankPill: {
-    minWidth: 48,
-    height: 36,
-    borderRadius: 14,
-    backgroundColor: theme.primary + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: theme.primary + '25',
-  },
-  rankText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: theme.primary,
-  },
-  leaderMain: {
-    flex: 1,
-  },
-  leaderName: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: theme.text,
-    marginBottom: 2,
-  },
-  leaderMeta: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  activityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    gap: 16,
-  },
-  avatarSmall: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: theme.backgroundSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: theme.border,
-    borderBottomWidth: 4,
-  },
-  avatarTextSmall: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: theme.text,
-  },
-  activityMain: {
-    flex: 1,
-  },
-  activityText: {
-    fontSize: 14,
-    color: theme.text,
-    fontWeight: '700',
-    lineHeight: 20,
-  },
-  activityName: {
-    fontWeight: '900',
-    color: theme.primary,
-  },
-  activityTime: {
-    fontSize: 12,
-    color: theme.textLight,
-    fontWeight: '800',
-    marginTop: 4,
-    textTransform: 'uppercase',
-  },
-  activityXp: {
-    backgroundColor: Colors.warning + '15',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.warning + '30',
-  },
-  activityXpText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: Colors.warning,
-  },
-  emptyFriends: {
-    padding: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyFriendsTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: theme.text,
-    marginTop: 16,
-    marginBottom: 8,
-    textTransform: 'uppercase',
-  },
-  emptyFriendsText: {
-    fontSize: 15,
-    color: theme.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    fontWeight: '700',
-  },
-  statsCard: {
-    flexDirection: 'row',
-    backgroundColor: theme.white,
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 2,
-    borderColor: theme.border,
-    borderBottomWidth: 6,
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
-  statItem: {
-    alignItems: 'center',
-    gap: 8,
-  },
-  levelBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: theme.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: theme.primary,
-    borderBottomWidth: 4,
-    borderBottomColor: 'rgba(0,0,0,0.2)',
-  },
-  levelText: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: theme.white,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: theme.text,
-  },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: theme.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  statDivider: {
-    width: 2,
-    height: 40,
-    backgroundColor: theme.border,
-    borderRadius: 1,
-  },
-  streakBadgeSmall: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.warning + '15',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.warning + '30',
-  },
-  streakValue: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: Colors.warning,
-  },
-  loadingContainer: {
-    padding: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    fontWeight: '700',
-    color: theme.textSecondary,
-  },
-  claimButton: {
-    backgroundColor: Colors.success,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: Colors.success,
-    borderBottomWidth: 4,
-    borderBottomColor: 'rgba(0,0,0,0.2)',
-    minWidth: 100,
-    alignItems: 'center',
-  },
-  claimButtonText: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: theme.white,
-    letterSpacing: 0.5,
-  },
-  claimedPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.success + '15',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.success + '30',
-  },
-  claimedText: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: Colors.success,
-  },
-  earnedTag: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-  },
-  leaderboardScopeWrap: {
-    flexDirection: 'row',
-    backgroundColor: theme.white,
-    borderRadius: 20,
-    padding: 4,
-    borderWidth: 2,
-    borderColor: theme.border,
-    borderBottomWidth: 6,
-  },
-  scopePill: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  scopePillActive: {
-    backgroundColor: theme.primary,
-  },
-  scopePillText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: theme.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  scopePillTextActive: {
-    color: theme.white,
-  },
-  profileIconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.white,
-    borderWidth: 2,
-    borderColor: theme.border,
-    borderBottomWidth: 4,
-  },
+    container: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: 24,
+      paddingBottom: 100,
+    },
+    section: {
+      marginTop: 16,
+      marginBottom: 8,
+    },
+    sectionTitle: {
+      ...fontStyles.h3,
+      color: theme.text,
+      marginBottom: 12,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+      fontSize: 16,
+    },
+    tabContainer: {
+      flexDirection: 'row',
+      backgroundColor: theme.white,
+      borderRadius: 20,
+      padding: 4,
+      marginBottom: 24,
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderBottomWidth: 6,
+    },
+    tab: {
+      flex: 1,
+      paddingVertical: 10,
+      borderRadius: 14,
+      alignItems: 'center',
+    },
+    activeTab: {
+      backgroundColor: theme.primary,
+    },
+    tabText: {
+      fontSize: 13,
+      fontWeight: '900',
+      color: theme.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    activeTabText: {
+      color: theme.white,
+    },
+    card: {
+      backgroundColor: theme.white,
+      borderRadius: 28,
+      padding: 20,
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderBottomWidth: 8,
+    },
+    questTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+    },
+    cardIcon: {
+      width: 56,
+      height: 56,
+      borderRadius: 18,
+      backgroundColor: theme.backgroundSecondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderBottomWidth: 4,
+    },
+    questMain: {
+      flex: 1,
+    },
+    questTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    cardTitle: {
+      fontSize: 17,
+      fontWeight: '900',
+      color: theme.text,
+      marginBottom: 2,
+      flex: 1,
+    },
+    xpPill: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 14,
+      backgroundColor: theme.primary + '15',
+      borderWidth: 2,
+      borderColor: theme.primary + '25',
+    },
+    xpText: {
+      fontSize: 13,
+      fontWeight: '900',
+      color: theme.primary,
+    },
+    questMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 10,
+      marginBottom: 12,
+    },
+    questMeta: {
+      fontSize: 14,
+      fontWeight: '800',
+      color: theme.textSecondary,
+      textTransform: 'uppercase',
+    },
+    questPercent: {
+      fontSize: 14,
+      fontWeight: '900',
+      color: theme.text,
+    },
+    progressTrack: {
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: '#F0F0F0',
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: 'rgba(0,0,0,0.05)',
+    },
+    progressFill: {
+      height: '100%',
+      borderRadius: 8,
+      backgroundColor: theme.primary,
+      borderBottomWidth: 4,
+      borderBottomColor: 'rgba(0,0,0,0.15)',
+    },
+    divider: {
+      height: 2,
+      backgroundColor: '#F0F0F0',
+      marginVertical: 24,
+      borderRadius: 1,
+    },
+    badgesGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 12,
+    },
+    badgeCard: {
+      width: '48%',
+      backgroundColor: theme.white,
+      borderRadius: 28,
+      borderWidth: 2,
+      borderColor: theme.border,
+      padding: 16,
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: 12,
+      borderBottomWidth: 8,
+    },
+    badgeCardLocked: {
+      opacity: 0.6,
+      backgroundColor: '#F8F9FA',
+    },
+    badgeIconWrap: {
+      width: 64,
+      height: 64,
+      borderRadius: 22,
+      backgroundColor: theme.backgroundSecondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderBottomWidth: 4,
+      marginBottom: 4,
+    },
+    badgeTextWrap: {
+      alignItems: 'center',
+    },
+    badgeTitle: {
+      fontSize: 15,
+      fontWeight: '900',
+      color: theme.text,
+      marginBottom: 4,
+      textAlign: 'center',
+    },
+    badgeSubtitle: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: theme.textSecondary,
+      textAlign: 'center',
+      lineHeight: 16,
+    },
+    searchContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: theme.white,
+      borderRadius: 24,
+      padding: 14,
+      gap: 12,
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderBottomWidth: 8,
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 16,
+      color: theme.text,
+      fontWeight: '700',
+    },
+    resultsList: {
+      gap: 16,
+    },
+    searchResultCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: theme.white,
+      borderRadius: 24,
+      padding: 16,
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderBottomWidth: 8,
+      gap: 16,
+    },
+    avatar: {
+      width: 52,
+      height: 52,
+      borderRadius: 18,
+      backgroundColor: theme.white,
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderBottomWidth: 4,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarText: {
+      fontSize: 22,
+      fontWeight: '900',
+      color: theme.text,
+    },
+    resultMain: {
+      flex: 1,
+    },
+    resultName: {
+      fontSize: 17,
+      fontWeight: '900',
+      color: theme.text,
+    },
+    resultBio: {
+      fontSize: 13,
+      color: theme.textSecondary,
+      fontWeight: '700',
+      marginTop: 2,
+    },
+    miniFollowBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      backgroundColor: theme.white,
+      borderWidth: 2,
+      borderColor: theme.primary,
+      borderBottomWidth: 4,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    miniFollowBtnActive: {
+      backgroundColor: theme.primary,
+      borderColor: theme.primary,
+    },
+    leaderRow: {
+      position: 'relative',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+      paddingVertical: 20,
+    },
+    rowDivider: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: 2,
+      backgroundColor: '#F0F0F0',
+    },
+    rankPill: {
+      minWidth: 48,
+      height: 36,
+      borderRadius: 14,
+      backgroundColor: theme.primary + '15',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: theme.primary + '25',
+    },
+    rankText: {
+      fontSize: 14,
+      fontWeight: '900',
+      color: theme.primary,
+    },
+    leaderMain: {
+      flex: 1,
+    },
+    leaderName: {
+      fontSize: 17,
+      fontWeight: '900',
+      color: theme.text,
+      marginBottom: 2,
+    },
+    leaderMeta: {
+      fontSize: 13,
+      color: theme.textSecondary,
+      fontWeight: '800',
+      textTransform: 'uppercase',
+    },
+    activityRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 16,
+      gap: 16,
+    },
+    avatarSmall: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      backgroundColor: theme.backgroundSecondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderBottomWidth: 4,
+    },
+    avatarTextSmall: {
+      fontSize: 16,
+      fontWeight: '900',
+      color: theme.text,
+    },
+    activityMain: {
+      flex: 1,
+    },
+    activityText: {
+      fontSize: 14,
+      color: theme.text,
+      fontWeight: '700',
+      lineHeight: 20,
+    },
+    activityName: {
+      fontWeight: '900',
+      color: theme.primary,
+    },
+    activityTime: {
+      fontSize: 12,
+      color: theme.textLight,
+      fontWeight: '800',
+      marginTop: 4,
+      textTransform: 'uppercase',
+    },
+    activityXp: {
+      backgroundColor: Colors.warning + '15',
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: Colors.warning + '30',
+    },
+    activityXpText: {
+      fontSize: 12,
+      fontWeight: '900',
+      color: Colors.warning,
+    },
+    emptyFriends: {
+      padding: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emptyFriendsTitle: {
+      fontSize: 20,
+      fontWeight: '900',
+      color: theme.text,
+      marginTop: 16,
+      marginBottom: 8,
+      textTransform: 'uppercase',
+    },
+    emptyFriendsText: {
+      fontSize: 15,
+      color: theme.textSecondary,
+      textAlign: 'center',
+      lineHeight: 22,
+      fontWeight: '700',
+    },
+    statsCard: {
+      flexDirection: 'row',
+      backgroundColor: theme.white,
+      borderRadius: 24,
+      padding: 20,
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderBottomWidth: 6,
+      justifyContent: 'space-around',
+      alignItems: 'center',
+    },
+    statItem: {
+      alignItems: 'center',
+      gap: 8,
+    },
+    levelBadge: {
+      width: 48,
+      height: 48,
+      borderRadius: 16,
+      backgroundColor: theme.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: theme.primary,
+      borderBottomWidth: 4,
+      borderBottomColor: 'rgba(0,0,0,0.2)',
+    },
+    levelText: {
+      fontSize: 20,
+      fontWeight: '900',
+      color: theme.white,
+    },
+    statValue: {
+      fontSize: 24,
+      fontWeight: '900',
+      color: theme.text,
+    },
+    statLabel: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: theme.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    statDivider: {
+      width: 2,
+      height: 40,
+      backgroundColor: theme.border,
+      borderRadius: 1,
+    },
+    streakBadgeSmall: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: Colors.warning + '15',
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: Colors.warning + '30',
+    },
+    streakValue: {
+      fontSize: 18,
+      fontWeight: '900',
+      color: Colors.warning,
+    },
+    loadingContainer: {
+      padding: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    loadingText: {
+      marginTop: 12,
+      fontSize: 14,
+      fontWeight: '700',
+      color: theme.textSecondary,
+    },
+    claimButton: {
+      backgroundColor: Colors.success,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 14,
+      borderWidth: 2,
+      borderColor: Colors.success,
+      borderBottomWidth: 4,
+      borderBottomColor: 'rgba(0,0,0,0.2)',
+      minWidth: 100,
+      alignItems: 'center',
+    },
+    claimButtonText: {
+      fontSize: 11,
+      fontWeight: '900',
+      color: theme.white,
+      letterSpacing: 0.5,
+    },
+    claimedPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: Colors.success + '15',
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: Colors.success + '30',
+    },
+    claimedText: {
+      fontSize: 11,
+      fontWeight: '900',
+      color: Colors.success,
+    },
+    earnedTag: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+    },
+    leaderboardScopeWrap: {
+      flexDirection: 'row',
+      backgroundColor: theme.white,
+      borderRadius: 20,
+      padding: 4,
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderBottomWidth: 6,
+    },
+    scopePill: {
+      flex: 1,
+      paddingVertical: 10,
+      borderRadius: 14,
+      alignItems: 'center',
+    },
+    scopePillActive: {
+      backgroundColor: theme.primary,
+    },
+    scopePillText: {
+      fontSize: 13,
+      fontWeight: '900',
+      color: theme.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    scopePillTextActive: {
+      color: theme.white,
+    },
+    profileIconButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.white,
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderBottomWidth: 4,
+    },
   });
 }

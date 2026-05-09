@@ -108,64 +108,7 @@ export default function ProfileScreen() {
   const [followingCount, setFollowingCount] = React.useState(0);
   const [weightHistory, setWeightHistory] = React.useState<WeightHistoryEntry[]>([]);
 
-  const [editVisible, setEditVisible] = React.useState(false);
-  const [editUsernameDraft, setEditUsernameDraft] = React.useState('');
-  const [editNameDraft, setEditNameDraft] = React.useState('');
-  const [editBioDraft, setEditBioDraft] = React.useState('');
-  const [savingProfile, setSavingProfile] = React.useState(false);
   const [profileRefreshLoading, setProfileRefreshLoading] = React.useState(false);
-
-  const handleSaveProfile = async () => {
-    if (!user) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    const candidate = (editUsernameDraft || '').trim().toLowerCase();
-    if (candidate && !/^[a-z0-9_]{3,20}$/.test(candidate)) {
-      Alert.alert('Invalid username', 'Use 3-20 characters: letters, numbers, underscores.');
-      return;
-    }
-    try {
-      setSavingProfile(true);
-      const updatePayload: any = {
-        bio: editBioDraft.trim(),
-        name: editNameDraft.trim()
-      };
-
-      const promises: Promise<any>[] = [userApi.updateMyProfile(updatePayload)];
-      if (candidate && candidate !== user.username) {
-        promises.push(socialApi.setMyUsername(candidate));
-      }
-
-      const results = await Promise.all(promises);
-      const profileRes = results[0];
-      const usernameRes = results.length > 1 ? results[1] : null;
-
-      await setUser({
-        ...user,
-        username: usernameRes ? usernameRes.username : user.username,
-        name: editNameDraft.trim(),
-        bio: profileRes.bio ?? editBioDraft.trim()
-      });
-
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      setEditVisible(false);
-    } catch (e: any) {
-      const status = e?.response?.status;
-      const detail = e?.response?.data?.detail;
-      if (status === 409) {
-        Alert.alert('Username taken', 'That username is already taken. Try another.');
-      } else {
-        Alert.alert('Error', detail || 'Failed to save profile');
-      }
-    } finally {
-      setSavingProfile(false);
-    }
-  };
-
-  React.useEffect(() => {
-    setEditUsernameDraft((user?.username || '').toString());
-    setEditNameDraft((user?.name || '').toString());
-    setEditBioDraft((user?.bio || '').toString());
-  }, [user?.username, user?.name, user?.bio]);
 
   const refreshProfileData = React.useCallback(async () => {
     if (!user?.id) return;
@@ -194,55 +137,7 @@ export default function ProfileScreen() {
     refreshProfileData();
   }, [refreshProfileData]);
 
-  const [uploadingPhoto, setUploadingPhoto] = React.useState(false);
 
-  const handlePickPhoto = async () => {
-    if (!user) return;
-    try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('Permission required', 'Allow Loggr to access your photos to set a profile picture.');
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.7,
-      });
-      if (result.canceled || !result.assets[0]) return;
-
-      setUploadingPhoto(true);
-      const uri = result.assets[0].uri;
-      const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
-      const filePath = `${user.id}.${ext}`;
-
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      const binaryString = atob(base64);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, bytes, { contentType: `image/${ext}`, upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      const updated = await userApi.updateMyProfile({ avatar_url: urlData.publicUrl });
-      await setUser({ ...user, avatar_url: updated.avatar_url ?? urlData.publicUrl });
-      setAvatarImageFailed(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    } catch (e: any) {
-      Alert.alert('Upload failed', e?.message ?? 'Could not update profile photo. Try again.');
-    } finally {
-      setUploadingPhoto(false);
-    }
-  };
 
   const handleLogout = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -389,7 +284,7 @@ export default function ProfileScreen() {
                   style={styles.editBadgeLarge}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                    setEditVisible(true);
+                    router.push('/edit-profile');
                   }}
                 >
                   <Ionicons name="pencil" size={16} color={theme.white} />
@@ -437,7 +332,7 @@ export default function ProfileScreen() {
                 title="Edit Profile"
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                  setEditVisible(true);
+                  router.push('/edit-profile');
                 }}
                 color={theme.primary}
                 size="large"
@@ -447,141 +342,6 @@ export default function ProfileScreen() {
             </View>
           </AppCard>
         </AnimatedCard>
-
-        <Modal
-          visible={editVisible}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setEditVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              style={styles.modalSheet}
-            >
-              {/* Drag Handle */}
-              <View style={styles.modalDragHandle} />
-
-              <View style={styles.modalHeader}>
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                    setEditVisible(false);
-                  }}
-                  style={styles.modalCloseBtn}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Ionicons name="close" size={24} color={theme.text} />
-                </TouchableOpacity>
-                <Text style={styles.modalTitle}>Edit Profile</Text>
-                <TouchableOpacity
-                  onPress={async () => {
-                    // Trigger the same save logic as the DuoButton
-                    // We can move the logic to a helper function
-                    handleSaveProfile();
-                  }}
-                  disabled={savingProfile}
-                >
-                  <Text style={[styles.saveBtnText, savingProfile && { opacity: 0.5 }]}>
-                    {savingProfile ? '...' : 'Done'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
-                <View style={styles.modalContent}>
-                  <View style={styles.modalAvatarSection}>
-                    <View style={styles.avatarEditContainer}>
-                      <View style={styles.avatarLarge}>
-                        {!avatarImageFailed && resolvedAvatarUrl ? (
-                          <Image
-                            source={{ uri: resolvedAvatarUrl }}
-                            style={{ width: '100%', height: '100%', borderRadius: Radius.xxxxl }}
-                          />
-                        ) : (
-                          <Text style={styles.avatarTextLarge}>{user?.name?.[0]?.toUpperCase() || 'U'}</Text>
-                        )}
-                      </View>
-                      <TouchableOpacity
-                        style={styles.avatarEditBadge}
-                        onPress={handlePickPhoto}
-                        disabled={uploadingPhoto}
-                      >
-                        {uploadingPhoto
-                          ? <ActivityIndicator size="small" color={theme.white} />
-                          : <Ionicons name="camera" size={18} color={theme.white} />}
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={styles.changePhotoHint}>Tap to change photo</Text>
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Name</Text>
-                    <View style={styles.inputWrapper}>
-                      <Ionicons name="person-outline" size={20} color={theme.primary} style={{ marginRight: 10 }} />
-                      <TextInput
-                        style={styles.textInput}
-                        value={editNameDraft}
-                        onChangeText={setEditNameDraft}
-                        placeholder="Your name"
-                        placeholderTextColor={theme.textLight}
-                        selectionColor={theme.primary}
-                      />
-                    </View>
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Username</Text>
-                    <View style={styles.inputWrapper}>
-                      <Text style={styles.inputPrefix}>@</Text>
-                      <TextInput
-                        style={styles.textInput}
-                        value={editUsernameDraft}
-                        onChangeText={(t) => setEditUsernameDraft(t.toLowerCase().replace(/\s/g, ''))}
-                        placeholder="your_username"
-                        placeholderTextColor={theme.textLight}
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                        maxLength={20}
-                        selectionColor={theme.primary}
-                      />
-                    </View>
-                    <Text style={styles.inputHint}>3-20 characters (letters, numbers, underscores)</Text>
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Bio</Text>
-                    <View style={[styles.inputWrapper, styles.bioInputWrapper]}>
-                      <TextInput
-                        style={[styles.textInput, styles.bioTextInput]}
-                        value={editBioDraft}
-                        onChangeText={setEditBioDraft}
-                        placeholder="Tell us about your fitness journey..."
-                        placeholderTextColor={theme.textLight}
-                        multiline
-                        numberOfLines={4}
-                        maxLength={160}
-                        selectionColor={theme.primary}
-                      />
-                    </View>
-                    <Text style={styles.charCount}>{editBioDraft.length}/160</Text>
-                  </View>
-
-                  <DuoButton
-                    title={savingProfile ? 'Saving...' : 'Save Changes'}
-                    onPress={handleSaveProfile}
-                    disabled={savingProfile}
-                    loading={savingProfile}
-                    color={theme.primary}
-                    size="large"
-                    style={{ marginTop: Spacing.sm }}
-                  />
-                </View>
-                <View style={{ height: 40 }} />
-              </ScrollView>
-            </KeyboardAvoidingView>
-          </View>
-        </Modal>
 
         {/* XP & Level Section */}
         <AnimatedCard delay={200} type="pop" style={styles.section}>
@@ -1185,17 +945,16 @@ function makeStyles(theme: typeof Colors) {
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(13, 8, 8, 0.5)',
     justifyContent: 'flex-end',
   },
   modalSheet: {
     backgroundColor: theme.background,
     borderTopLeftRadius: Radius.xxxxl,
     borderTopRightRadius: Radius.xxxxl,
-    paddingBottom: Spacing.xl,
     borderWidth: 2,
     borderColor: theme.border,
-    height: '85%',
+    maxHeight: '90%',
+    flexShrink: 1,
     width: '100%',
     elevation: 20,
     shadowColor: '#000',
@@ -1231,12 +990,11 @@ function makeStyles(theme: typeof Colors) {
     paddingHorizontal: 8,
   },
   modalScroll: {
-    flex: 1,
+    flexGrow: 1,
   },
   modalContent: {
     paddingHorizontal: Spacing.xxl,
     paddingTop: Spacing.xl,
-    paddingBottom: 60,
   },
   badgeCount: {
     fontSize: 14,

@@ -9,12 +9,16 @@ import PageHeader from '../components/PageHeader';
 const LAST_UPDATED = 'May 3, 2026';
 const CONTACT_EMAIL = 'privacy@loggr.app';
 
-const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <View style={styles.section}>
-    <Text style={styles.sectionTitle}>{title}</Text>
-    <Text style={styles.body}>{children}</Text>
-  </View>
-);
+const Section = ({ title, children }: { title: string; children: React.ReactNode }) => {
+  const { theme } = useTheme();
+  const styles = makeStyles(theme);
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <Text style={styles.body}>{children}</Text>
+    </View>
+  );
+};
 
 export default function PrivacyPolicyScreen() {
   const { theme } = useTheme();

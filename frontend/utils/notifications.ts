@@ -9,7 +9,7 @@
 import { Platform } from 'react-native';
 
 // Lazy import so the app doesn't crash if expo-notifications isn't installed yet
-let Notifications: typeof import('expo-notifications') | null = null;
+let Notifications: any = null;
 try {
   Notifications = require('expo-notifications');
 } catch {
@@ -55,7 +55,7 @@ export function scheduleLocalNotification(title: string, body: string, delaySeco
   Notifications.scheduleNotificationAsync({
     content: { title, body, sound: true },
     trigger: delaySeconds > 0 ? { seconds: delaySeconds } : null,
-  }).catch((err) => {
+  }).catch((err: any) => {
     if (__DEV__) console.warn('[Notifications] Schedule failed:', err);
   });
 }
@@ -69,9 +69,9 @@ export function notifyQuestComplete(questTitle: string, xp: number) {
 }
 
 /** Call after check-badges returns newly_earned badges. */
-export function notifyBadgesEarned(badges: { title: string }[]) {
+export function notifyBadgesEarned(badges: { title?: string }[]) {
   if (badges.length === 0) return;
-  const names = badges.map((b) => b.title).join(', ');
+  const names = badges.map((b) => b.title || 'Badge').join(', ');
   scheduleLocalNotification(
     '🎖️ New Badge' + (badges.length > 1 ? 's' : '') + ' Earned!',
     badges.length === 1 ? `You earned the "${names}" badge!` : `New badges: ${names}`
