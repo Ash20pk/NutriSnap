@@ -84,31 +84,48 @@ async def approve_label_review(
     )
 
 
+def _scheduler_lock_held() -> bool:
+    """Try to grab the lock non-blocking. If it fails, another worker holds it = scheduler is active."""
+    import fcntl
+    lock_path = _scheduler_module._LOCK_PATH
+    if not lock_path.exists():
+        return False
+    try:
+        with open(lock_path, "r") as f:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(f, fcntl.LOCK_UN)
+            return False  # got the lock — nobody holds it
+    except OSError:
+        return True  # another process holds it = scheduler is running
+
+
 @router.get("/cron/status")
 async def get_cron_status(admin_key: str = Depends(verify_admin_key)):
-    """Return scheduler state and next fire times for all registered jobs."""
+    """
+    Return scheduler state and next fire times.
+    Works correctly regardless of which gunicorn worker handles the request:
+    - scheduler_active: true if ANY worker holds the lock (reliable cross-worker check)
+    - this_worker: true only if THIS worker is the scheduler worker
+    - jobs: populated only when this_worker=true
+    """
     sched = _scheduler_module._scheduler
-    lock = _scheduler_module._lock_file
-
-    if sched is None or not sched.running:
-        return {
-            "running": False,
-            "this_worker": lock is not None,
-            "jobs": [],
-        }
+    is_this_worker = sched is not None and sched.running
+    active = is_this_worker or _scheduler_lock_held()
 
     jobs = []
-    for job in sched.get_jobs():
-        next_run = job.next_run_time
-        jobs.append({
-            "id": job.id,
-            "name": job.name,
-            "next_run_utc": next_run.astimezone(timezone.utc).isoformat() if next_run else None,
-        })
+    if is_this_worker:
+        for job in sched.get_jobs():
+            next_run = job.next_run_time
+            jobs.append({
+                "id": job.id,
+                "name": job.name,
+                "next_run_utc": next_run.astimezone(timezone.utc).isoformat() if next_run else None,
+            })
 
     return {
-        "running": True,
-        "this_worker": lock is not None,
+        "scheduler_active": active,
+        "this_worker": is_this_worker,
+        "note": "Hit this endpoint a few times if this_worker=false — jobs shown only from the scheduler worker",
         "jobs": jobs,
     }
 
