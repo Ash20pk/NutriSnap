@@ -78,7 +78,6 @@ async def get_user_badges(
     Returns:
         Dictionary with badges list
     """
-    require_user_match(uid, user_id)
     return await service.get_user_badges(user_id)
 
 

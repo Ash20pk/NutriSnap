@@ -450,24 +450,6 @@ api.interceptors.response.use(
       });
     }
 
-    // Some auth flows may return forbidden; ensure we reset client auth state.
-    if (status === 403) {
-      try {
-        await supabase.auth.signOut();
-      } catch {
-        // ignore
-      }
-      try {
-        delete api.defaults.headers.common.Authorization;
-      } catch {
-        // ignore
-      }
-      try {
-        router.replace('/intro' as any);
-      } catch {
-        // ignore
-      }
-    }
 
     return Promise.reject(error);
   }
