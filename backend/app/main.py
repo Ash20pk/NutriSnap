@@ -12,6 +12,7 @@ from starlette.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.logging_config import setup_logging
 from app.core.middleware import AIRateLimitMiddleware, RequestSizeLimitMiddleware
+from app.core.scheduler import start as start_scheduler, stop as stop_scheduler
 from app.db.pool import init_pool, close_pool, check_pool_health
 
 # Import route modules
@@ -37,11 +38,15 @@ async def lifespan(app: FastAPI):
     # Initialize database pool
     await init_pool(settings.DATABASE_URL)
     logger.info("Database pool initialized")
-    
+
+    # Start background scheduler (analytics warmup + nutrient cleanup)
+    start_scheduler()
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down NutriSnap Backend API")
+    stop_scheduler()
     await close_pool()
     logger.info("Database pool closed")
 

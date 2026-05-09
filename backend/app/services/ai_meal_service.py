@@ -51,6 +51,7 @@ class AIMealService:
                     conn,
                     food.get("name", ""),
                     float(food.get("estimated_quantity_grams", 0) or 0),
+                    "g",
                 )
                 matched["confidence"] = food.get("confidence", "medium")
                 matched_foods.append(matched)
@@ -92,11 +93,14 @@ class AIMealService:
         async with self.pool.acquire() as conn:
             for idx, item in enumerate(parsed_foods):
                 try:
-                    logger.info(f"[VOICE_TO_MEAL] Matching food {idx+1}/{len(parsed_foods)}: {item['name']} ({item['quantity_grams']}g)")
+                    qty_val = float(item.get("quantity_value") or item.get("quantity_grams") or 0)
+                    qty_unit = str(item.get("quantity_unit") or "g")
+                    logger.info(f"[VOICE_TO_MEAL] Matching food {idx+1}/{len(parsed_foods)}: {item['name']} ({qty_val} {qty_unit})")
                     matched = await self._match_food_to_database(
                         conn,
                         item["name"],
-                        float(item["quantity_grams"])
+                        qty_val,
+                        qty_unit,
                     )
 
                     # If backend needs clarification, stop and ask the user instead of guessing.
@@ -108,11 +112,11 @@ class AIMealService:
                             "follow_up_question": matched.get("follow_up_question"),
                             "options": matched.get("options") or [],
                             "requested_food_name": matched.get("name") or item.get("name"),
-                            "requested_quantity_grams": float(item.get("quantity_grams") or 0),
+                            "requested_quantity_grams": float(matched.get("quantity") or qty_val),
                         }
 
-                    matched["displayQuantity"] = round(float(item["quantity_grams"]), 1)
-                    matched["displayUnit"] = "g"
+                    matched["displayQuantity"] = round(qty_val, 1)
+                    matched["displayUnit"] = qty_unit
                     matched_foods.append(matched)
                     logger.info(f"[VOICE_TO_MEAL] Successfully matched: {item['name']}")
                 except Exception as e:
@@ -184,13 +188,16 @@ class AIMealService:
         matched_foods: List[Dict[str, Any]] = []
         async with self.pool.acquire() as conn:
             for item in parsed_foods:
+                qty_val = float(item.get("quantity_value") or item.get("quantity_grams") or 0)
+                qty_unit = str(item.get("quantity_unit") or "g")
                 matched = await self._match_food_to_database(
                     conn,
                     item["name"],
-                    float(item["quantity_grams"])
+                    qty_val,
+                    qty_unit,
                 )
-                matched["displayQuantity"] = round(float(item["quantity_grams"]), 1)
-                matched["displayUnit"] = "g"
+                matched["displayQuantity"] = round(qty_val, 1)
+                matched["displayUnit"] = qty_unit
                 matched_foods.append(matched)
         
         return {
@@ -271,23 +278,13 @@ class AIMealService:
         self,
         conn: asyncpg.Connection,
         food_name: str,
-        quantity_grams: float
+        quantity_value: float,
+        quantity_unit: str = "g",
     ) -> Dict[str, Any]:
-        """
-        Match a food name to database and calculate nutrition.
-        
-        Args:
-            conn: Database connection
-            food_name: Name of the food
-            quantity_grams: Quantity in grams
-        
-        Returns:
-            Dictionary with matched food data and nutrition
-        """
         from app.utils.parsers import match_food_to_database_db
-        
+
         try:
-            matched = await match_food_to_database_db(conn, food_name, quantity_grams)
+            matched = await match_food_to_database_db(conn, food_name, quantity_value, quantity_unit)
             return matched
         except Exception as e:
             logger.error(f"Food matching failed for '{food_name}': {str(e)}")

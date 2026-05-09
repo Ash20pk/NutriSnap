@@ -602,7 +602,16 @@ export default function ProfileScreen() {
                 style={[
                   styles.xpProgressFill,
                   {
-                    width: `${stats ? Math.min(100, Math.max(0, ((100 - (stats.xp_for_next_level ?? 100)) / 100) * 100)) : 0}%`,
+                    width: `${stats
+                      ? Math.min(100, Math.max(0,
+                          stats.xp_to_next_level != null
+                            // xp_to_next_level: XP still needed — calculate progress from xp_for_next_level
+                            ? ((stats.xp_for_next_level ?? 0) - (stats.xp_to_next_level ?? 0)) /
+                              Math.max(1, stats.xp_for_next_level ?? 100) * 100
+                            // fallback: treat xp_for_next_level as XP remaining within a 100xp level
+                            : (100 - Math.min(100, stats.xp_for_next_level ?? 100))
+                        ))
+                      : 0}%`,
                   },
                 ]}
               />

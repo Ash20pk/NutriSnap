@@ -26,6 +26,7 @@ import StandardDonutChart from '../../components/StandardDonutChart';
 import AppCard from '../../components/AppCard';
 import SectionTitle from '../../components/SectionTitle';
 import EmptyState from '../../components/EmptyState';
+import HydrationTracker from '../../components/HydrationTracker';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 48;
@@ -868,6 +869,8 @@ export default function AnalyticsScreen() {
             </View>
           </View>
         </AnimatedCard>
+
+        <HydrationTracker userId={user?.id} delay={125} readOnly={true} />
 
         <AnimatedCard delay={150} type="slide" style={styles.section}>
           <InsightHeader
@@ -2273,9 +2276,12 @@ function makeStyles(theme: typeof Colors) {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: theme.white,
+    borderWidth: 2,
+    borderColor: theme.border,
+    borderBottomWidth: 4,
   },
   });
 }

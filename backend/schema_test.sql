@@ -135,6 +135,21 @@ CREATE INDEX IF NOT EXISTS idx_foods_last_synced_at  ON public.foods (last_synce
 CREATE INDEX IF NOT EXISTS idx_foods_sync_status     ON public.foods (sync_status);
 
 
+CREATE TABLE IF NOT EXISTS public.food_serving_sizes (
+    id          uuid             PRIMARY KEY DEFAULT gen_random_uuid(),
+    food_id     uuid             NOT NULL REFERENCES public.foods(id) ON DELETE CASCADE,
+    unit_name   text             NOT NULL,
+    unit_label  text             NOT NULL,
+    grams       double precision NOT NULL CHECK (grams > 0),
+    is_default  boolean          NOT NULL DEFAULT false,
+    created_at  timestamptz      NOT NULL DEFAULT now(),
+    CONSTRAINT uq_food_serving_unit UNIQUE (food_id, unit_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_food_serving_sizes_food_id
+    ON public.food_serving_sizes (food_id);
+
+
 CREATE TABLE IF NOT EXISTS public.meals (
     id              uuid PRIMARY KEY,
     user_id         uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,

@@ -10,11 +10,12 @@ import {
   Animated,
   Modal,
   Easing,
+  Share,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useUser } from '../../context/UserContext';
 import { useTheme } from '../../context/ThemeContext';
-import { mealApi, questApi, waterApi, WaterToday } from '../../utils/api';
+import { mealApi, questApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { useRouter } from 'expo-router';
@@ -27,6 +28,7 @@ import StandardDonutChart from '../../components/StandardDonutChart';
 import AppCard from '../../components/AppCard';
 import SectionTitle from '../../components/SectionTitle';
 import StreakCalendarModal from '../../components/StreakCalendarModal';
+import HydrationTracker from '../../components/HydrationTracker';
 import * as Haptics from 'expo-haptics';
 
 const { width } = Dimensions.get('window');
@@ -46,8 +48,7 @@ export default function HomeScreen() {
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [hasShownGoalToday, setHasShownGoalToday] = useState(false);
   const [showWeeklyWrapBanner, setShowWeeklyWrapBanner] = useState(false);
-  const [waterData, setWaterData] = useState<WaterToday | null>(null);
-  const [waterAdding, setWaterAdding] = useState(false);
+  const [waterRefreshTick, setWaterRefreshTick] = useState(0);
   const sparkleAnims = useRef([...Array(6)].map(() => new Animated.Value(0))).current;
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -69,14 +70,12 @@ export default function HomeScreen() {
     if (!user) return;
     setLoading(true);
     try {
-      const [mealStats, qStats, water] = await Promise.all([
+      const [mealStats, qStats] = await Promise.all([
         mealApi.getStats(user.id),
         questApi.getStats(user.id),
-        waterApi.getToday(user.id).catch(() => null),
       ]);
       setStats(mealStats);
       setQuestStats(qStats);
-      if (water) setWaterData(water);
     } catch (error) {
       console.error('Error fetching stats:', error);
     } finally {
@@ -84,33 +83,6 @@ export default function HomeScreen() {
     }
   }, [user]);
 
-  const addWater = React.useCallback(async (ml: number) => {
-    if (!user || waterAdding) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    setWaterAdding(true);
-    try {
-      await waterApi.logWater(user.id, ml);
-      const fresh = await waterApi.getToday(user.id);
-      setWaterData(fresh);
-    } catch (e) {
-      console.error('Water log failed:', e);
-    } finally {
-      setWaterAdding(false);
-    }
-  }, [user, waterAdding]);
-
-  const undoLastWater = React.useCallback(async () => {
-    if (!user || !waterData?.logs?.length) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    try {
-      const last = waterData.logs[0];
-      await waterApi.deleteLog(user.id, last.id);
-      const fresh = await waterApi.getToday(user.id);
-      setWaterData(fresh);
-    } catch (e) {
-      console.error('Undo water failed:', e);
-    }
-  }, [user, waterData]);
 
   const openStreakCalendar = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -345,6 +317,7 @@ export default function HomeScreen() {
             onRefresh={() => {
               fetchStats();
               fetchWeeklyData();
+              setWaterRefreshTick(t => t + 1);
             }} 
             tintColor={theme.primary} 
             colors={[theme.primary]}
@@ -518,81 +491,7 @@ export default function HomeScreen() {
         </AnimatedCard>
 
         {/* Water Tracker */}
-        <AnimatedCard delay={380} type="slide" style={styles.section}>
-          <SectionTitle title="Hydration" />
-          <AppCard style={styles.standardCard} padding={0}>
-            <View style={styles.waterContent}>
-              {/* Progress bar */}
-              <View style={styles.waterTopRow}>
-                <View>
-                  <Text style={styles.waterValue}>
-                    {waterData ? Math.round(waterData.total_ml / 100) / 10 : 0}
-                    <Text style={styles.waterUnit}> L</Text>
-                  </Text>
-                  <Text style={styles.waterGoalText}>
-                    of {waterData ? Math.round((waterData.goal_ml) / 100) / 10 : 2.5} L goal
-                  </Text>
-                </View>
-                <View style={styles.waterPercentBadge}>
-                  <Text style={styles.waterPercentText}>
-                    {waterData ? Math.round(waterData.percentage) : 0}%
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.waterBarTrack}>
-                <View
-                  style={[
-                    styles.waterBarFill,
-                    { width: `${Math.min(waterData?.percentage ?? 0, 100)}%` },
-                  ]}
-                />
-              </View>
-
-              {/* Glass icons — each represents 250ml */}
-              <View style={styles.waterGlasses}>
-                {Array.from({ length: 8 }).map((_, i) => {
-                  const threshold = (i + 1) * 250;
-                  const filled = (waterData?.total_ml ?? 0) >= threshold;
-                  return (
-                    <TouchableOpacity
-                      key={i}
-                      onPress={() => addWater(250)}
-                      disabled={waterAdding}
-                    >
-                      <Ionicons
-                        name={filled ? 'water' : 'water-outline'}
-                        size={28}
-                        color={filled ? '#3B9FE8' : theme.borderLight}
-                      />
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Quick add buttons */}
-              <View style={styles.waterButtons}>
-                {[250, 500].map((ml) => (
-                  <TouchableOpacity
-                    key={ml}
-                    style={styles.waterAddBtn}
-                    onPress={() => addWater(ml)}
-                    disabled={waterAdding}
-                  >
-                    <Ionicons name="add" size={16} color={theme.primary} />
-                    <Text style={styles.waterAddBtnText}>{ml} ml</Text>
-                  </TouchableOpacity>
-                ))}
-                {(waterData?.logs?.length ?? 0) > 0 && (
-                  <TouchableOpacity style={styles.waterUndoBtn} onPress={undoLastWater}>
-                    <Ionicons name="arrow-undo" size={15} color={theme.textSecondary} />
-                    <Text style={styles.waterUndoText}>Undo</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          </AppCard>
-        </AnimatedCard>
+        <HydrationTracker userId={user?.id} delay={380} externalRefresh={waterRefreshTick} />
 
         {/* Weekly Trend Chart - Glass Card */}
         {weeklyData.length > 0 && (
@@ -671,8 +570,16 @@ export default function HomeScreen() {
             
             <TouchableOpacity 
               style={styles.shareLink}
-              onPress={() => {
+              onPress={async () => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                try {
+                  await Share.share({
+                    message: `I just hit my daily calorie goal on NutriSnap! 🎯\n${Math.round(stats?.total_calories || 0)} kcal • ${stats?.meals_logged || 0} meals logged today.`,
+                    title: 'Daily Goal Crushed!',
+                  });
+                } catch (e) {
+                  console.error('Share failed:', e);
+                }
               }}
             >
               <Ionicons name="share-outline" size={18} color={theme.primary} />

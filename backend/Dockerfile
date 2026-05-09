@@ -46,9 +46,10 @@ COPY --from=builder /install /usr/local
 COPY --chown=nutrisnap:nutrisnap app/             ./app/
 COPY --chown=nutrisnap:nutrisnap gunicorn_conf.py  ./
 COPY --chown=nutrisnap:nutrisnap pyproject.toml    ./
-# Root-level modules that are imported directly by app packages
-COPY --chown=nutrisnap:nutrisnap analytics_ai.py     ./
-COPY --chown=nutrisnap:nutrisnap nutrition_targets.py ./
+# Root-level modules imported by app packages or run as cron subprocesses
+COPY --chown=nutrisnap:nutrisnap analytics_ai.py        ./
+COPY --chown=nutrisnap:nutrisnap nutrition_targets.py   ./
+COPY --chown=nutrisnap:nutrisnap backfill_nutrients.py  ./
 
 # Install the project in editable mode (registers entry-points)
 RUN pip install --no-cache-dir -e . --no-deps

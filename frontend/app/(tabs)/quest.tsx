@@ -1179,9 +1179,12 @@ function makeStyles(theme: typeof Colors) {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: theme.backgroundSecondary,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: theme.white,
+    borderWidth: 2,
+    borderColor: theme.border,
+    borderBottomWidth: 4,
   },
   });
 }
