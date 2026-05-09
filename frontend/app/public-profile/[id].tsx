@@ -9,7 +9,7 @@ import DuoButton from '../../components/DuoButton';
 import AnimatedCard from '../../components/AnimatedCard';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
-import { socialApi } from '../../utils/api';
+import { socialApi, questApi } from '../../utils/api';
 import * as Haptics from 'expo-haptics';
 
 type PublicUserStats = {
@@ -38,6 +38,7 @@ export default function PublicProfileScreen() {
   const userId = typeof params.id === 'string' ? params.id : Array.isArray(params.id) ? params.id[0] : '';
 
   const [profile, setProfile] = useState<PublicUserStats | null>(null);
+  const [badges, setBadges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
@@ -56,11 +57,15 @@ export default function PublicProfileScreen() {
   const fetchProfile = useCallback(async () => {
     if (!userId) return;
     try {
-      const res = await socialApi.getPublicUserStats(userId);
+      const [res, badgesRes] = await Promise.all([
+        socialApi.getPublicUserStats(userId),
+        questApi.getBadges(userId).catch(() => ({ badges: [] })),
+      ]);
       setProfile({
         ...res,
         is_followed_by_me: !!(res as any)?.is_followed_by_me,
       });
+      setBadges((badgesRes.badges || []).filter((b: any) => b.earned));
     } catch (e) {
       console.error('Error fetching public profile:', e);
       setProfile(null);
@@ -225,21 +230,25 @@ export default function PublicProfileScreen() {
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Shared Recipes</Text>
-              <EmptyState
-                icon="restaurant"
-                title="No shared recipes yet"
-                subtitle="This section will appear when recipe sharing is enabled."
-              />
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Badges</Text>
-              <EmptyState
-                icon="ribbon-outline"
-                title="No badges to show"
-                subtitle="This section will appear when public badges are enabled."
-              />
+              <Text style={styles.sectionTitle}>Badges ({badges.length})</Text>
+              {badges.length === 0 ? (
+                <EmptyState
+                  icon="ribbon-outline"
+                  title="No badges yet"
+                  subtitle="This user hasn't earned any badges yet."
+                />
+              ) : (
+                <View style={styles.badgesGrid}>
+                  {badges.map((badge) => (
+                    <View key={badge.id} style={styles.badgeCard}>
+                      <View style={styles.badgeIconWrap}>
+                        <Ionicons name={badge.icon as any} size={28} color={Colors.warning} />
+                      </View>
+                      <Text style={styles.badgeTitle}>{badge.title}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           </>
         )}

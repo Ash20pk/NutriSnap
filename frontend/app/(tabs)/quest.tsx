@@ -424,13 +424,17 @@ export default function QuestScreen() {
                           <UserRow
                             style={styles.searchResultCard}
                             title={result.name}
-                            subtitle={`@${result.username}`}
+                            subtitle={result.username ? `@${result.username}` : undefined}
                             titleStyle={styles.resultName}
                             subtitleStyle={styles.resultBio}
                             avatar={{
                               text: (result.name || result.username || 'U')[0].toUpperCase(),
                               containerStyle: styles.avatar,
                               textStyle: styles.avatarText,
+                            }}
+                            onPress={() => {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                              router.push(`/public-profile/${result.id}` as any);
                             }}
                             right={(
                               <TouchableOpacity
@@ -516,6 +520,10 @@ export default function QuestScreen() {
                           text: entry.name.charAt(0),
                           containerStyle: styles.avatarSmall,
                           textStyle: styles.avatarTextSmall,
+                        }}
+                        onPress={entry.is_current_user ? undefined : () => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                          router.push(`/public-profile/${entry.user_id}` as any);
                         }}
                         left={(
                           <View

@@ -37,23 +37,28 @@ class SocialService:
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT id, name, username, bio, avatar_url
-                FROM profiles
-                WHERE id != $1
+                SELECT
+                  p.id, p.name, p.username, p.bio, p.avatar_url,
+                  EXISTS(
+                    SELECT 1 FROM user_follows uf
+                    WHERE uf.follower_id = $1 AND uf.following_id = p.id
+                  ) AS is_following
+                FROM profiles p
+                WHERE p.id != $1
                   AND (
-                    lower(name) LIKE '%' || $2 || '%'
-                    OR lower(username) LIKE '%' || $2 || '%'
+                    lower(p.name) LIKE '%' || $2 || '%'
+                    OR lower(p.username) LIKE '%' || $2 || '%'
                   )
-                ORDER BY 
-                  CASE WHEN lower(username) = $2 THEN 0 ELSE 1 END,
-                  CASE WHEN lower(name) = $2 THEN 0 ELSE 1 END,
-                  name ASC
+                ORDER BY
+                  CASE WHEN lower(p.username) = $2 THEN 0 ELSE 1 END,
+                  CASE WHEN lower(p.name) = $2 THEN 0 ELSE 1 END,
+                  p.name ASC
                 LIMIT 50
                 """,
                 to_uuid(current_uid),
                 q,
             )
-        
+
         results = []
         for r in rows:
             results.append({
@@ -62,6 +67,7 @@ class SocialService:
                 "username": r["username"],
                 "bio": r["bio"],
                 "avatar_url": r["avatar_url"],
+                "is_following": bool(r["is_following"]),
             })
         
         return {"results": results}
