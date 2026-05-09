@@ -130,20 +130,32 @@ async def get_cron_status(admin_key: str = Depends(verify_admin_key)):
     }
 
 
+_VALID_JOBS = {
+    "analytics_warmup": _scheduler_module.job_analytics_warmup,
+    "nutrient_daily":   _scheduler_module.job_nutrient_daily,
+    "nutrient_weekly":  _scheduler_module.job_nutrient_weekly,
+}
+
+
 @router.post("/cron/trigger/{job_id}")
 async def trigger_cron_job(job_id: str, admin_key: str = Depends(verify_admin_key)):
-    """Manually fire a scheduled job right now (for testing)."""
-    sched = _scheduler_module._scheduler
-    if sched is None or not sched.running:
-        raise HTTPException(status_code=503, detail="Scheduler not running on this worker")
+    """
+    Manually fire a cron job right now for testing.
+    Runs directly on whichever worker receives the request — no need to hit the
+    scheduler worker specifically. The job runs in the background so the response
+    returns immediately.
+    """
+    import asyncio
 
-    job = sched.get_job(job_id)
-    if job is None:
-        valid = [j.id for j in sched.get_jobs()]
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found. Valid: {valid}")
+    fn = _VALID_JOBS.get(job_id)
+    if fn is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown job '{job_id}'. Valid: {list(_VALID_JOBS)}"
+        )
 
-    job.modify(next_run_time=__import__("datetime").datetime.now(timezone.utc))
-    return {"triggered": job_id, "message": f"Job '{job.name}' will fire within seconds"}
+    asyncio.create_task(fn())
+    return {"triggered": job_id, "message": "Job started in background — check docker logs for progress"}
 
 
 @router.get("/stats")
