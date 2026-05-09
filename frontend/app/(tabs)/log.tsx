@@ -743,7 +743,7 @@ export default function LogScreen() {
                                 {food.name.split(' ').map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
                               </Text>
                               <Text style={styles.selectedFoodDetails}>
-                                {food.displayQuantity || food.quantity} {food.displayUnit || 'g'} • {food.calories} CAL
+                                {(+(food.displayQuantity || food.quantity || 0)).toFixed(1)} {food.displayUnit || 'g'} • {(+(food.calories || 0)).toFixed(1)} CAL
                               </Text>
                             </View>
                             <View style={styles.selectedFoodActions}>

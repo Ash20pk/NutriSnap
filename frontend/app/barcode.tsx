@@ -626,17 +626,17 @@ export default function BarcodeScreen() {
 
               <View style={styles.nutritionGrid}>
                 <View style={styles.nutritionItem}>
-                  <Text style={styles.nutritionValue}>{scannedProduct?.calories}</Text>
+                  <Text style={styles.nutritionValue}>{(+(scannedProduct?.calories ?? 0)).toFixed(1)}</Text>
                   <Text style={styles.nutritionLabel}>CALORIES</Text>
                 </View>
                 <View style={styles.nutritionDivider} />
                 <View style={styles.nutritionItem}>
-                  <Text style={styles.nutritionValue}>{scannedProduct?.protein}g</Text>
+                  <Text style={styles.nutritionValue}>{(+(scannedProduct?.protein ?? 0)).toFixed(1)}g</Text>
                   <Text style={styles.nutritionLabel}>PROTEIN</Text>
                 </View>
                 <View style={styles.nutritionDivider} />
                 <View style={styles.nutritionItem}>
-                  <Text style={styles.nutritionValue}>{scannedProduct?.carbs}g</Text>
+                  <Text style={styles.nutritionValue}>{(+(scannedProduct?.carbs ?? 0)).toFixed(1)}g</Text>
                   <Text style={styles.nutritionLabel}>CARBS</Text>
                 </View>
               </View>

@@ -849,22 +849,22 @@ export default function AnalyticsScreen() {
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <Ionicons name="flame" size={28} color={theme.primary} />
-              <Text style={styles.statValue}>{averages.calories || 0}</Text>
+              <Text style={styles.statValue}>{(+(averages.calories || 0)).toFixed(1)}</Text>
               <Text style={styles.statLabel}>kcal/day</Text>
             </View>
             <View style={styles.statCard}>
               <Ionicons name="fitness" size={28} color={Colors.protein} />
-              <Text style={styles.statValue}>{averages.protein || 0}g</Text>
+              <Text style={styles.statValue}>{(+(averages.protein || 0)).toFixed(1)}g</Text>
               <Text style={styles.statLabel}>Protein</Text>
             </View>
             <View style={styles.statCard}>
               <Ionicons name="leaf" size={28} color={Colors.carbs} />
-              <Text style={styles.statValue}>{averages.carbs || 0}g</Text>
+              <Text style={styles.statValue}>{(+(averages.carbs || 0)).toFixed(1)}g</Text>
               <Text style={styles.statLabel}>Carbs</Text>
             </View>
             <View style={styles.statCard}>
               <Ionicons name="water" size={28} color={Colors.fat} />
-              <Text style={styles.statValue}>{averages.fat || 0}g</Text>
+              <Text style={styles.statValue}>{(+(averages.fat || 0)).toFixed(1)}g</Text>
               <Text style={styles.statLabel}>Fat</Text>
             </View>
           </View>

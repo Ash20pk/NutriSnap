@@ -95,7 +95,7 @@ export default function SavedRecipesScreen() {
                 </View>
                 <View style={styles.metaItem}>
                     <Ionicons name="flame-outline" size={14} color={theme.textSecondary} />
-                    <Text style={styles.metaText}>{item.recipe?.calories} cal</Text>
+                    <Text style={styles.metaText}>{(+(item.recipe?.calories ?? 0)).toFixed(1)} cal</Text>
                 </View>
                 <Text style={styles.dateText}>
                     {new Date(item.created_at).toLocaleDateString()}

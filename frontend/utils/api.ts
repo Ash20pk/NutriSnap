@@ -697,6 +697,17 @@ export const mealApi = {
     const response = await api.get(`/meals/stats/${userId}?${dateParam}timezone_offset=${timezoneOffset}`);
     return response.data;
   },
+  deleteMeal: async (mealId: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/meals/${mealId}`);
+    return response.data;
+  },
+  updateMeal: async (
+    mealId: string,
+    payload: { meal_type?: string; foods?: any[]; notes?: string }
+  ): Promise<Meal> => {
+    const response = await api.put(`/meals/${mealId}`, payload);
+    return response.data;
+  },
 };
 
 // Analytics API

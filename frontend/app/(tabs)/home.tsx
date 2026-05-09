@@ -15,7 +15,8 @@ import {
 import { Colors } from '../../constants/Colors';
 import { useUser } from '../../context/UserContext';
 import { useTheme } from '../../context/ThemeContext';
-import { mealApi, questApi } from '../../utils/api';
+import { mealApi, questApi, Meal } from '../../utils/api';
+import MealActionsSheet from '../../components/MealActionsSheet';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { useRouter } from 'expo-router';
@@ -26,6 +27,7 @@ import AnimatedCard from '../../components/AnimatedCard';
 import StandardBarChart from '../../components/StandardBarChart';
 import StandardDonutChart from '../../components/StandardDonutChart';
 import AppCard from '../../components/AppCard';
+import EmptyState from '../../components/EmptyState';
 import SectionTitle from '../../components/SectionTitle';
 import StreakCalendarModal from '../../components/StreakCalendarModal';
 import HydrationTracker from '../../components/HydrationTracker';
@@ -34,6 +36,13 @@ import * as Haptics from 'expo-haptics';
 const { width } = Dimensions.get('window');
 
 const WEEKLY_WRAP_RELEASE_HOUR = 22;
+
+const MEAL_CONFIG = {
+  breakfast: { icon: 'sunny',        color: '#F28D35', label: 'Breakfast' },
+  lunch:     { icon: 'partly-sunny', color: '#2F593E', label: 'Lunch'     },
+  dinner:    { icon: 'moon',         color: '#5B6AF0', label: 'Dinner'    },
+  snack:     { icon: 'cafe',         color: '#8B7A6A', label: 'Snack'     },
+} as const;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -49,6 +58,8 @@ export default function HomeScreen() {
   const [hasShownGoalToday, setHasShownGoalToday] = useState(false);
   const [showWeeklyWrapBanner, setShowWeeklyWrapBanner] = useState(false);
   const [waterRefreshTick, setWaterRefreshTick] = useState(0);
+  const [todayMeals, setTodayMeals] = useState<Meal[]>([]);
+  const [selectedMeal, setSelectedMeal] = useState<Meal | null>(null);
   const sparkleAnims = useRef([...Array(6)].map(() => new Animated.Value(0))).current;
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -83,6 +94,20 @@ export default function HomeScreen() {
     }
   }, [user]);
 
+
+  const fetchTodayMeals = React.useCallback(async () => {
+    if (!user) return;
+    try {
+      const result = await mealApi.getHistory(user.id, 2);
+      const today = new Date().toDateString();
+      const todays = (result.meals as Meal[]).filter(
+        m => new Date((m as any).timestamp || (m as any).logged_at).toDateString() === today
+      );
+      setTodayMeals(todays);
+    } catch (e) {
+      console.error('Error fetching today meals:', e);
+    }
+  }, [user]);
 
   const openStreakCalendar = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -128,8 +153,9 @@ export default function HomeScreen() {
     if (user) {
       fetchStats();
       fetchWeeklyData();
+      fetchTodayMeals();
     }
-  }, [user, fetchStats, fetchWeeklyData]);
+  }, [user, fetchStats, fetchWeeklyData, fetchTodayMeals]);
 
   useEffect(() => {
     const checkWeeklyWrap = () => {
@@ -317,6 +343,7 @@ export default function HomeScreen() {
             onRefresh={() => {
               fetchStats();
               fetchWeeklyData();
+              fetchTodayMeals();
               setWaterRefreshTick(t => t + 1);
             }} 
             tintColor={theme.primary} 
@@ -515,8 +542,112 @@ export default function HomeScreen() {
           </AnimatedCard>
         )}
 
+        {/* Today's Meals */}
+        <AnimatedCard delay={450} type="slide" style={styles.section}>
+          <SectionTitle title="Today's Meals" />
+          {todayMeals.length > 0 ? (
+            <View style={styles.mealsListGap}>
+              {todayMeals.map(meal => {
+                const conf = MEAL_CONFIG[meal.meal_type as keyof typeof MEAL_CONFIG] ?? MEAL_CONFIG.snack;
+                const rawTs = (meal as any).timestamp || (meal as any).logged_at;
+                const timeStr = (() => { try { return format(new Date(rawTs), 'h:mm a'); } catch { return ''; } })();
+                return (
+                  <TouchableOpacity
+                    key={meal.id}
+                    style={styles.mealCard}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      setSelectedMeal(meal);
+                    }}
+                    activeOpacity={0.82}
+                  >
+                    <View style={styles.mealCardBody}>
+                      <View style={styles.mealCardTopRow}>
+                        <View style={[styles.mealTypeIcon, { backgroundColor: conf.color + '18' }]}>
+                          <Ionicons name={conf.icon as any} size={18} color={conf.color} />
+                        </View>
+                        <Text style={styles.mealCardTitle}>{conf.label}</Text>
+                        {(meal.foods?.length ?? 0) > 0 && (
+                          <View style={[styles.mealItemsBadge, { backgroundColor: conf.color + '18' }]}>
+                            <Text style={[styles.mealItemsBadgeText, { color: conf.color }]}>
+                              {meal.foods!.length} {meal.foods!.length === 1 ? 'item' : 'items'}
+                            </Text>
+                          </View>
+                        )}
+                        <View style={{ flex: 1 }} />
+                        {timeStr ? <Text style={styles.mealCardTime}>{timeStr}</Text> : null}
+                      </View>
+
+                      {(meal.foods?.length ?? 0) > 0 && (
+                        <Text style={styles.mealCardSub} numberOfLines={1}>
+                          {meal.foods!.slice(0, 3).map((f: any) => f.name).join(' · ')}
+                          {meal.foods!.length > 3 ? ` +${meal.foods!.length - 3}` : ''}
+                        </Text>
+                      )}
+
+                      <View style={styles.mealCardDivider} />
+
+                      <View style={styles.mealCardBottomRow}>
+                        <View style={styles.mealMacroRow}>
+                          <View style={styles.mealMacroChip}>
+                            <View style={[styles.macroDot, { backgroundColor: Colors.protein }]} />
+                            <Text style={styles.mealMacroText}>{(+(meal.total_protein ?? 0)).toFixed(1)}g</Text>
+                          </View>
+                          <View style={styles.mealMacroChip}>
+                            <View style={[styles.macroDot, { backgroundColor: Colors.carbs }]} />
+                            <Text style={styles.mealMacroText}>{(+(meal.total_carbs ?? 0)).toFixed(1)}g</Text>
+                          </View>
+                          <View style={styles.mealMacroChip}>
+                            <View style={[styles.macroDot, { backgroundColor: Colors.fat }]} />
+                            <Text style={styles.mealMacroText}>{(+(meal.total_fat ?? 0)).toFixed(1)}g</Text>
+                          </View>
+                        </View>
+                        <View style={styles.mealCardCalRow}>
+                          <Text style={[styles.mealCardCal, { color: conf.color }]}>{(+(meal.total_calories ?? 0)).toFixed(1)}</Text>
+                          <Text style={styles.mealCardCalLabel}>kcal</Text>
+                          <Ionicons name="chevron-forward" size={13} color={theme.textLight} />
+                        </View>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : (
+            <AppCard padding={0} style={{ overflow: 'hidden' }}>
+              <TouchableOpacity 
+                activeOpacity={0.9} 
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                  router.push('/(tabs)/log');
+                }}
+              >
+                <EmptyState 
+                  icon="restaurant-outline"
+                  title="No meals logged yet"
+                  subtitle="Tap here to log your first meal of the day!"
+                />
+              </TouchableOpacity>
+            </AppCard>
+          )}
+        </AnimatedCard>
+
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      <MealActionsSheet
+        meal={selectedMeal}
+        visible={selectedMeal !== null}
+        onClose={() => setSelectedMeal(null)}
+        onUpdated={updated => {
+          setTodayMeals(prev => prev.map(m => m.id === updated.id ? updated : m));
+          fetchStats();
+        }}
+        onDeleted={id => {
+          setTodayMeals(prev => prev.filter(m => m.id !== id));
+          fetchStats();
+        }}
+      />
 
       {/* Goal Crushed Modal */}
       <Modal
@@ -574,7 +705,7 @@ export default function HomeScreen() {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                 try {
                   await Share.share({
-                    message: `I just hit my daily calorie goal on NutriSnap! 🎯\n${Math.round(stats?.total_calories || 0)} kcal • ${stats?.meals_logged || 0} meals logged today.`,
+                    message: `I just hit my daily calorie goal on NutriSnap! 🎯\n${(+(stats?.total_calories || 0)).toFixed(1)} kcal • ${stats?.meals_logged || 0} meals logged today.`,
                     title: 'Daily Goal Crushed!',
                   });
                 } catch (e) {
@@ -744,6 +875,102 @@ function makeStyles(theme: typeof Colors) {
     marginBottom: 12,
     textTransform: 'uppercase',
     letterSpacing: 1,
+  },
+  mealsListGap: {
+    gap: 10,
+  },
+  mealCard: {
+    flexDirection: 'row',
+    backgroundColor: theme.white,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: theme.border,
+    borderBottomWidth: 4,
+    overflow: 'hidden',
+  },
+  mealCardBody: {
+    flex: 1,
+    padding: 14,
+    gap: 7,
+  },
+  mealCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  mealTypeIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mealCardTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: theme.text,
+  },
+  mealItemsBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 20,
+  },
+  mealItemsBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  mealCardTime: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  mealCardSub: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    lineHeight: 16,
+  },
+  mealCardDivider: {
+    height: 1,
+    backgroundColor: theme.borderLight,
+  },
+  mealCardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  mealMacroRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  mealMacroChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  macroDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  mealMacroText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.textSecondary,
+  },
+  mealCardCalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  mealCardCal: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: theme.text,
+  },
+  mealCardCalLabel: {
+    fontSize: 11,
+    color: theme.textSecondary,
+    marginRight: 2,
   },
   caloriesContent: {
     // No extra padding needed
