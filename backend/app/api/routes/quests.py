@@ -5,6 +5,7 @@ Quest routes for gamification features.
 from fastapi import APIRouter, Depends, Query
 
 from app.services.quest_service import QuestService
+from app.services.feed_service import FeedService
 from app.db.pool import get_pool
 from app.api.dependencies import get_current_uid, require_user_match
 
@@ -12,9 +13,13 @@ router = APIRouter(prefix="/quests", tags=["quests"])
 
 
 def get_quest_service() -> QuestService:
-    """Dependency to get quest service instance."""
     pool = get_pool()
     return QuestService(pool)
+
+
+def get_feed_service() -> FeedService:
+    pool = get_pool()
+    return FeedService(pool)
 
 
 @router.get("/{user_id}/daily")
@@ -135,11 +140,18 @@ async def get_streak_calendar(
 async def check_badges(
     user_id: str,
     uid: str = Depends(get_current_uid),
-    service: QuestService = Depends(get_quest_service)
+    service: QuestService = Depends(get_quest_service),
+    feed_service: FeedService = Depends(get_feed_service),
 ):
     """
     Check if the user has earned any new badges and award XP.
-    Called after every meal log.
+    Auto-publishes a feed post for each newly earned badge.
     """
     require_user_match(uid, user_id)
-    return await service.check_badges(user_id)
+    result = await service.check_badges(user_id)
+    for badge in result.get("newly_earned", []):
+        try:
+            await feed_service.create_badge_post(user_id, badge)
+        except Exception:
+            pass  # never fail the badge check due to feed errors
+    return result

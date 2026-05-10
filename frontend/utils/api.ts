@@ -877,6 +877,44 @@ export const socialApi = {
   },
 };
 
+// Feed API
+export interface FeedPost {
+  id: string;
+  user_id: string;
+  author_name: string;
+  author_username: string | null;
+  author_avatar: string | null;
+  event_type: 'photo' | 'badge' | 'streak' | 'goal' | 'xp_level';
+  title: string;
+  body: string | null;
+  photo_url: string | null;
+  metadata: Record<string, any>;
+  hype_count: number;
+  created_at: string;
+  i_hyped: boolean;
+}
+
+export const feedApi = {
+  getFeed: async (limit = 20, offset = 0): Promise<{ posts: FeedPost[]; count: number }> => {
+    const response = await api.get(`/feed?limit=${limit}&offset=${offset}`);
+    return response.data;
+  },
+  createPost: async (payload: {
+    event_type: string;
+    title: string;
+    body?: string;
+    photo_url?: string;
+    metadata?: Record<string, any>;
+  }): Promise<{ post_id: string; created_at: string }> => {
+    const response = await api.post('/feed', payload);
+    return response.data;
+  },
+  toggleHype: async (postId: string): Promise<{ hyped: boolean; hype_count: number }> => {
+    const response = await api.post(`/feed/${postId}/hype`);
+    return response.data;
+  },
+};
+
 export const waterApi = {
   logWater: async (userId: string, amountMl: number): Promise<WaterLog> => {
     const response = await api.post('/water/log', { user_id: userId, amount_ml: amountMl });

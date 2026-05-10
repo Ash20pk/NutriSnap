@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,21 +11,33 @@ import {
   TextInput,
   Alert,
   Animated,
+  RefreshControl,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
-import { mealApi } from '../../utils/api';
+import { mealApi, Meal } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import PageHeader from '../../components/PageHeader';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { Audio } from 'expo-av';
+import { format } from 'date-fns';
 
 import DuoButton from '../../components/DuoButton';
 import AnimatedCard from '../../components/AnimatedCard';
 import LoadingState from '../../components/LoadingState';
+import MealActionsSheet from '../../components/MealActionsSheet';
+import AppCard from '../../components/AppCard';
+import EmptyState from '../../components/EmptyState';
+
+const MEAL_CONFIG = {
+  breakfast: { icon: 'sunny',        color: '#F28D35', label: 'Breakfast' },
+  lunch:     { icon: 'partly-sunny', color: '#2F593E', label: 'Lunch'     },
+  dinner:    { icon: 'moon',         color: '#5B6AF0', label: 'Dinner'    },
+  snack:     { icon: 'cafe',         color: '#8B7A6A', label: 'Snack'     },
+} as const;
 
 export default function LogScreen() {
   const { theme } = useTheme();
@@ -38,6 +50,10 @@ export default function LogScreen() {
   const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('breakfast');
   const [logMethod, setLogMethod] = useState<'photo' | 'manual' | null>(null);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [todayMeals, setTodayMeals] = useState<Meal[]>([]);
+  const [todayStats, setTodayStats] = useState<any>(null);
+  const [selectedMeal, setSelectedMeal] = useState<Meal | null>(null);
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -53,6 +69,34 @@ export default function LogScreen() {
   const [manualParseLoading, setManualParseLoading] = useState(false);
   const [clarificationQuestion, setClarificationQuestion] = useState<string | null>(null);
   const [clarificationRequestedName, setClarificationRequestedName] = useState<string | null>(null);
+
+  const fetchTodayData = useCallback(async () => {
+    if (!user) return;
+    try {
+      const [result, stats] = await Promise.all([
+        mealApi.getHistory(user.id, 2),
+        mealApi.getStats(user.id),
+      ]);
+      const today = new Date().toDateString();
+      const todays = (result.meals as Meal[]).filter(
+        m => new Date((m as any).timestamp || (m as any).logged_at).toDateString() === today
+      );
+      setTodayMeals(todays);
+      setTodayStats(stats);
+    } catch (e) {
+      console.error('Error fetching today data:', e);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchTodayData();
+  }, [fetchTodayData]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchTodayData();
+    setRefreshing(false);
+  }, [fetchTodayData]);
 
   useEffect(() => {
     const openMode = typeof params?.openMode === 'string' ? params.openMode : '';
@@ -379,10 +423,13 @@ export default function LogScreen() {
           </TouchableOpacity>
         }
       />
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />
+        }
       >
 
         {/* Meal Type Selector */}
@@ -517,6 +564,122 @@ export default function LogScreen() {
             </TouchableOpacity>
           </AnimatedCard>
         </View>
+
+        {/* Today at a Glance */}
+        {todayStats && (
+          <AnimatedCard delay={550} type="slide" style={styles.glanceSection}>
+            <Text style={styles.sectionTitle}>Today at a Glance</Text>
+            <AppCard padding={0} style={styles.glanceCard}>
+              <View style={styles.glanceRow}>
+                <View style={styles.glanceStat}>
+                  <Text style={styles.glanceValue}>{Math.round(todayStats.total_calories || 0)}</Text>
+                  <Text style={styles.glanceLabel}>kcal eaten</Text>
+                </View>
+                <View style={styles.glanceDivider} />
+                <View style={styles.glanceStat}>
+                  <Text style={[styles.glanceValue, { color: theme.primary }]}>
+                    {Math.max(0, Math.round((todayStats.targets?.calories || 2000) - (todayStats.total_calories || 0)))}
+                  </Text>
+                  <Text style={styles.glanceLabel}>kcal left</Text>
+                </View>
+                <View style={styles.glanceDivider} />
+                <View style={styles.glanceStat}>
+                  <Text style={styles.glanceValue}>{todayMeals.length}</Text>
+                  <Text style={styles.glanceLabel}>meals</Text>
+                </View>
+              </View>
+              <View style={styles.glanceBarTrack}>
+                <View
+                  style={[
+                    styles.glanceBarFill,
+                    {
+                      width: `${Math.min(100, ((todayStats.total_calories || 0) / (todayStats.targets?.calories || 2000)) * 100)}%`,
+                    },
+                  ]}
+                />
+              </View>
+            </AppCard>
+          </AnimatedCard>
+        )}
+
+        {/* Today's Meals */}
+        <AnimatedCard delay={620} type="slide" style={styles.glanceSection}>
+          <Text style={styles.sectionTitle}>Today's Meals</Text>
+          {todayMeals.length > 0 ? (
+            <View style={styles.mealsListGap}>
+              {todayMeals.map(meal => {
+                const conf = MEAL_CONFIG[meal.meal_type as keyof typeof MEAL_CONFIG] ?? MEAL_CONFIG.snack;
+                const rawTs = (meal as any).timestamp || (meal as any).logged_at;
+                const timeStr = (() => { try { return format(new Date(rawTs), 'h:mm a'); } catch { return ''; } })();
+                return (
+                  <TouchableOpacity
+                    key={meal.id}
+                    style={styles.mealCard}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                      setSelectedMeal(meal);
+                    }}
+                    activeOpacity={0.82}
+                  >
+                    <View style={styles.mealCardBody}>
+                      <View style={styles.mealCardTopRow}>
+                        <View style={[styles.mealTypeIcon, { backgroundColor: conf.color + '18' }]}>
+                          <Ionicons name={conf.icon as any} size={18} color={conf.color} />
+                        </View>
+                        <Text style={styles.mealCardTitle}>{conf.label}</Text>
+                        {(meal.foods?.length ?? 0) > 0 && (
+                          <View style={[styles.mealItemsBadge, { backgroundColor: conf.color + '18' }]}>
+                            <Text style={[styles.mealItemsBadgeText, { color: conf.color }]}>
+                              {meal.foods!.length} {meal.foods!.length === 1 ? 'item' : 'items'}
+                            </Text>
+                          </View>
+                        )}
+                        <View style={{ flex: 1 }} />
+                        {timeStr ? <Text style={styles.mealCardTime}>{timeStr}</Text> : null}
+                      </View>
+                      {(meal.foods?.length ?? 0) > 0 && (
+                        <Text style={styles.mealCardSub} numberOfLines={1}>
+                          {meal.foods!.slice(0, 3).map((f: any) => f.name).join(' · ')}
+                          {meal.foods!.length > 3 ? ` +${meal.foods!.length - 3}` : ''}
+                        </Text>
+                      )}
+                      <View style={styles.mealCardDivider} />
+                      <View style={styles.mealCardBottomRow}>
+                        <View style={styles.mealMacroRow}>
+                          <View style={styles.mealMacroChip}>
+                            <View style={[styles.macroDot, { backgroundColor: Colors.protein }]} />
+                            <Text style={styles.mealMacroText}>{(+(meal.total_protein ?? 0)).toFixed(1)}g</Text>
+                          </View>
+                          <View style={styles.mealMacroChip}>
+                            <View style={[styles.macroDot, { backgroundColor: Colors.carbs }]} />
+                            <Text style={styles.mealMacroText}>{(+(meal.total_carbs ?? 0)).toFixed(1)}g</Text>
+                          </View>
+                          <View style={styles.mealMacroChip}>
+                            <View style={[styles.macroDot, { backgroundColor: Colors.fat }]} />
+                            <Text style={styles.mealMacroText}>{(+(meal.total_fat ?? 0)).toFixed(1)}g</Text>
+                          </View>
+                        </View>
+                        <View style={styles.mealCardCalRow}>
+                          <Text style={[styles.mealCardCal, { color: conf.color }]}>{(+(meal.total_calories ?? 0)).toFixed(1)}</Text>
+                          <Text style={styles.mealCardCalLabel}>kcal</Text>
+                          <Ionicons name="chevron-forward" size={13} color={theme.textLight} />
+                        </View>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : (
+            <AppCard padding={0} style={{ overflow: 'hidden' }}>
+              <EmptyState
+                icon="restaurant-outline"
+                title="No meals logged yet"
+                subtitle="Use the options above to log your first meal!"
+              />
+            </AppCard>
+          )}
+        </AnimatedCard>
 
         {/* Manual/Voice Input Modal */}
         <Modal visible={showModal} animationType="slide" transparent={true}>
@@ -805,6 +968,20 @@ export default function LogScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      <MealActionsSheet
+        meal={selectedMeal}
+        visible={selectedMeal !== null}
+        onClose={() => setSelectedMeal(null)}
+        onUpdated={updated => {
+          setTodayMeals(prev => prev.map(m => m.id === updated.id ? updated : m));
+          fetchTodayData();
+        }}
+        onDeleted={id => {
+          setTodayMeals(prev => prev.filter(m => m.id !== id));
+          fetchTodayData();
+        }}
+      />
     </View>
   );
 }
@@ -1315,6 +1492,153 @@ function makeStyles(theme: typeof Colors) {
     flexDirection: 'row',
     gap: 12,
     marginTop: 8,
+  },
+  glanceSection: {
+    marginBottom: 24,
+  },
+  glanceCard: {
+    backgroundColor: theme.white,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: theme.border,
+    borderBottomWidth: 6,
+    overflow: 'hidden',
+    padding: 16,
+    gap: 12,
+  },
+  glanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  glanceStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  glanceValue: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: theme.text,
+  },
+  glanceLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.textSecondary,
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
+  glanceDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: theme.border,
+  },
+  glanceBarTrack: {
+    height: 8,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: 4,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  glanceBarFill: {
+    height: '100%',
+    backgroundColor: theme.primary,
+    borderRadius: 4,
+  },
+  mealsListGap: {
+    gap: 10,
+  },
+  mealCard: {
+    flexDirection: 'row',
+    backgroundColor: theme.white,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: theme.border,
+    borderBottomWidth: 4,
+    overflow: 'hidden',
+  },
+  mealCardBody: {
+    flex: 1,
+    padding: 14,
+    gap: 7,
+  },
+  mealCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  mealTypeIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mealCardTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: theme.text,
+  },
+  mealItemsBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 20,
+  },
+  mealItemsBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  mealCardTime: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  mealCardSub: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    lineHeight: 16,
+  },
+  mealCardDivider: {
+    height: 1,
+    backgroundColor: theme.borderLight,
+  },
+  mealCardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  mealMacroRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  mealMacroChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  macroDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  mealMacroText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.textSecondary,
+  },
+  mealCardCalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  mealCardCal: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: theme.text,
+  },
+  mealCardCalLabel: {
+    fontSize: 11,
+    color: theme.textSecondary,
+    marginRight: 2,
   },
   profileIconButton: {
     width: 44,
