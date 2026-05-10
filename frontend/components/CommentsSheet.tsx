@@ -34,6 +34,7 @@ interface Props {
   visible: boolean;
   post: Post | null;
   onClose: () => void;
+  onCommentAdded?: (postId: string) => void;
 }
 
 type LocalComment = PostComment & {
@@ -44,7 +45,7 @@ type LocalComment = PostComment & {
   repliesLoading?: boolean;
 };
 
-export default function CommentsSheet({ visible, post, onClose }: Props) {
+export default function CommentsSheet({ visible, post, onClose, onCommentAdded }: Props) {
   const { user } = useUser();
   const slideAnim = useRef(new Animated.Value(700)).current;
   const [comments, setComments] = useState<LocalComment[]>([]);
@@ -135,6 +136,7 @@ export default function CommentsSheet({ visible, post, onClose }: Props) {
         ));
       } else {
         setComments(prev => prev.map(c => c.id === tempId ? comment : c));
+        onCommentAdded?.(post.id);
       }
     } catch (e) {
       if (parentId) {
@@ -246,9 +248,9 @@ export default function CommentsSheet({ visible, post, onClose }: Props) {
 
   const triggerReply = (comment: LocalComment) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    const firstName = comment.author_name.split(' ')[0];
-    setReplyingTo({ id: comment.id, name: firstName });
-    setBody(`@${firstName} `);
+    const mentionHandle = comment.author_username ?? comment.author_name.split(' ')[0];
+    setReplyingTo({ id: comment.id, name: mentionHandle });
+    setBody(`@${mentionHandle} `);
     inputRef.current?.focus();
   };
 

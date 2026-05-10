@@ -67,6 +67,10 @@ class FeedService:
                         SELECT 1 FROM post_reactions r2
                         WHERE r2.post_id = p.id AND r2.user_id = $1
                     )                AS i_reacted,
+                    EXISTS(
+                        SELECT 1 FROM saved_posts sp
+                        WHERE sp.post_id = p.id AND sp.user_id = $1
+                    )                AS i_saved,
                     (
                         SELECT JSON_BUILD_OBJECT(
                             'id',          c.id::text,
@@ -132,6 +136,10 @@ class FeedService:
                         SELECT 1 FROM post_reactions r2
                         WHERE r2.post_id = p.id AND r2.user_id = $2
                     ) AS i_reacted,
+                    EXISTS(
+                        SELECT 1 FROM saved_posts sp
+                        WHERE sp.post_id = p.id AND sp.user_id = $2
+                    ) AS i_saved,
                     NULL::json AS first_comment
                 FROM posts p
                 JOIN profiles pr ON pr.id = p.user_id
@@ -448,6 +456,27 @@ class FeedService:
                 )
                 return {"liked": True, "like_count": int(like_count or 0)}
 
+    # ── Save / Unsave ───────────────────────────────────────────────────────
+
+    async def toggle_save_post(self, user_id: str, post_id: str) -> Dict[str, Any]:
+        uid = to_uuid(user_id)
+        pid = to_uuid(post_id)
+        async with self.pool.acquire() as conn:
+            existing = await conn.fetchval(
+                "SELECT 1 FROM saved_posts WHERE user_id=$1 AND post_id=$2", uid, pid,
+            )
+            if existing:
+                await conn.execute(
+                    "DELETE FROM saved_posts WHERE user_id=$1 AND post_id=$2", uid, pid,
+                )
+                return {"saved": False}
+            else:
+                await conn.execute(
+                    "INSERT INTO saved_posts (user_id, post_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                    uid, pid,
+                )
+                return {"saved": True}
+
     # ── Auto-publish from badge check ───────────────────────────────────────
 
     async def create_badge_post(self, user_id: str, badge: Dict[str, Any]) -> None:
@@ -511,5 +540,6 @@ class FeedService:
             "comment_count": r["comment_count"],
             "created_at": r["created_at"].isoformat(),
             "i_reacted": bool(r["i_reacted"]),
+            "i_saved": bool(r.get("i_saved") or False),
             "first_comment": first_comment,
         }

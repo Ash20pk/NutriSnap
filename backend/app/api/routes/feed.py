@@ -95,6 +95,17 @@ async def toggle_hype_compat(
     return {"hyped": result["reacted"], "hype_count": result["reaction_count"]}
 
 
+# ── Save ────────────────────────────────────────────────────────────────────
+
+@router.post("/{post_id}/save")
+async def toggle_save(
+    post_id: str,
+    uid: str = Depends(get_current_uid),
+    service: FeedService = Depends(get_feed_service),
+):
+    return await service.toggle_save_post(uid, post_id)
+
+
 # ── Comments ────────────────────────────────────────────────────────────────
 
 @router.get("/{post_id}/comments")

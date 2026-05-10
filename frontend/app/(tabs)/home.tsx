@@ -172,6 +172,11 @@ export default function HomeScreen() {
         visible={!!commentPost}
         post={commentPost}
         onClose={() => setCommentPost(null)}
+        onCommentAdded={postId => {
+          setFeedPosts(prev => prev.map(p =>
+            p.id === postId ? { ...p, comment_count: p.comment_count + 1 } : p
+          ));
+        }}
       />
 
       {/* ── Header ─────────────────────────────── */}
@@ -385,7 +390,7 @@ export default function HomeScreen() {
 
 function makeStyles(theme: typeof Colors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f2f2f2' },
+    container: { flex: 1, backgroundColor: theme.background },
     flex: { flex: 1 },
     scrollContent: { paddingBottom: 100 },
 

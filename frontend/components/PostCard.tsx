@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   Animated,
   Alert,
+  Share,
+  Modal,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -60,8 +62,12 @@ export default function PostCard({ post, currentUserId, onCommentPress, onDelete
   const [reacted, setReacted] = useState(post.i_reacted);
   const [reactionCount, setReactionCount] = useState(post.reaction_count);
   const [commentCount, setCommentCount] = useState(post.comment_count);
+  const [saved, setSaved] = useState(post.i_saved);
+
+  React.useEffect(() => { setCommentCount(post.comment_count); }, [post.comment_count]);
   const [imageFailed, setImageFailed] = useState(false);
   const [showHeart, setShowHeart] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
   const heartAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const lastTap = useRef(0);
@@ -128,7 +134,25 @@ export default function PostCard({ post, currentUserId, onCommentPress, onDelete
     onCommentPress(post);
   };
 
-  const handleDelete = () => {
+  const handleShare = async () => {
+    try {
+      const lines: string[] = [];
+      if (post.caption) lines.push(post.caption);
+      if (post.media[0]?.media_url) lines.push(post.media[0].media_url);
+      await Share.share({
+        message: lines.join('\n') || `Check out ${post.author_name}'s post on NutriSnap!`,
+        title: 'NutriSnap',
+      });
+    } catch { /* cancelled */ }
+  };
+
+  const handleOptions = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    setShowOptions(true);
+  };
+
+  const confirmDelete = () => {
+    setShowOptions(false);
     Alert.alert('Delete Post', 'Remove this from your feed?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -137,7 +161,7 @@ export default function PostCard({ post, currentUserId, onCommentPress, onDelete
           try {
             await postApi.deletePost(post.id);
             onDeleted?.(post.id);
-          } catch (e) {
+          } catch {
             Alert.alert('Error', 'Could not delete post.');
           }
         },
@@ -172,37 +196,40 @@ export default function PostCard({ post, currentUserId, onCommentPress, onDelete
           <Text style={styles.authorName} numberOfLines={1}>{post.author_name}</Text>
           <Text style={styles.timeAgo}>{timeAgo}</Text>
         </View>
-        {isMe && (
-          <TouchableOpacity onPress={handleDelete} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="ellipsis-horizontal" size={18} color="#999" />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity onPress={handleOptions} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Ionicons name="ellipsis-horizontal" size={18} color="#999" />
+        </TouchableOpacity>
       </TouchableOpacity>
 
       {/* Media */}
       {post.post_type === 'photo' && photoUri && !imageFailed ? (
-        <TouchableOpacity activeOpacity={1} onPress={handleDoubleTap}>
-          <Image
-            source={{ uri: photoUri }}
-            style={styles.photo}
-            contentFit="cover"
-            cachePolicy="none"
-            recyclingKey={photoUri}
-            onError={(e) => {
-              // eslint-disable-next-line no-console
-              console.error('Post image failed to load:', { postId: post.id, uri: photoUri, error: e });
-              setImageFailed(true);
-            }}
-          />
-          {showHeart && (
-            <Animated.View style={[styles.bigHeart, {
-              opacity: heartAnim,
-              transform: [{ scale: heartAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1.5] }) }]
-            }]}>
-              <Ionicons name="flame" size={80} color="#fff" />
-            </Animated.View>
-          )}
-        </TouchableOpacity>
+        <View>
+          <TouchableOpacity activeOpacity={1} onPress={handleDoubleTap}>
+            <Image
+              source={{ uri: photoUri }}
+              style={styles.photo}
+              contentFit="cover"
+              cachePolicy="none"
+              recyclingKey={photoUri}
+              onError={(e) => {
+                // eslint-disable-next-line no-console
+                console.error('Post image failed to load:', { postId: post.id, uri: photoUri, error: e });
+                setImageFailed(true);
+              }}
+            />
+            {showHeart && (
+              <Animated.View style={[styles.bigHeart, {
+                opacity: heartAnim,
+                transform: [{ scale: heartAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1.5] }) }]
+              }]}>
+                <Ionicons name="flame" size={80} color="#FF3D00" />
+              </Animated.View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.shareOverlay} onPress={handleShare} activeOpacity={0.8}>
+            <Ionicons name="arrow-redo-outline" size={18} color="#fff" />
+          </TouchableOpacity>
+        </View>
       ) : (
         <LinearGradient
           colors={gradient}
@@ -224,68 +251,95 @@ export default function PostCard({ post, currentUserId, onCommentPress, onDelete
         </LinearGradient>
       )}
 
-      {/* Caption */}
-      {post.caption ? (
-        <View style={styles.captionWrap}>
-          <Text style={styles.captionText} numberOfLines={3}>
-            <Text style={styles.captionAuthor}>{post.author_name.split(' ')[0]} </Text>
-            {post.caption}
-          </Text>
-        </View>
-      ) : null}
-
-      {/* First comment preview */}
-      {post.first_comment && (
-        <TouchableOpacity style={styles.commentPreview} onPress={handleComment} activeOpacity={0.7}>
-          <Text style={styles.commentPreviewText} numberOfLines={1}>
-            <Text style={styles.commentPreviewAuthor}>{post.first_comment.author_name.split(' ')[0]} </Text>
-            {post.first_comment.body}
-          </Text>
-          {commentCount > 1 && (
-            <Text style={styles.viewAll}>View all {commentCount} comments</Text>
+      {/* Action row */}
+      <View style={styles.actions}>
+        {/* Left group: hype · comment · share */}
+        <TouchableOpacity style={styles.actionBtn} onPress={() => handleReact()} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+            <Ionicons name={reacted ? 'flame' : 'flame-outline'} size={22} color={reacted ? '#FF3D00' : '#888'} />
+          </Animated.View>
+          {reactionCount > 0 && (
+            <Text style={[styles.actionCount, reacted && { color: '#FF3D00' }]}>{reactionCount}</Text>
           )}
         </TouchableOpacity>
-      )}
 
-      {/* Social proof */}
-      {reactionCount > 0 && (
-        <View style={styles.socialProof}>
-          <Ionicons name="flame" size={12} color="#FF3D00" />
-          <Text style={styles.socialProofText}>
-            {reacted 
-              ? (reactionCount > 1 ? `You and ${reactionCount - 1} others hyped this` : 'You hyped this')
-              : `${reactionCount} ${reactionCount === 1 ? 'person' : 'people'} hyped this`
-            }
-          </Text>
-        </View>
-      )}
-
-      {/* Reactions bar */}
-      <View style={styles.reactions}>
-        <TouchableOpacity
-          style={[styles.reactionBtn, reacted && styles.reactionBtnActive]}
-          onPress={() => handleReact()}
-          activeOpacity={0.8}
-        >
-          <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-            <Ionicons
-              name={reacted ? 'flame' : 'flame-outline'}
-              size={18}
-              color={reacted ? '#FF3D00' : '#666'}
-            />
-          </Animated.View>
-          <Text style={[styles.reactionText, reacted && { color: '#FF3D00' }]}>
-            {reactionCount > 0 ? reactionCount : ''} {reacted ? 'Hyped' : 'Hype'}
-          </Text>
+        <TouchableOpacity style={styles.actionBtn} onPress={handleComment} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="chatbubble-outline" size={20} color="#888" />
+          {commentCount > 0 && (
+            <Text style={styles.actionCount}>{commentCount}</Text>
+          )}
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.reactionBtn} onPress={handleComment} activeOpacity={0.8}>
-          <Ionicons name="chatbubble-outline" size={18} color="#666" />
-          <Text style={styles.reactionText}>
-            {commentCount > 0 ? commentCount : ''} Comment{commentCount !== 1 ? 's' : ''}
-          </Text>
+        <TouchableOpacity style={styles.actionBtn} onPress={handleShare} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="arrow-redo-outline" size={20} color="#888" />
+        </TouchableOpacity>
+
+        {/* Right: bookmark */}
+        <TouchableOpacity
+          style={styles.saveBtn}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          onPress={async () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+            const next = !saved;
+            setSaved(next);
+            try { await postApi.toggleSave(post.id); }
+            catch { setSaved(!next); }
+          }}
+        >
+          <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={22} color={saved ? Colors.primary : '#888'} />
         </TouchableOpacity>
       </View>
+
+      {/* Caption */}
+      {post.caption ? (
+        <Text style={styles.captionText} numberOfLines={3}>
+          <Text style={styles.captionAuthor}>{post.author_name.split(' ')[0]} </Text>
+          {post.caption}
+        </Text>
+      ) : null}
+
+      {/* Custom options sheet */}
+      <Modal visible={showOptions} transparent animationType="fade" onRequestClose={() => setShowOptions(false)}>
+        <TouchableOpacity style={styles.optionsBackdrop} activeOpacity={1} onPress={() => setShowOptions(false)}>
+          <View style={styles.optionsSheet}>
+            <View style={styles.optionsHandle} />
+
+            <TouchableOpacity
+              style={styles.optionRow}
+              activeOpacity={0.75}
+              onPress={() => { setShowOptions(false); handleShare(); }}
+            >
+              <View style={[styles.optionIcon, { backgroundColor: Colors.primary + '18' }]}>
+                <Ionicons name="arrow-redo-outline" size={20} color={Colors.primary} />
+              </View>
+              <Text style={styles.optionLabel}>Share</Text>
+              <Ionicons name="chevron-forward" size={16} color="#ccc" />
+            </TouchableOpacity>
+
+            {isMe && (
+              <>
+                <View style={styles.optionDivider} />
+                <TouchableOpacity style={styles.optionRow} activeOpacity={0.75} onPress={confirmDelete}>
+                  <View style={[styles.optionIcon, { backgroundColor: '#FF3D0018' }]}>
+                    <Ionicons name="trash-outline" size={20} color="#FF3D00" />
+                  </View>
+                  <Text style={[styles.optionLabel, { color: '#FF3D00' }]}>Delete Post</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#ccc" />
+                </TouchableOpacity>
+              </>
+            )}
+
+            <TouchableOpacity
+              style={[styles.optionRow, styles.optionCancel]}
+              activeOpacity={0.75}
+              onPress={() => setShowOptions(false)}
+            >
+              <Text style={styles.optionCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -323,6 +377,14 @@ const styles = StyleSheet.create({
   timeAgo: { fontSize: 12, fontWeight: '700', color: '#999', marginTop: 1 },
 
   photo: { width: '100%', height: 300 },
+  shareOverlay: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.38)',
+    borderRadius: 20,
+    padding: 7,
+  },
   bigHeart: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
@@ -351,41 +413,89 @@ const styles = StyleSheet.create({
   },
   xpText: { fontSize: 13, fontWeight: '900', color: '#fff' },
 
-  captionWrap: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 },
-  captionText: { fontSize: 14, color: '#222', lineHeight: 20, fontWeight: '500' },
+  captionText: {
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+    fontSize: 14,
+    color: '#222',
+    lineHeight: 20,
+    fontWeight: '400',
+  },
   captionAuthor: { fontWeight: '900', color: '#111' },
-
-  commentPreview: { paddingHorizontal: 16, paddingBottom: 8, gap: 2 },
-  commentPreviewText: { fontSize: 13, color: '#444', lineHeight: 18, fontWeight: '500' },
-  commentPreviewAuthor: { fontWeight: '800', color: '#111' },
-  viewAll: { fontSize: 12, color: '#999', fontWeight: '700', marginTop: 2 },
-  socialProof: {
+  actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 8,
+    justifyContent: 'flex-start',
+    gap: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  socialProofText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#666',
-  },
-  reactions: {
+  actionBtn: {
     flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1.5,
+    alignItems: 'center',
+    gap: 5,
+  },
+  actionCount: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#888',
+  },
+  saveBtn: {
+    marginLeft: 'auto',
+  },
+
+  // Options modal
+  optionsBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  optionsSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingBottom: 32,
+    paddingTop: 8,
+    borderTopWidth: 2,
+    borderColor: '#e8e8e8',
+  },
+  optionsHandle: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: '#ddd', alignSelf: 'center', marginBottom: 12,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    gap: 14,
+  },
+  optionIcon: {
+    width: 40, height: 40, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  optionLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111',
+  },
+  optionDivider: {
+    height: 1,
+    backgroundColor: '#f0f0f0',
+    marginHorizontal: 20,
+  },
+  optionCancel: {
+    justifyContent: 'center',
+    marginTop: 8,
+    borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
   },
-  reactionBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 20, backgroundColor: '#f8f8f8',
-    borderWidth: 2, borderColor: '#e8e8e8',
+  optionCancelText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#888',
+    flex: 1,
+    textAlign: 'center',
   },
-  reactionBtnActive: { borderColor: '#FF3D00', backgroundColor: '#FFF5F0' },
-  reactionText: { fontSize: 13, fontWeight: '800', color: '#555' },
 });

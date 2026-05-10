@@ -1,0 +1,12 @@
+-- 029_saved_posts.sql
+-- Allows users to bookmark/save posts (Instagram-style).
+
+CREATE TABLE IF NOT EXISTS saved_posts (
+    user_id    UUID        NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    post_id    UUID        NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, post_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_saved_posts_user ON saved_posts(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_saved_posts_post ON saved_posts(post_id);

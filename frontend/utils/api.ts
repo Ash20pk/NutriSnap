@@ -901,6 +901,7 @@ export interface Post {
   comment_count: number;
   created_at: string;
   i_reacted: boolean;
+  i_saved: boolean;
   first_comment: { id: string; author_name: string; body: string } | null;
 }
 
@@ -968,6 +969,11 @@ export const postApi = {
 
   getReplies: async (postId: string, commentId: string): Promise<{ replies: PostComment[] }> => {
     const response = await api.get(`/feed/${postId}/comments/${commentId}/replies`);
+    return response.data;
+  },
+
+  toggleSave: async (postId: string): Promise<{ saved: boolean }> => {
+    const response = await api.post(`/feed/${postId}/save`);
     return response.data;
   },
 
