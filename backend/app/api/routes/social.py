@@ -3,8 +3,10 @@ Social routes for user interactions.
 """
 
 from fastapi import APIRouter, Depends, Query
+from typing import Optional
 
 from app.services.social_service import SocialService
+from app.services.feed_service import FeedService
 from app.db.pool import get_pool
 from app.api.dependencies import get_current_uid, require_user_match
 
@@ -15,6 +17,10 @@ def get_social_service() -> SocialService:
     """Dependency to get social service instance."""
     pool = get_pool()
     return SocialService(pool)
+
+
+def get_feed_service() -> FeedService:
+    return FeedService(get_pool())
 
 
 @router.get("/search")
@@ -131,3 +137,15 @@ async def get_public_user_stats(
         Dictionary with public user stats
     """
     return await service.get_public_user_stats(user_id, uid)
+
+
+@router.get("/{user_id}/posts")
+async def get_user_posts(
+    user_id: str,
+    limit: int = Query(20, ge=1, le=50),
+    cursor: Optional[str] = Query(None),
+    uid: str = Depends(get_current_uid),
+    feed_service: FeedService = Depends(get_feed_service),
+):
+    """Public post grid for a user's profile."""
+    return await feed_service.get_user_posts(user_id, requester_id=uid, limit=limit, cursor=cursor)

@@ -15,89 +15,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { useUser } from '../../context/UserContext';
 import { useTheme } from '../../context/ThemeContext';
-import { mealApi, questApi, socialApi, feedApi, ApiLeaderboardEntry, FollowUser, FeedPost } from '../../utils/api';
+import { mealApi, questApi, postApi, ApiLeaderboardEntry, Post } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
-import { format, formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
-import { supabase } from '../../utils/supabase';
 import DuoButton from '../../components/DuoButton';
 import StreakCalendarModal from '../../components/StreakCalendarModal';
 import AchievementShareModal, { Achievement } from '../../components/AchievementShareModal';
+import PostCard from '../../components/PostCard';
+import CommentsSheet from '../../components/CommentsSheet';
+import CreatePostSheet from '../../components/CreatePostSheet';
 import * as Haptics from 'expo-haptics';
-
-// Deterministic avatar color from name
-const AVATAR_COLORS = ['#5B6AF0', '#2F593E', '#F28D35', '#E05C7A', '#3B9FE8', '#8B7A6A', '#C05FF0'];
-function avatarColor(name: string) {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return AVATAR_COLORS[h % AVATAR_COLORS.length];
-}
-function initials(name: string) {
-  const parts = name.trim().split(' ');
-  return parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}`.toUpperCase() : name.slice(0, 2).toUpperCase();
-}
-
-// ── Post components ──────────────────────────────────────────────
-
-function PostHeader({ name, sub, onPress }: { name: string; sub: string; onPress?: () => void }) {
-  return (
-    <TouchableOpacity style={postStyles.header} activeOpacity={onPress ? 0.75 : 1} onPress={onPress} disabled={!onPress}>
-      <View style={[postStyles.avatar, { backgroundColor: avatarColor(name) }]}>
-        <Text style={postStyles.avatarText}>{initials(name)}</Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={postStyles.name} numberOfLines={1}>{name}</Text>
-        <Text style={postStyles.sub}>{sub}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-function PostReactions({ liked: initLiked, count }: { liked?: boolean; count?: number }) {
-  const [hyped, setHyped] = useState(initLiked ?? false);
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  const tapHype = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    Animated.sequence([
-      Animated.timing(scaleAnim, { toValue: 1.3, duration: 100, useNativeDriver: true }),
-      Animated.timing(scaleAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
-    ]).start();
-    setHyped(v => !v);
-  };
-
-  const hypeCount = (count ?? Math.floor(Math.random() * 12)) + (hyped ? 1 : 0);
-
-  return (
-    <View style={postStyles.reactions}>
-      <TouchableOpacity style={[postStyles.reactionBtn, hyped && { borderColor: '#FF3D00', backgroundColor: '#FFF5F0' }]} onPress={tapHype} activeOpacity={0.8}>
-        <Animated.View style={{ transform: [{ scale: hyped ? scaleAnim : new Animated.Value(1) }] }}>
-          <Ionicons name={hyped ? 'flame' : 'flame-outline'} size={18} color={hyped ? '#FF3D00' : '#666'} />
-        </Animated.View>
-        <Text style={[postStyles.reactionCount, hyped && { color: '#FF3D00' }]}>{hypeCount} Hypes</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={postStyles.reactionBtn} activeOpacity={0.8} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); }}>
-        <Ionicons name="chatbubble-outline" size={18} color="#666" />
-        <Text style={postStyles.reactionCount}>Comment</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-const postStyles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
-  avatar: { width: 42, height: 42, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(0,0,0,0.1)' },
-  avatarText: { fontSize: 16, fontWeight: '900', color: '#fff' },
-  name: { fontSize: 16, fontWeight: '900', color: '#111' },
-  sub: { fontSize: 12, fontWeight: '700', color: '#888', marginTop: 2 },
-  reactions: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 2, borderTopColor: '#f0f0f0' },
-  reactionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#f8f8f8', borderWidth: 2, borderColor: '#e8e8e8' },
-  reactionCount: { fontSize: 13, fontWeight: '800', color: '#555' },
-});
 
 // ── Main screen ──────────────────────────────────────────────────
 
@@ -112,10 +41,12 @@ export default function HomeScreen() {
   const [stats, setStats] = useState<any>(null);
   const [questStats, setQuestStats] = useState<any>(null);
   const [leaderboard, setLeaderboard] = useState<ApiLeaderboardEntry[]>([]);
-  const [following, setFollowing] = useState<FollowUser[]>([]);
-  const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
+  const [feedPosts, setFeedPosts] = useState<Post[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [photoUploading, setPhotoUploading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [showCreatePost, setShowCreatePost] = useState(false);
+  const [commentPost, setCommentPost] = useState<Post | null>(null);
   const [showStreakCalendar, setShowStreakCalendar] = useState(false);
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [hasShownGoalToday, setHasShownGoalToday] = useState(false);
@@ -128,18 +59,17 @@ export default function HomeScreen() {
     if (!user) return;
     setLoading(true);
     try {
-      const [mealStats, qStats, lb, fw, feed] = await Promise.all([
+      const [mealStats, qStats, lb, feed] = await Promise.all([
         mealApi.getStats(user.id),
         questApi.getStats(user.id),
         questApi.getLeaderboard('global').catch(() => ({ leaderboard: [] })),
-        socialApi.getMyFollowing().catch(() => ({ following: [] })),
-        feedApi.getFeed(30, 0).catch(() => ({ posts: [] })),
+        postApi.getFeed(20).catch(() => ({ posts: [], next_cursor: null })),
       ]);
       setStats(mealStats);
       setQuestStats(qStats);
       setLeaderboard(lb.leaderboard || []);
-      setFollowing(fw.following || []);
       setFeedPosts(feed.posts || []);
+      setNextCursor(feed.next_cursor ?? null);
     } catch (e) {
       console.error('Home fetch error:', e);
     } finally {
@@ -147,51 +77,19 @@ export default function HomeScreen() {
     }
   }, [user]);
 
-  const handlePhotoPost = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.6,
-      allowsEditing: true,
-      aspect: [4, 3],
-    });
-    if (result.canceled || !result.assets?.[0]) return;
-
-    setPhotoUploading(true);
+  const loadMorePosts = useCallback(async () => {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
     try {
-      const asset = result.assets[0];
-      const ext = asset.uri.split('.').pop() ?? 'jpg';
-      const fileName = `feed/${user!.id}/${Date.now()}.${ext}`;
-
-      const resp = await fetch(asset.uri);
-      const blob = await resp.blob();
-      const { error: uploadError } = await supabase.storage
-        .from('posts')
-        .upload(fileName, blob, { contentType: `image/${ext}`, upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage.from('posts').getPublicUrl(fileName);
-      const photoUrl = urlData.publicUrl;
-
-      await feedApi.createPost({
-        event_type: 'photo',
-        title: `${user!.name.split(' ')[0]} shared a fitness photo`,
-        photo_url: photoUrl,
-      });
-
-      const feed = await feedApi.getFeed(30, 0);
-      setFeedPosts(feed.posts || []);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      const feed = await postApi.getFeed(20, nextCursor);
+      setFeedPosts(prev => [...prev, ...(feed.posts || [])]);
+      setNextCursor(feed.next_cursor ?? null);
     } catch (e) {
-      console.error('Photo post failed:', e);
+      console.error('Load more error:', e);
     } finally {
-      setPhotoUploading(false);
+      setLoadingMore(false);
     }
-  }, [user]);
+  }, [nextCursor, loadingMore]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -248,107 +146,22 @@ export default function HomeScreen() {
     );
   };
 
-  // ── Real feed post card ──────────────────────────────────────
-  const FeedPostCard = ({ post }: { post: FeedPost }) => {
-    const [hyped, setHyped] = useState(post.i_hyped);
-    const [hypeCount, setHypeCount] = useState(post.hype_count);
-    const scaleAnim = useRef(new Animated.Value(1)).current;
-    const isMe = post.user_id === user?.id;
-
-    const toggleHype = async () => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-      Animated.sequence([
-        Animated.timing(scaleAnim, { toValue: 1.35, duration: 100, useNativeDriver: true }),
-        Animated.timing(scaleAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
-      ]).start();
-      const next = !hyped;
-      setHyped(next);
-      setHypeCount(c => c + (next ? 1 : -1));
-      try { await feedApi.toggleHype(post.id); } catch { setHyped(!next); setHypeCount(c => c + (next ? -1 : 1)); }
-    };
-
-    const timeAgo = (() => {
-      try { return formatDistanceToNow(new Date(post.created_at), { addSuffix: true }); }
-      catch { return ''; }
-    })();
-
-    const badgeGradients: Record<number, [string, string]> = {
-      3: ['#F5C518', '#F28D35'],
-      2: ['#B0B0B0', '#787878'],
-      1: ['#D4874A', '#A0522D'],
-    };
-    const typeGradients: Record<string, [string, string]> = {
-      streak: ['#FF6B35', '#FF3D00'],
-      goal:   ['#2F593E', '#4CAF50'],
-      xp_level: ['#5B6AF0', '#C05FF0'],
-      badge:  badgeGradients[post.metadata?.badge_tier ?? 1] ?? badgeGradients[1],
-      photo:  [theme.primary, '#5B6AF0'],
-    };
-    const gradient = typeGradients[post.event_type] ?? typeGradients.badge;
-
-    return (
-      <View style={styles.post}>
-        <PostHeader
-          name={post.author_name}
-          sub={timeAgo}
-          onPress={isMe ? undefined : () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); router.push(`/public-profile/${post.user_id}` as any); }}
-        />
-
-        {/* Photo post */}
-        {post.event_type === 'photo' && post.photo_url ? (
-          <Image
-            source={{ uri: post.photo_url }}
-            style={styles.postPhoto}
-            contentFit="cover"
-          />
-        ) : (
-          /* Badge / milestone / non-photo */
-          <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.postGradientContent}>
-            {post.metadata?.badge_icon || post.event_type === 'streak' || post.event_type === 'goal' ? (
-              <Text style={styles.postGradientEmoji}>
-                {post.metadata?.badge_icon ?? (post.event_type === 'streak' ? '🔥' : post.event_type === 'goal' ? '🎯' : '⚡')}
-              </Text>
-            ) : null}
-            <Text style={styles.postGradientTitle}>{post.title}</Text>
-            {post.body ? <Text style={styles.postGradientSub}>{post.body}</Text> : null}
-            {post.metadata?.xp ? (
-              <View style={styles.postXpPill}>
-                <Text style={styles.postXpText}>+{post.metadata.xp} XP</Text>
-              </View>
-            ) : null}
-          </LinearGradient>
-        )}
-
-        {/* Caption */}
-        {(post.event_type === 'photo' && post.title) && (
-          <View style={styles.postCaption}>
-            <Text style={styles.postCaptionText}><Text style={{ fontWeight: '900' }}>{post.author_name.split(' ')[0]}</Text> {post.title.replace(`${post.author_name.split(' ')[0]} shared a fitness photo`, 'shared a fitness photo')}</Text>
-          </View>
-        )}
-
-        {/* Reactions */}
-        <View style={styles.postReactions}>
-          <TouchableOpacity style={[styles.postReactionBtn, hyped && styles.postReactionBtnActive]} onPress={toggleHype} activeOpacity={0.8}>
-            <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-              <Ionicons name={hyped ? 'flame' : 'flame-outline'} size={18} color={hyped ? '#FF3D00' : '#666'} />
-            </Animated.View>
-            <Text style={[styles.postReactionText, hyped && { color: '#FF3D00' }]}>{hypeCount} {hyped ? 'Hyped' : 'Hype'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.postReactionBtn} activeOpacity={0.8} onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})}>
-            <Ionicons name="chatbubble-outline" size={18} color="#666" />
-            <Text style={styles.postReactionText}>Comment</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
-
   return (
     <View style={styles.container}>
       <StreakCalendarModal
         visible={showStreakCalendar}
         onClose={() => setShowStreakCalendar(false)}
         userId={user?.id}
+      />
+      <CreatePostSheet
+        visible={showCreatePost}
+        onClose={() => setShowCreatePost(false)}
+        onPosted={fetchAll}
+      />
+      <CommentsSheet
+        visible={!!commentPost}
+        post={commentPost}
+        onClose={() => setCommentPost(null)}
       />
 
       {/* ── Header ─────────────────────────────── */}
@@ -458,12 +271,11 @@ export default function HomeScreen() {
           <Text style={styles.feedLabel}>Community</Text>
           <TouchableOpacity
             style={styles.photoUploadBtn}
-            onPress={handlePhotoPost}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}); setShowCreatePost(true); }}
             activeOpacity={0.8}
-            disabled={photoUploading}
           >
-            <Ionicons name={photoUploading ? 'hourglass-outline' : 'camera-outline'} size={16} color={theme.primary} />
-            <Text style={styles.photoUploadText}>{photoUploading ? 'Uploading…' : 'Share Photo'}</Text>
+            <Ionicons name="camera-outline" size={16} color={theme.primary} />
+            <Text style={styles.photoUploadText}>Share Photo</Text>
           </TouchableOpacity>
         </View>
 
@@ -481,7 +293,22 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {feedPosts.map(post => <FeedPostCard key={post.id} post={post} />)}
+        {feedPosts.map(post => (
+          <PostCard
+            key={post.id}
+            post={post}
+            currentUserId={user?.id}
+            onCommentPress={setCommentPost}
+            onDeleted={id => setFeedPosts(prev => prev.filter(p => p.id !== id))}
+          />
+        ))}
+
+        {nextCursor && !loadingMore && (
+          <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMorePosts} activeOpacity={0.8}>
+            <Text style={styles.loadMoreText}>Load more</Text>
+          </TouchableOpacity>
+        )}
+        {loadingMore && <Ionicons name="ellipsis-horizontal" size={20} color="#ccc" style={{ alignSelf: 'center', marginBottom: 8 }} />}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -754,6 +581,15 @@ function makeStyles(theme: typeof Colors) {
       borderColor: '#FF3D00', backgroundColor: '#FFF5F0',
     },
     postReactionText: { fontSize: 13, fontWeight: '800', color: '#555' },
+
+    // Load more
+    loadMoreBtn: {
+      alignSelf: 'center', marginBottom: 12,
+      paddingHorizontal: 20, paddingVertical: 10,
+      borderRadius: 20, backgroundColor: '#f0f0f0',
+      borderWidth: 1.5, borderColor: '#e0e0e0',
+    },
+    loadMoreText: { fontSize: 13, fontWeight: '800', color: '#666' },
 
     // Empty feed
     emptyFeed: {

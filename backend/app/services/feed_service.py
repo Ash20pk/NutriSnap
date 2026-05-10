@@ -1,9 +1,15 @@
 """
-Feed service — creates and retrieves social_feed_events posts.
+Feed service — scalable social graph: posts, reactions, comments, notifications.
+
+Feed strategy: pull-on-read (fan-out on read).
+Swap to fan-out on write at ~50k DAU by precomputing a timeline table.
 """
 
+import json
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
 import asyncpg
 
 from app.db.queries import to_uuid
@@ -15,157 +21,382 @@ class FeedService:
     def __init__(self, pool: asyncpg.Pool):
         self.pool = pool
 
-    # ── Create ──────────────────────────────────────────────────────
-
-    async def create_post(
-        self,
-        user_id: str,
-        event_type: str,
-        title: str,
-        body: Optional[str] = None,
-        photo_url: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        import json
-        meta_json = json.dumps(metadata or {})
-        async with self.pool.acquire() as conn:
-            row = await conn.fetchrow(
-                """
-                INSERT INTO social_feed_events
-                    (user_id, event_type, title, body, photo_url, metadata)
-                VALUES ($1, $2, $3, $4, $5, $6::jsonb)
-                RETURNING id, created_at
-                """,
-                to_uuid(user_id),
-                event_type,
-                title,
-                body,
-                photo_url,
-                meta_json,
-            )
-        return {"post_id": str(row["id"]), "created_at": row["created_at"].isoformat()}
-
-    # ── Read ────────────────────────────────────────────────────────
+    # ── Feed ────────────────────────────────────────────────────────────────
 
     async def get_feed(
         self,
         user_id: str,
         limit: int = 20,
-        offset: int = 0,
+        cursor: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Returns posts from users the caller follows + their own posts,
-        newest first.
+        Pull-on-read: posts from self + following, newest first.
+        cursor = created_at ISO string of the oldest post on the last page.
         """
         uid = to_uuid(user_id)
+        cursor_ts = datetime.fromisoformat(cursor) if cursor else datetime.now(timezone.utc)
+
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
                 SELECT
-                    e.id,
-                    e.user_id,
-                    p.name        AS author_name,
-                    p.username    AS author_username,
-                    p.avatar_url  AS author_avatar,
-                    e.event_type,
-                    e.title,
-                    e.body,
-                    e.photo_url,
-                    e.metadata,
-                    e.hype_count,
-                    e.created_at,
+                    p.id,
+                    p.user_id,
+                    p.post_type,
+                    p.caption,
+                    p.metadata,
+                    p.reaction_count,
+                    p.comment_count,
+                    p.created_at,
+                    pr.name          AS author_name,
+                    pr.username      AS author_username,
+                    COALESCE(
+                        JSON_AGG(
+                            JSON_BUILD_OBJECT(
+                                'id',         pm.id::text,
+                                'media_url',  pm.media_url,
+                                'media_type', pm.media_type,
+                                'width',      pm.width,
+                                'height',     pm.height,
+                                'sort_order', pm.sort_order
+                            ) ORDER BY pm.sort_order
+                        ) FILTER (WHERE pm.id IS NOT NULL),
+                        '[]'::json
+                    )                AS media,
                     EXISTS(
-                        SELECT 1 FROM feed_post_hypes h
-                        WHERE h.post_id = e.id AND h.user_id = $1
-                    ) AS i_hyped
-                FROM social_feed_events e
-                JOIN profiles p ON p.id = e.user_id
-                WHERE
-                    e.user_id = $1
-                    OR e.user_id IN (
-                        SELECT following_id FROM user_follows WHERE follower_id = $1
-                    )
-                ORDER BY e.created_at DESC
-                LIMIT $2 OFFSET $3
+                        SELECT 1 FROM post_reactions r2
+                        WHERE r2.post_id = p.id AND r2.user_id = $1
+                    )                AS i_reacted,
+                    (
+                        SELECT JSON_BUILD_OBJECT(
+                            'id',          c.id::text,
+                            'author_name', cp.name,
+                            'body',        c.body
+                        )
+                        FROM post_comments c
+                        JOIN profiles cp ON cp.id = c.user_id
+                        WHERE c.post_id = p.id AND c.deleted_at IS NULL
+                        ORDER BY c.created_at ASC
+                        LIMIT 1
+                    )                AS first_comment
+                FROM posts p
+                JOIN profiles pr ON pr.id = p.user_id
+                LEFT JOIN post_media pm ON pm.post_id = p.id
+                WHERE p.deleted_at IS NULL
+                  AND p.created_at < $2
+                  AND (
+                      p.user_id = $1
+                      OR p.user_id IN (
+                          SELECT following_id FROM user_follows WHERE follower_id = $1
+                      )
+                  )
+                GROUP BY p.id, pr.name, pr.username
+                ORDER BY p.created_at DESC
+                LIMIT $3
                 """,
-                uid, limit, offset,
+                uid, cursor_ts, limit,
             )
 
-        posts = []
-        for r in rows:
-            import json
-            meta = r["metadata"]
-            if isinstance(meta, str):
-                meta = json.loads(meta)
-            posts.append({
-                "id": str(r["id"]),
-                "user_id": str(r["user_id"]),
-                "author_name": r["author_name"],
-                "author_username": r["author_username"],
-                "author_avatar": r["author_avatar"],
-                "event_type": r["event_type"],
-                "title": r["title"],
-                "body": r["body"],
-                "photo_url": r["photo_url"],
-                "metadata": meta or {},
-                "hype_count": r["hype_count"],
-                "created_at": r["created_at"].isoformat(),
-                "i_hyped": bool(r["i_hyped"]),
-            })
+        posts = [self._row_to_post(r) for r in rows]
+        next_cursor = posts[-1]["created_at"] if len(posts) == limit else None
+        return {"posts": posts, "next_cursor": next_cursor}
 
-        return {"posts": posts, "count": len(posts)}
+    async def get_user_posts(
+        self,
+        user_id: str,
+        requester_id: str,
+        limit: int = 20,
+        cursor: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        uid = to_uuid(user_id)
+        rid = to_uuid(requester_id)
+        cursor_ts = datetime.fromisoformat(cursor) if cursor else datetime.now(timezone.utc)
 
-    # ── Hype ────────────────────────────────────────────────────────
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    p.id, p.user_id, p.post_type, p.caption, p.metadata,
+                    p.reaction_count, p.comment_count, p.created_at,
+                    pr.name AS author_name, pr.username AS author_username,
+                    COALESCE(
+                        JSON_AGG(
+                            JSON_BUILD_OBJECT(
+                                'id', pm.id::text, 'media_url', pm.media_url,
+                                'media_type', pm.media_type, 'width', pm.width,
+                                'height', pm.height, 'sort_order', pm.sort_order
+                            ) ORDER BY pm.sort_order
+                        ) FILTER (WHERE pm.id IS NOT NULL), '[]'::json
+                    ) AS media,
+                    EXISTS(
+                        SELECT 1 FROM post_reactions r2
+                        WHERE r2.post_id = p.id AND r2.user_id = $2
+                    ) AS i_reacted,
+                    NULL::json AS first_comment
+                FROM posts p
+                JOIN profiles pr ON pr.id = p.user_id
+                LEFT JOIN post_media pm ON pm.post_id = p.id
+                WHERE p.deleted_at IS NULL
+                  AND p.user_id = $1
+                  AND p.created_at < $3
+                GROUP BY p.id, pr.name, pr.username
+                ORDER BY p.created_at DESC
+                LIMIT $4
+                """,
+                uid, rid, cursor_ts, limit,
+            )
 
-    async def toggle_hype(self, user_id: str, post_id: str) -> Dict[str, Any]:
+        posts = [self._row_to_post(r) for r in rows]
+        next_cursor = posts[-1]["created_at"] if len(posts) == limit else None
+        return {"posts": posts, "next_cursor": next_cursor}
+
+    # ── Create / Delete Post ────────────────────────────────────────────────
+
+    async def create_post(
+        self,
+        user_id: str,
+        post_type: str,
+        caption: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        media_url: Optional[str] = None,
+        media_type: str = "image",
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        meta_json = json.dumps(metadata or {})
+        uid = to_uuid(user_id)
+
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO posts (user_id, post_type, caption, metadata)
+                    VALUES ($1, $2, $3, $4::jsonb)
+                    RETURNING id, created_at
+                    """,
+                    uid, post_type, caption, meta_json,
+                )
+                post_id = row["id"]
+                if media_url:
+                    await conn.execute(
+                        """
+                        INSERT INTO post_media (post_id, media_url, media_type, width, height)
+                        VALUES ($1, $2, $3, $4, $5)
+                        """,
+                        post_id, media_url, media_type, width, height,
+                    )
+
+        return {"post_id": str(post_id), "created_at": row["created_at"].isoformat()}
+
+    async def delete_post(self, user_id: str, post_id: str) -> Dict[str, bool]:
+        uid = to_uuid(user_id)
+        pid = to_uuid(post_id)
+        async with self.pool.acquire() as conn:
+            result = await conn.execute(
+                "UPDATE posts SET deleted_at=NOW() WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL",
+                pid, uid,
+            )
+        return {"deleted": result == "UPDATE 1"}
+
+    # ── Reactions ───────────────────────────────────────────────────────────
+
+    async def toggle_reaction(
+        self,
+        user_id: str,
+        post_id: str,
+        reaction_type: str = "hype",
+    ) -> Dict[str, Any]:
         uid = to_uuid(user_id)
         pid = to_uuid(post_id)
 
         async with self.pool.acquire() as conn:
             existing = await conn.fetchval(
-                "SELECT 1 FROM feed_post_hypes WHERE post_id=$1 AND user_id=$2",
-                pid, uid,
+                "SELECT 1 FROM post_reactions WHERE post_id=$1 AND user_id=$2 AND reaction_type=$3",
+                pid, uid, reaction_type,
             )
             if existing:
                 await conn.execute(
-                    "DELETE FROM feed_post_hypes WHERE post_id=$1 AND user_id=$2",
-                    pid, uid,
+                    "DELETE FROM post_reactions WHERE post_id=$1 AND user_id=$2 AND reaction_type=$3",
+                    pid, uid, reaction_type,
                 )
                 new_count = await conn.fetchval(
-                    "UPDATE social_feed_events SET hype_count = GREATEST(0, hype_count-1) WHERE id=$1 RETURNING hype_count",
+                    "UPDATE posts SET reaction_count=GREATEST(0,reaction_count-1) WHERE id=$1 RETURNING reaction_count",
                     pid,
                 )
-                return {"hyped": False, "hype_count": new_count or 0}
+                return {"reacted": False, "reaction_count": new_count or 0}
             else:
                 await conn.execute(
-                    "INSERT INTO feed_post_hypes (post_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING",
-                    pid, uid,
+                    "INSERT INTO post_reactions (post_id,user_id,reaction_type) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING",
+                    pid, uid, reaction_type,
                 )
                 new_count = await conn.fetchval(
-                    "UPDATE social_feed_events SET hype_count = hype_count+1 WHERE id=$1 RETURNING hype_count",
+                    "UPDATE posts SET reaction_count=reaction_count+1 WHERE id=$1 RETURNING reaction_count",
                     pid,
                 )
-                return {"hyped": True, "hype_count": new_count or 1}
+                try:
+                    post_owner = await conn.fetchval("SELECT user_id FROM posts WHERE id=$1", pid)
+                    if post_owner and post_owner != uid:
+                        await conn.execute(
+                            """
+                            INSERT INTO notifications (recipient_id,actor_id,notif_type,post_id)
+                            VALUES ($1,$2,'reaction',$3)
+                            """,
+                            post_owner, uid, pid,
+                        )
+                except Exception:
+                    pass
+                return {"reacted": True, "reaction_count": new_count or 1}
 
-    # ── Auto-create from badge check ────────────────────────────────
+    # ── Comments ────────────────────────────────────────────────────────────
+
+    async def get_comments(
+        self,
+        post_id: str,
+        limit: int = 30,
+        cursor: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        pid = to_uuid(post_id)
+        cursor_ts = (
+            datetime.fromisoformat(cursor) if cursor
+            else datetime(1970, 1, 1, tzinfo=timezone.utc)
+        )
+
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT c.id, c.post_id, c.user_id, c.body, c.created_at,
+                       pr.name AS author_name, pr.username AS author_username
+                FROM post_comments c
+                JOIN profiles pr ON pr.id = c.user_id
+                WHERE c.post_id=$1 AND c.deleted_at IS NULL AND c.created_at > $2
+                ORDER BY c.created_at ASC
+                LIMIT $3
+                """,
+                pid, cursor_ts, limit,
+            )
+
+        comments = [
+            {
+                "id": str(r["id"]),
+                "post_id": str(r["post_id"]),
+                "user_id": str(r["user_id"]),
+                "author_name": r["author_name"],
+                "author_username": r["author_username"],
+                "body": r["body"],
+                "created_at": r["created_at"].isoformat(),
+            }
+            for r in rows
+        ]
+        next_cursor = comments[-1]["created_at"] if len(comments) == limit else None
+        return {"comments": comments, "next_cursor": next_cursor}
+
+    async def create_comment(
+        self,
+        user_id: str,
+        post_id: str,
+        body: str,
+    ) -> Dict[str, Any]:
+        uid = to_uuid(user_id)
+        pid = to_uuid(post_id)
+
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                row = await conn.fetchrow(
+                    "INSERT INTO post_comments (user_id,post_id,body) VALUES ($1,$2,$3) RETURNING id,created_at",
+                    uid, pid, body,
+                )
+                await conn.execute(
+                    "UPDATE posts SET comment_count=comment_count+1 WHERE id=$1", pid,
+                )
+                try:
+                    post_owner = await conn.fetchval("SELECT user_id FROM posts WHERE id=$1", pid)
+                    if post_owner and post_owner != uid:
+                        await conn.execute(
+                            """
+                            INSERT INTO notifications (recipient_id,actor_id,notif_type,post_id,comment_id)
+                            VALUES ($1,$2,'comment',$3,$4)
+                            """,
+                            post_owner, uid, pid, row["id"],
+                        )
+                except Exception:
+                    pass
+
+            author = await conn.fetchrow("SELECT name,username FROM profiles WHERE id=$1", uid)
+
+        return {
+            "id": str(row["id"]),
+            "post_id": post_id,
+            "user_id": user_id,
+            "author_name": author["name"] if author else "",
+            "author_username": author["username"] if author else None,
+            "body": body,
+            "created_at": row["created_at"].isoformat(),
+        }
+
+    async def delete_comment(self, user_id: str, comment_id: str) -> Dict[str, bool]:
+        uid = to_uuid(user_id)
+        cid = to_uuid(comment_id)
+        async with self.pool.acquire() as conn:
+            async with conn.transaction():
+                post_id = await conn.fetchval(
+                    "SELECT post_id FROM post_comments WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL",
+                    cid, uid,
+                )
+                if not post_id:
+                    return {"deleted": False}
+                await conn.execute("UPDATE post_comments SET deleted_at=NOW() WHERE id=$1", cid)
+                await conn.execute(
+                    "UPDATE posts SET comment_count=GREATEST(0,comment_count-1) WHERE id=$1", post_id,
+                )
+        return {"deleted": True}
+
+    # ── Auto-publish from badge check ───────────────────────────────────────
 
     async def create_badge_post(self, user_id: str, badge: Dict[str, Any]) -> None:
-        """Called after badge check to auto-publish an achievement post."""
         tier = badge.get("tier", 1)
         tier_label = {1: "Bronze", 2: "Silver", 3: "Gold"}.get(tier, "")
-        title = f"Earned the {badge.get('name') or badge.get('title', 'badge')} badge"
-        body = badge.get("description", "")
+        name = badge.get("name") or badge.get("title", "badge")
+        caption = f"Just earned the {name} {tier_label} badge! 🏅"
+        if badge.get("description"):
+            caption += f"\n{badge['description']}"
         await self.create_post(
             user_id=user_id,
-            event_type="badge",
-            title=title,
-            body=body,
+            post_type="badge",
+            caption=caption,
             metadata={
                 "badge_id": badge.get("id"),
                 "badge_icon": badge.get("icon"),
-                "badge_name": badge.get("name") or badge.get("title"),
+                "badge_name": name,
                 "badge_tier": tier,
                 "tier_label": tier_label,
                 "xp": badge.get("xp", 0),
             },
         )
+
+    # ── Helpers ─────────────────────────────────────────────────────────────
+
+    def _row_to_post(self, r: asyncpg.Record) -> Dict[str, Any]:
+        meta = r["metadata"]
+        if isinstance(meta, str):
+            meta = json.loads(meta)
+        media = r["media"]
+        if isinstance(media, str):
+            media = json.loads(media)
+        first_comment = r.get("first_comment")
+        if isinstance(first_comment, str):
+            first_comment = json.loads(first_comment)
+        return {
+            "id": str(r["id"]),
+            "user_id": str(r["user_id"]),
+            "author_name": r["author_name"],
+            "author_username": r["author_username"],
+            "post_type": r["post_type"],
+            "caption": r["caption"],
+            "media": media or [],
+            "metadata": meta or {},
+            "reaction_count": r["reaction_count"],
+            "comment_count": r["comment_count"],
+            "created_at": r["created_at"].isoformat(),
+            "i_reacted": bool(r["i_reacted"]),
+            "first_comment": first_comment,
+        }

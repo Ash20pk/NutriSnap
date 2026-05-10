@@ -877,42 +877,107 @@ export const socialApi = {
   },
 };
 
-// Feed API
-export interface FeedPost {
+// ── Social graph types ─────────────────────────────────────────────────────
+
+export interface PostMedia {
+  id: string;
+  media_url: string;
+  media_type: 'image' | 'video';
+  width?: number;
+  height?: number;
+  sort_order: number;
+}
+
+export interface Post {
   id: string;
   user_id: string;
   author_name: string;
   author_username: string | null;
-  author_avatar: string | null;
-  event_type: 'photo' | 'badge' | 'streak' | 'goal' | 'xp_level';
-  title: string;
-  body: string | null;
-  photo_url: string | null;
+  post_type: 'photo' | 'badge' | 'streak' | 'goal' | 'xp_level';
+  caption: string | null;
+  media: PostMedia[];
   metadata: Record<string, any>;
-  hype_count: number;
+  reaction_count: number;
+  comment_count: number;
   created_at: string;
-  i_hyped: boolean;
+  i_reacted: boolean;
+  first_comment: { id: string; author_name: string; body: string } | null;
 }
 
-export const feedApi = {
-  getFeed: async (limit = 20, offset = 0): Promise<{ posts: FeedPost[]; count: number }> => {
-    const response = await api.get(`/feed?limit=${limit}&offset=${offset}`);
+export interface PostComment {
+  id: string;
+  post_id: string;
+  user_id: string;
+  author_name: string;
+  author_username: string | null;
+  body: string;
+  created_at: string;
+}
+
+export const postApi = {
+  getFeed: async (limit = 20, cursor?: string): Promise<{ posts: Post[]; next_cursor: string | null }> => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    const response = await api.get(`/feed?${params}`);
     return response.data;
   },
+
   createPost: async (payload: {
-    event_type: string;
-    title: string;
-    body?: string;
-    photo_url?: string;
+    post_type: string;
+    caption?: string;
+    media_url?: string;
+    media_type?: string;
+    width?: number;
+    height?: number;
     metadata?: Record<string, any>;
   }): Promise<{ post_id: string; created_at: string }> => {
     const response = await api.post('/feed', payload);
     return response.data;
   },
-  toggleHype: async (postId: string): Promise<{ hyped: boolean; hype_count: number }> => {
-    const response = await api.post(`/feed/${postId}/hype`);
+
+  deletePost: async (postId: string): Promise<{ deleted: boolean }> => {
+    const response = await api.delete(`/feed/${postId}`);
     return response.data;
   },
+
+  toggleReaction: async (postId: string): Promise<{ reacted: boolean; reaction_count: number }> => {
+    const response = await api.post(`/feed/${postId}/react`);
+    return response.data;
+  },
+
+  getComments: async (postId: string, cursor?: string): Promise<{ comments: PostComment[]; next_cursor: string | null }> => {
+    const params = new URLSearchParams();
+    if (cursor) params.set('cursor', cursor);
+    const response = await api.get(`/feed/${postId}/comments?${params}`);
+    return response.data;
+  },
+
+  createComment: async (postId: string, body: string): Promise<PostComment> => {
+    const response = await api.post(`/feed/${postId}/comments`, { body });
+    return response.data;
+  },
+
+  deleteComment: async (postId: string, commentId: string): Promise<{ deleted: boolean }> => {
+    const response = await api.delete(`/feed/${postId}/comments/${commentId}`);
+    return response.data;
+  },
+
+  getUserPosts: async (userId: string, cursor?: string): Promise<{ posts: Post[]; next_cursor: string | null }> => {
+    const params = new URLSearchParams();
+    if (cursor) params.set('cursor', cursor);
+    const response = await api.get(`/users/${userId}/posts?${params}`);
+    return response.data;
+  },
+};
+
+// Legacy alias — existing code using feedApi keeps working
+export type FeedPost = Post;
+export const feedApi = {
+  getFeed: (limit = 20, _offset = 0) => postApi.getFeed(limit),
+  createPost: (p: { event_type: string; title: string; body?: string; photo_url?: string; metadata?: Record<string, any> }) =>
+    postApi.createPost({ post_type: p.event_type, caption: p.body ?? p.title, media_url: p.photo_url, metadata: p.metadata }),
+  toggleHype: (postId: string) =>
+    postApi.toggleReaction(postId).then(r => ({ hyped: r.reacted, hype_count: r.reaction_count })),
 };
 
 export const waterApi = {
