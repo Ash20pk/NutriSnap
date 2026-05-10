@@ -912,6 +912,10 @@ export interface PostComment {
   author_username: string | null;
   body: string;
   created_at: string;
+  parent_id: string | null;
+  reply_count: number;
+  like_count: number;
+  i_liked: boolean;
 }
 
 export const postApi = {
@@ -952,13 +956,23 @@ export const postApi = {
     return response.data;
   },
 
-  createComment: async (postId: string, body: string): Promise<PostComment> => {
-    const response = await api.post(`/feed/${postId}/comments`, { body });
+  createComment: async (postId: string, body: string, parentId?: string): Promise<PostComment> => {
+    const response = await api.post(`/feed/${postId}/comments`, { body, parent_id: parentId ?? null });
     return response.data;
   },
 
   deleteComment: async (postId: string, commentId: string): Promise<{ deleted: boolean }> => {
     const response = await api.delete(`/feed/${postId}/comments/${commentId}`);
+    return response.data;
+  },
+
+  getReplies: async (postId: string, commentId: string): Promise<{ replies: PostComment[] }> => {
+    const response = await api.get(`/feed/${postId}/comments/${commentId}/replies`);
+    return response.data;
+  },
+
+  toggleCommentReaction: async (postId: string, commentId: string): Promise<{ liked: boolean; like_count: number }> => {
+    const response = await api.post(`/feed/${postId}/comments/${commentId}/react`);
     return response.data;
   },
 

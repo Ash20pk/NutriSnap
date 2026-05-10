@@ -16,6 +16,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import { File as FSFile } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../utils/supabase';
@@ -31,6 +32,17 @@ interface Props {
 }
 
 const MAX_CAPTION = 2200;
+
+const AVATAR_COLORS = ['#5B6AF0', '#2F593E', '#F28D35', '#E05C7A', '#3B9FE8', '#8B7A6A', '#C05FF0'];
+function avatarColor(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+function initials(name: string) {
+  const parts = name.trim().split(' ');
+  return parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}`.toUpperCase() : name.slice(0, 2).toUpperCase();
+}
 
 export default function CreatePostSheet({ visible, onClose, onPosted }: Props) {
   const { theme } = useTheme();
@@ -95,21 +107,38 @@ export default function CreatePostSheet({ visible, onClose, onPosted }: Props) {
       const ext = image.uri.split('.').pop() ?? 'jpg';
       const fileName = `feed/${user.id}/${Date.now()}.${ext}`;
 
-      const resp = await fetch(image.uri);
-      const blob = await resp.blob();
+      const mimeMap: Record<string, string> = {
+        jpg: 'image/jpeg', jpeg: 'image/jpeg',
+        png: 'image/png', webp: 'image/webp', heic: 'image/heic',
+      };
+      const contentType = mimeMap[ext.toLowerCase()] ?? `image/${ext.toLowerCase()}`;
+
+      // fetch().blob() returns 0 bytes in React Native — use new FileSystem API
+      const file = new FSFile(image.uri);
+      const base64 = await file.base64();
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
       const { error: uploadError } = await supabase.storage
         .from('posts')
-        .upload(fileName, blob, { contentType: `image/${ext}`, upsert: true });
+        .upload(fileName, bytes, { contentType, upsert: true });
 
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage.from('posts').getPublicUrl(fileName);
 
+      const publicUrl = (() => {
+        const u = urlData.publicUrl;
+        if (!u || typeof u !== 'string') return u;
+        if (u.startsWith('http://')) return u.replace('http://', 'https://');
+        return u;
+      })();
+
       await postApi.createPost({
         post_type: 'photo',
         caption: caption.trim() || undefined,
-        media_url: urlData.publicUrl,
+        media_url: publicUrl,
         media_type: 'image',
         width: image.width,
         height: image.height,
@@ -130,60 +159,68 @@ export default function CreatePostSheet({ visible, onClose, onPosted }: Props) {
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
-        <Animated.View style={[styles.sheet, { paddingBottom: insets.bottom + 8, transform: [{ translateY: slideAnim }] }]}>
-          {/* Handle + top bar */}
-          <View style={styles.handle} />
-          <View style={styles.topBar}>
-            <TouchableOpacity onPress={step === 'compose' ? () => setStep('pick') : onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={styles.topBarCancel}>{step === 'compose' ? 'Back' : 'Cancel'}</Text>
-            </TouchableOpacity>
-            <Text style={styles.topBarTitle}>New Post</Text>
-            {step === 'compose' ? (
-              <TouchableOpacity
-                style={[styles.postBtn, (!image || uploading) && styles.postBtnDisabled]}
-                onPress={handlePost}
-                disabled={!image || uploading}
-                activeOpacity={0.85}
-              >
-                {uploading
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <Text style={styles.postBtnText}>Share</Text>
-                }
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <View style={styles.overlay}>
+          <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
+          <Animated.View style={[styles.sheet, { paddingBottom: insets.bottom + 8, transform: [{ translateY: slideAnim }] }]}>
+            {/* Handle + top bar */}
+            <View style={styles.handle} />
+            <View style={styles.topBar}>
+              <TouchableOpacity onPress={step === 'compose' ? () => setStep('pick') : onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.topBarCancel}>{step === 'compose' ? 'Back' : 'Cancel'}</Text>
               </TouchableOpacity>
-            ) : (
-              <View style={{ width: 60 }} />
-            )}
-          </View>
-
-          {step === 'pick' ? (
-            /* ── Pick step ── */
-            <View style={styles.pickStep}>
-              <Ionicons name="images-outline" size={56} color="#ccc" />
-              <Text style={styles.pickTitle}>Choose a photo</Text>
-              <Text style={styles.pickSub}>Share your fitness journey with the community</Text>
-              <TouchableOpacity style={styles.pickBtn} onPress={pickFromLibrary} activeOpacity={0.88}>
-                <LinearGradient
-                  colors={[Colors.primary, Colors.primary + 'CC']}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                  style={StyleSheet.absoluteFill}
-                />
-                <Ionicons name="images" size={20} color="#fff" />
-                <Text style={styles.pickBtnText}>Photo Library</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.pickBtn, styles.pickBtnOutline]} onPress={pickFromCamera} activeOpacity={0.88}>
-                <Ionicons name="camera" size={20} color={Colors.primary} />
-                <Text style={[styles.pickBtnText, { color: Colors.primary }]}>Camera</Text>
-              </TouchableOpacity>
+              <Text style={styles.topBarTitle}>New Post</Text>
+              {step === 'compose' ? (
+                <TouchableOpacity
+                  style={[styles.postBtn, (!image || uploading) && styles.postBtnDisabled]}
+                  onPress={handlePost}
+                  disabled={!image || uploading}
+                  activeOpacity={0.85}
+                >
+                  {uploading
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Text style={styles.postBtnText}>Share</Text>
+                  }
+                </TouchableOpacity>
+              ) : (
+                <View style={{ width: 60 }} />
+              )}
             </View>
-          ) : (
-            /* ── Compose step ── */
-            <KeyboardAvoidingView
-              style={{ flex: 1 }}
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            >
-              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+
+            {step === 'pick' ? (
+              /* ── Pick step ── */
+              <View style={styles.pickStep}>
+                <View style={styles.pickIconContainer}>
+                  <Ionicons name="images-outline" size={48} color={Colors.primary} />
+                </View>
+                <View style={{ alignItems: 'center', gap: 8 }}>
+                  <Text style={styles.pickTitle}>Share a Photo</Text>
+                  <Text style={styles.pickSub}>Show the world your progress, meals, or achievements!</Text>
+                </View>
+                
+                <View style={{ width: '100%', gap: 12, marginTop: 12 }}>
+                  <TouchableOpacity style={styles.pickBtn} onPress={pickFromLibrary} activeOpacity={0.88}>
+                    <LinearGradient
+                      colors={[Colors.primary, Colors.primary + 'CC']}
+                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                      style={StyleSheet.absoluteFill}
+                    />
+                    <Ionicons name="images" size={20} color="#fff" />
+                    <Text style={styles.pickBtnText}>Choose from Library</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity style={[styles.pickBtn, styles.pickBtnOutline]} onPress={pickFromCamera} activeOpacity={0.88}>
+                    <Ionicons name="camera" size={20} color={Colors.primary} />
+                    <Text style={[styles.pickBtnText, { color: Colors.primary }]}>Take a Photo</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              /* ── Compose step ── */
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 40 }}>
                 {/* Preview */}
                 {image && (
                   <View style={styles.previewWrap}>
@@ -196,26 +233,31 @@ export default function CreatePostSheet({ visible, onClose, onPosted }: Props) {
                 )}
 
                 {/* Caption */}
-                <View style={styles.captionWrap}>
-                  <TextInput
-                    style={styles.captionInput}
-                    placeholder="Write a caption…"
-                    placeholderTextColor="#aaa"
-                    value={caption}
-                    onChangeText={setCaption}
-                    multiline
-                    maxLength={MAX_CAPTION}
-                    autoFocus
-                  />
-                  <Text style={[styles.charCount, charsLeft < 100 && { color: charsLeft < 20 ? '#FF3D00' : Colors.warning }]}>
-                    {charsLeft}
-                  </Text>
+                <View style={styles.captionArea}>
+                  <View style={[styles.captionAvatar, { backgroundColor: avatarColor(user?.name || 'Me') }]}>
+                    <Text style={styles.captionAvatarText}>{initials(user?.name || 'Me')}</Text>
+                  </View>
+                  <View style={styles.captionInputWrap}>
+                    <TextInput
+                      style={styles.captionInput}
+                      placeholder="Write a caption…"
+                      placeholderTextColor="#aaa"
+                      value={caption}
+                      onChangeText={setCaption}
+                      multiline
+                      maxLength={MAX_CAPTION}
+                      autoFocus
+                    />
+                    <Text style={[styles.charCount, charsLeft < 100 && { color: charsLeft < 20 ? '#FF3D00' : Colors.warning }]}>
+                      {charsLeft}
+                    </Text>
+                  </View>
                 </View>
               </ScrollView>
-            </KeyboardAvoidingView>
-          )}
-        </Animated.View>
-      </View>
+            )}
+          </Animated.View>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -254,7 +296,14 @@ const styles = StyleSheet.create({
   // Pick step
   pickStep: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
-    gap: 16, paddingHorizontal: 32, paddingVertical: 40,
+    gap: 20, paddingHorizontal: 32, paddingVertical: 40,
+  },
+  pickIconContainer: {
+    width: 100, height: 100, borderRadius: 32,
+    backgroundColor: '#f8f8f8',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: '#f0f0f0',
+    marginBottom: 8,
   },
   pickTitle: { fontSize: 22, fontWeight: '900', color: '#111' },
   pickSub: { fontSize: 14, color: '#888', fontWeight: '600', textAlign: 'center', lineHeight: 20 },
@@ -280,10 +329,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 6,
   },
   changePhotoText: { fontSize: 13, fontWeight: '800', color: '#fff' },
-  captionWrap: { padding: 16, gap: 8 },
+  captionArea: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 12,
+  },
+  captionAvatar: {
+    width: 36, height: 36, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  captionAvatarText: { fontSize: 13, fontWeight: '900', color: '#fff' },
+  captionInputWrap: {
+    flex: 1,
+    gap: 8,
+  },
   captionInput: {
     fontSize: 15, color: '#111', lineHeight: 22,
-    fontWeight: '500', minHeight: 80,
+    fontWeight: '500', minHeight: 100,
+    textAlignVertical: 'top',
   },
   charCount: { fontSize: 12, color: '#bbb', fontWeight: '700', textAlign: 'right' },
 });

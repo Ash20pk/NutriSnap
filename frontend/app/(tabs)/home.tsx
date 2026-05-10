@@ -146,6 +146,16 @@ export default function HomeScreen() {
     );
   };
 
+  const renderFeedSkeleton = () => (
+    <View style={{ gap: 16 }}>
+      {[1, 2, 3].map(i => (
+        <View key={i} style={[styles.post, { height: 320, opacity: 0.6, backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' }]}>
+          <Ionicons name="image-outline" size={48} color="#ccc" />
+        </View>
+      ))}
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       <StreakCalendarModal
@@ -279,29 +289,35 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {feedPosts.length === 0 && !loading && (
-          <View style={styles.emptyFeed}>
-            <Ionicons name="globe-outline" size={36} color={theme.textLight} />
-            <Text style={styles.emptyFeedTitle}>Your feed is quiet</Text>
-            <Text style={styles.emptyFeedSub}>Follow people from the leaderboard to see their activity here</Text>
-            <TouchableOpacity
-              style={styles.emptyFeedBtn}
-              onPress={() => router.push('/(tabs)/quest' as any)}
-            >
-              <Text style={styles.emptyFeedBtnText}>Go to Leaderboard</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        {loading && feedPosts.length === 0 ? (
+          renderFeedSkeleton()
+        ) : (
+          <>
+            {feedPosts.length === 0 && (
+              <View style={styles.emptyFeed}>
+                <Ionicons name="globe-outline" size={36} color={theme.textLight} />
+                <Text style={styles.emptyFeedTitle}>Your feed is quiet</Text>
+                <Text style={styles.emptyFeedSub}>Follow people from the leaderboard to see their activity here</Text>
+                <TouchableOpacity
+                  style={styles.emptyFeedBtn}
+                  onPress={() => router.push('/(tabs)/quest' as any)}
+                >
+                  <Text style={styles.emptyFeedBtnText}>Go to Leaderboard</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
-        {feedPosts.map(post => (
-          <PostCard
-            key={post.id}
-            post={post}
-            currentUserId={user?.id}
-            onCommentPress={setCommentPost}
-            onDeleted={id => setFeedPosts(prev => prev.filter(p => p.id !== id))}
-          />
-        ))}
+            {feedPosts.map(post => (
+              <PostCard
+                key={post.id}
+                post={post}
+                currentUserId={user?.id}
+                onCommentPress={setCommentPost}
+                onDeleted={id => setFeedPosts(prev => prev.filter(p => p.id !== id))}
+              />
+            ))}
+          </>
+        )}
 
         {nextCursor && !loadingMore && (
           <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMorePosts} activeOpacity={0.8}>

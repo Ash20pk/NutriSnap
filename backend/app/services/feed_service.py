@@ -252,10 +252,13 @@ class FeedService:
     async def get_comments(
         self,
         post_id: str,
+        requester_id: str,
         limit: int = 30,
         cursor: Optional[str] = None,
     ) -> Dict[str, Any]:
+        """Top-level comments only (parent_id IS NULL). Each row includes reply_count and like state."""
         pid = to_uuid(post_id)
+        uid = to_uuid(requester_id)
         cursor_ts = (
             datetime.fromisoformat(cursor) if cursor
             else datetime(1970, 1, 1, tzinfo=timezone.utc)
@@ -264,50 +267,95 @@ class FeedService:
         async with self.pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT c.id, c.post_id, c.user_id, c.body, c.created_at,
-                       pr.name AS author_name, pr.username AS author_username
+                SELECT
+                    c.id, c.post_id, c.user_id, c.body, c.created_at,
+                    c.reply_count,
+                    pr.name AS author_name, pr.username AS author_username,
+                    COUNT(cr.user_id)      AS like_count,
+                    EXISTS(
+                        SELECT 1 FROM comment_reactions cr2
+                        WHERE cr2.comment_id = c.id AND cr2.user_id = $2
+                    )                      AS i_liked
                 FROM post_comments c
                 JOIN profiles pr ON pr.id = c.user_id
-                WHERE c.post_id=$1 AND c.deleted_at IS NULL AND c.created_at > $2
+                LEFT JOIN comment_reactions cr ON cr.comment_id = c.id
+                WHERE c.post_id = $1
+                  AND c.parent_id IS NULL
+                  AND c.deleted_at IS NULL
+                  AND c.created_at > $3
+                GROUP BY c.id, pr.name, pr.username
                 ORDER BY c.created_at ASC
-                LIMIT $3
+                LIMIT $4
                 """,
-                pid, cursor_ts, limit,
+                pid, uid, cursor_ts, limit,
             )
 
-        comments = [
-            {
-                "id": str(r["id"]),
-                "post_id": str(r["post_id"]),
-                "user_id": str(r["user_id"]),
-                "author_name": r["author_name"],
-                "author_username": r["author_username"],
-                "body": r["body"],
-                "created_at": r["created_at"].isoformat(),
-            }
-            for r in rows
-        ]
+        comments = [self._row_to_comment(r) for r in rows]
         next_cursor = comments[-1]["created_at"] if len(comments) == limit else None
         return {"comments": comments, "next_cursor": next_cursor}
+
+    async def get_replies(
+        self,
+        comment_id: str,
+        requester_id: str,
+    ) -> Dict[str, Any]:
+        """All replies for a parent comment, oldest first."""
+        cid = to_uuid(comment_id)
+        uid = to_uuid(requester_id)
+
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    c.id, c.post_id, c.user_id, c.body, c.created_at,
+                    c.reply_count,
+                    pr.name AS author_name, pr.username AS author_username,
+                    COUNT(cr.user_id)      AS like_count,
+                    EXISTS(
+                        SELECT 1 FROM comment_reactions cr2
+                        WHERE cr2.comment_id = c.id AND cr2.user_id = $2
+                    )                      AS i_liked
+                FROM post_comments c
+                JOIN profiles pr ON pr.id = c.user_id
+                LEFT JOIN comment_reactions cr ON cr.comment_id = c.id
+                WHERE c.parent_id = $1 AND c.deleted_at IS NULL
+                GROUP BY c.id, pr.name, pr.username
+                ORDER BY c.created_at ASC
+                """,
+                cid, uid,
+            )
+
+        return {"replies": [self._row_to_comment(r) for r in rows]}
 
     async def create_comment(
         self,
         user_id: str,
         post_id: str,
         body: str,
+        parent_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         uid = to_uuid(user_id)
         pid = to_uuid(post_id)
+        par = to_uuid(parent_id) if parent_id else None
 
         async with self.pool.acquire() as conn:
             async with conn.transaction():
                 row = await conn.fetchrow(
-                    "INSERT INTO post_comments (user_id,post_id,body) VALUES ($1,$2,$3) RETURNING id,created_at",
-                    uid, pid, body,
+                    "INSERT INTO post_comments (user_id,post_id,body,parent_id) VALUES ($1,$2,$3,$4) RETURNING id,created_at",
+                    uid, pid, body, par,
                 )
-                await conn.execute(
-                    "UPDATE posts SET comment_count=comment_count+1 WHERE id=$1", pid,
-                )
+                comment_id = row["id"]
+
+                if par:
+                    # Increment parent's reply_count
+                    await conn.execute(
+                        "UPDATE post_comments SET reply_count=reply_count+1 WHERE id=$1", par,
+                    )
+                else:
+                    await conn.execute(
+                        "UPDATE posts SET comment_count=comment_count+1 WHERE id=$1", pid,
+                    )
+
                 try:
                     post_owner = await conn.fetchval("SELECT user_id FROM posts WHERE id=$1", pid)
                     if post_owner and post_owner != uid:
@@ -316,21 +364,37 @@ class FeedService:
                             INSERT INTO notifications (recipient_id,actor_id,notif_type,post_id,comment_id)
                             VALUES ($1,$2,'comment',$3,$4)
                             """,
-                            post_owner, uid, pid, row["id"],
+                            post_owner, uid, pid, comment_id,
                         )
+                    if par:
+                        parent_owner = await conn.fetchval(
+                            "SELECT user_id FROM post_comments WHERE id=$1", par,
+                        )
+                        if parent_owner and parent_owner != uid and parent_owner != post_owner:
+                            await conn.execute(
+                                """
+                                INSERT INTO notifications (recipient_id,actor_id,notif_type,post_id,comment_id)
+                                VALUES ($1,$2,'comment',$3,$4)
+                                """,
+                                parent_owner, uid, pid, comment_id,
+                            )
                 except Exception:
                     pass
 
             author = await conn.fetchrow("SELECT name,username FROM profiles WHERE id=$1", uid)
 
         return {
-            "id": str(row["id"]),
+            "id": str(comment_id),
             "post_id": post_id,
             "user_id": user_id,
             "author_name": author["name"] if author else "",
             "author_username": author["username"] if author else None,
             "body": body,
             "created_at": row["created_at"].isoformat(),
+            "parent_id": parent_id,
+            "reply_count": 0,
+            "like_count": 0,
+            "i_liked": False,
         }
 
     async def delete_comment(self, user_id: str, comment_id: str) -> Dict[str, bool]:
@@ -338,17 +402,51 @@ class FeedService:
         cid = to_uuid(comment_id)
         async with self.pool.acquire() as conn:
             async with conn.transaction():
-                post_id = await conn.fetchval(
-                    "SELECT post_id FROM post_comments WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL",
+                row = await conn.fetchrow(
+                    "SELECT post_id, parent_id FROM post_comments WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL",
                     cid, uid,
                 )
-                if not post_id:
+                if not row:
                     return {"deleted": False}
                 await conn.execute("UPDATE post_comments SET deleted_at=NOW() WHERE id=$1", cid)
-                await conn.execute(
-                    "UPDATE posts SET comment_count=GREATEST(0,comment_count-1) WHERE id=$1", post_id,
-                )
+                if row["parent_id"]:
+                    await conn.execute(
+                        "UPDATE post_comments SET reply_count=GREATEST(0,reply_count-1) WHERE id=$1",
+                        row["parent_id"],
+                    )
+                else:
+                    await conn.execute(
+                        "UPDATE posts SET comment_count=GREATEST(0,comment_count-1) WHERE id=$1",
+                        row["post_id"],
+                    )
         return {"deleted": True}
+
+    async def toggle_comment_reaction(self, user_id: str, comment_id: str) -> Dict[str, Any]:
+        uid = to_uuid(user_id)
+        cid = to_uuid(comment_id)
+
+        async with self.pool.acquire() as conn:
+            existing = await conn.fetchval(
+                "SELECT 1 FROM comment_reactions WHERE comment_id=$1 AND user_id=$2",
+                cid, uid,
+            )
+            if existing:
+                await conn.execute(
+                    "DELETE FROM comment_reactions WHERE comment_id=$1 AND user_id=$2", cid, uid,
+                )
+                like_count = await conn.fetchval(
+                    "SELECT COUNT(*) FROM comment_reactions WHERE comment_id=$1", cid,
+                )
+                return {"liked": False, "like_count": int(like_count or 0)}
+            else:
+                await conn.execute(
+                    "INSERT INTO comment_reactions (comment_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING",
+                    cid, uid,
+                )
+                like_count = await conn.fetchval(
+                    "SELECT COUNT(*) FROM comment_reactions WHERE comment_id=$1", cid,
+                )
+                return {"liked": True, "like_count": int(like_count or 0)}
 
     # ── Auto-publish from badge check ───────────────────────────────────────
 
@@ -374,6 +472,21 @@ class FeedService:
         )
 
     # ── Helpers ─────────────────────────────────────────────────────────────
+
+    def _row_to_comment(self, r: asyncpg.Record) -> Dict[str, Any]:
+        return {
+            "id": str(r["id"]),
+            "post_id": str(r["post_id"]),
+            "user_id": str(r["user_id"]),
+            "author_name": r["author_name"],
+            "author_username": r["author_username"],
+            "body": r["body"],
+            "created_at": r["created_at"].isoformat(),
+            "parent_id": str(r["parent_id"]) if r.get("parent_id") else None,
+            "reply_count": int(r.get("reply_count") or 0),
+            "like_count": int(r.get("like_count") or 0),
+            "i_liked": bool(r.get("i_liked") or False),
+        }
 
     def _row_to_post(self, r: asyncpg.Record) -> Dict[str, Any]:
         meta = r["metadata"]

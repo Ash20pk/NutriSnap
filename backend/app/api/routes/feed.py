@@ -31,6 +31,7 @@ class CreatePostRequest(BaseModel):
 
 class CreateCommentRequest(BaseModel):
     body: str = Field(..., min_length=1, max_length=2200)
+    parent_id: Optional[str] = None
 
 
 # ── Feed ────────────────────────────────────────────────────────────────────
@@ -104,7 +105,7 @@ async def get_comments(
     uid: str = Depends(get_current_uid),
     service: FeedService = Depends(get_feed_service),
 ):
-    return await service.get_comments(post_id, limit=limit, cursor=cursor)
+    return await service.get_comments(post_id, requester_id=uid, limit=limit, cursor=cursor)
 
 
 @router.post("/{post_id}/comments")
@@ -114,7 +115,7 @@ async def create_comment(
     uid: str = Depends(get_current_uid),
     service: FeedService = Depends(get_feed_service),
 ):
-    return await service.create_comment(uid, post_id, body.body)
+    return await service.create_comment(uid, post_id, body.body, parent_id=body.parent_id)
 
 
 @router.delete("/{post_id}/comments/{comment_id}")
@@ -125,3 +126,23 @@ async def delete_comment(
     service: FeedService = Depends(get_feed_service),
 ):
     return await service.delete_comment(uid, comment_id)
+
+
+@router.get("/{post_id}/comments/{comment_id}/replies")
+async def get_replies(
+    post_id: str,
+    comment_id: str,
+    uid: str = Depends(get_current_uid),
+    service: FeedService = Depends(get_feed_service),
+):
+    return await service.get_replies(comment_id, requester_id=uid)
+
+
+@router.post("/{post_id}/comments/{comment_id}/react")
+async def toggle_comment_reaction(
+    post_id: str,
+    comment_id: str,
+    uid: str = Depends(get_current_uid),
+    service: FeedService = Depends(get_feed_service),
+):
+    return await service.toggle_comment_reaction(uid, comment_id)

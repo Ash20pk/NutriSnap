@@ -60,7 +60,11 @@ export default function PostCard({ post, currentUserId, onCommentPress, onDelete
   const [reacted, setReacted] = useState(post.i_reacted);
   const [reactionCount, setReactionCount] = useState(post.reaction_count);
   const [commentCount, setCommentCount] = useState(post.comment_count);
+  const [imageFailed, setImageFailed] = useState(false);
+  const [showHeart, setShowHeart] = useState(false);
+  const heartAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const lastTap = useRef(0);
   const isMe = post.user_id === currentUserId;
 
   const gradient: [string, string] =
@@ -73,21 +77,50 @@ export default function PostCard({ post, currentUserId, onCommentPress, onDelete
     catch { return ''; }
   })();
 
-  const handleReact = async () => {
+  const handleReact = async (isDoubleTap = false) => {
+    if (isDoubleTap && reacted) {
+      // If already reacted, just show animation
+      showHeartAnimation();
+      return;
+    }
+    
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    
+    if (isDoubleTap) showHeartAnimation();
+    
     Animated.sequence([
       Animated.timing(scaleAnim, { toValue: 1.4, duration: 100, useNativeDriver: true }),
       Animated.timing(scaleAnim, { toValue: 1, duration: 120, useNativeDriver: true }),
     ]).start();
-    const next = !reacted;
+
+    const next = isDoubleTap ? true : !reacted;
+    if (next === reacted && !isDoubleTap) return;
+    
     setReacted(next);
-    setReactionCount(c => c + (next ? 1 : -1));
+    setReactionCount(c => c + (next ? (reacted ? 0 : 1) : -1));
     try {
       await postApi.toggleReaction(post.id);
     } catch {
       setReacted(!next);
       setReactionCount(c => c + (next ? -1 : 1));
     }
+  };
+
+  const showHeartAnimation = () => {
+    setShowHeart(true);
+    heartAnim.setValue(0);
+    Animated.sequence([
+      Animated.spring(heartAnim, { toValue: 1, tension: 80, friction: 8, useNativeDriver: true }),
+      Animated.timing(heartAnim, { toValue: 0, duration: 200, delay: 500, useNativeDriver: true }),
+    ]).start(() => setShowHeart(false));
+  };
+
+  const handleDoubleTap = () => {
+    const now = Date.now();
+    if (now - lastTap.current < 300) {
+      handleReact(true);
+    }
+    lastTap.current = now;
   };
 
   const handleComment = () => {
@@ -113,6 +146,12 @@ export default function PostCard({ post, currentUserId, onCommentPress, onDelete
   };
 
   const primaryMedia = post.media[0];
+  const photoUri = (() => {
+    const uri = primaryMedia?.media_url;
+    if (!uri || typeof uri !== 'string') return undefined;
+    if (uri.startsWith('http://')) return uri.replace('http://', 'https://');
+    return uri;
+  })();
 
   return (
     <View style={styles.card}>
@@ -141,12 +180,29 @@ export default function PostCard({ post, currentUserId, onCommentPress, onDelete
       </TouchableOpacity>
 
       {/* Media */}
-      {post.post_type === 'photo' && primaryMedia ? (
-        <Image
-          source={{ uri: primaryMedia.media_url }}
-          style={styles.photo}
-          contentFit="cover"
-        />
+      {post.post_type === 'photo' && photoUri && !imageFailed ? (
+        <TouchableOpacity activeOpacity={1} onPress={handleDoubleTap}>
+          <Image
+            source={{ uri: photoUri }}
+            style={styles.photo}
+            contentFit="cover"
+            cachePolicy="none"
+            recyclingKey={photoUri}
+            onError={(e) => {
+              // eslint-disable-next-line no-console
+              console.error('Post image failed to load:', { postId: post.id, uri: photoUri, error: e });
+              setImageFailed(true);
+            }}
+          />
+          {showHeart && (
+            <Animated.View style={[styles.bigHeart, {
+              opacity: heartAnim,
+              transform: [{ scale: heartAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1.5] }) }]
+            }]}>
+              <Ionicons name="flame" size={80} color="#fff" />
+            </Animated.View>
+          )}
+        </TouchableOpacity>
       ) : (
         <LinearGradient
           colors={gradient}
@@ -191,11 +247,24 @@ export default function PostCard({ post, currentUserId, onCommentPress, onDelete
         </TouchableOpacity>
       )}
 
+      {/* Social proof */}
+      {reactionCount > 0 && (
+        <View style={styles.socialProof}>
+          <Ionicons name="flame" size={12} color="#FF3D00" />
+          <Text style={styles.socialProofText}>
+            {reacted 
+              ? (reactionCount > 1 ? `You and ${reactionCount - 1} others hyped this` : 'You hyped this')
+              : `${reactionCount} ${reactionCount === 1 ? 'person' : 'people'} hyped this`
+            }
+          </Text>
+        </View>
+      )}
+
       {/* Reactions bar */}
       <View style={styles.reactions}>
         <TouchableOpacity
           style={[styles.reactionBtn, reacted && styles.reactionBtnActive]}
-          onPress={handleReact}
+          onPress={() => handleReact()}
           activeOpacity={0.8}
         >
           <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
@@ -254,6 +323,15 @@ const styles = StyleSheet.create({
   timeAgo: { fontSize: 12, fontWeight: '700', color: '#999', marginTop: 1 },
 
   photo: { width: '100%', height: 300 },
+  bigHeart: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: 'center', alignItems: 'center',
+    zIndex: 10,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 10,
+  },
 
   gradientContent: {
     marginHorizontal: 12,
@@ -281,7 +359,19 @@ const styles = StyleSheet.create({
   commentPreviewText: { fontSize: 13, color: '#444', lineHeight: 18, fontWeight: '500' },
   commentPreviewAuthor: { fontWeight: '800', color: '#111' },
   viewAll: { fontSize: 12, color: '#999', fontWeight: '700', marginTop: 2 },
-
+  socialProof: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  socialProofText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#666',
+  },
   reactions: {
     flexDirection: 'row',
     gap: 8,
