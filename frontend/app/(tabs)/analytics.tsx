@@ -647,12 +647,13 @@ export default function AnalyticsScreen() {
         processTopFoods(meals);
         calculateAverages(meals);
 
-        // If analytics cache is stale, trigger a refresh in the background
+        // If analytics cache is stale (or missing), refresh and re-fetch to show AI data
         if ((bundle as any)?.stale && meals.length > 0) {
-          console.log('[Analytics] Cache is stale, triggering background refresh...');
-          analyticsApi.refreshAnalytics(user.id, timeRange).catch((err) => {
-            console.warn('[Analytics] Background refresh failed:', err);
-          });
+          analyticsApi.refreshAnalytics(user.id, timeRange)
+            .then(() => fetchAnalytics())
+            .catch((err) => {
+              console.warn('[Analytics] Background refresh failed:', err);
+            });
         }
 
         const aiData = (bundle as any)?.daily_ai || (bundle as any)?.ai || {};

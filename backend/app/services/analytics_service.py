@@ -307,7 +307,7 @@ class AnalyticsService:
                 "daily_highlights": daily_highlights,
                 "micronutrient_targets": micro_targets,
                 "cached": cache_valid,
-                "stale": cache is not None and not cache_valid and not is_inactive,
+                "stale": not is_inactive and not cache_valid,
             }
 
             logger.info(
