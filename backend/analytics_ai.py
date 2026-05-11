@@ -420,16 +420,18 @@ DAILY MODE — ADDITIONAL RULES:
 
 
     try:
-        response = await openai_client.responses.create(
-            model="gpt-5.5",
-            input=[
+        from app.core.config import settings as _settings
+        response = await openai_client.chat.completions.create(
+            model=_settings.OPENAI_MODEL,
+            messages=[
                 {"role": "system", "content": "You are a nutrition analyst. Provide concise, data-backed insights in JSON format only. NEVER invent numbers or scores not present in the input data. Every claim must be traceable to a specific value provided."},
                 {"role": "user", "content": prompt},
             ],
-            text={"format": {"type": "json_object"}},
+            response_format={"type": "json_object"},
+            temperature=0.3,
         )
 
-        content = response.output_text
+        content = response.choices[0].message.content
         result = json.loads(content)
 
         tokens_used = response.usage.total_tokens if hasattr(response, 'usage') else 0

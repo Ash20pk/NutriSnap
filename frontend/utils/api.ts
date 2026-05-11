@@ -741,8 +741,9 @@ export const analyticsApi = {
     // Legacy shape (server.py / older bundle): { history, ai }
     return data;
   },
-  refreshAnalytics: async (userId: string, timeRange: 'daily' | 'week' | 'month' | 'year' = 'week'): Promise<AnalyticsData> => {
-    const response = await api.post(`/analytics/${userId}/refresh?time_range=${timeRange}`);
+  refreshAnalytics: async (userId: string, timeRange: 'daily' | 'week' | 'month' | 'year' = 'week', timezoneOffset?: number): Promise<AnalyticsData> => {
+    const tz = typeof timezoneOffset === 'number' ? timezoneOffset : -new Date().getTimezoneOffset();
+    const response = await api.post(`/analytics/${userId}/refresh?time_range=${timeRange}&timezone_offset=${tz}`);
     return response.data;
   },
 };

@@ -649,7 +649,8 @@ export default function AnalyticsScreen() {
 
         // If analytics cache is stale (or missing), refresh and re-fetch to show AI data
         if ((bundle as any)?.stale && meals.length > 0) {
-          analyticsApi.refreshAnalytics(user.id, timeRange)
+          const tz = -new Date().getTimezoneOffset();
+          analyticsApi.refreshAnalytics(user.id, timeRange, tz)
             .then(() => fetchAnalytics())
             .catch((err) => {
               console.warn('[Analytics] Background refresh failed:', err);

@@ -388,11 +388,12 @@ class AnalyticsService:
                        total_calories, total_protein, total_carbs, total_fat
                 FROM meals
                 WHERE user_id = $1
-                  AND timestamp >= (now() - make_interval(days => $2::int))
+                  AND timestamp >= (now() AT TIME ZONE 'UTC' + make_interval(mins => $3::int) - make_interval(days => $2::int))
                 ORDER BY timestamp DESC
                 """,
                 to_uuid(user_id),
                 days,
+                int(timezone_offset),
             )
             
             if len(meals) == 0:
