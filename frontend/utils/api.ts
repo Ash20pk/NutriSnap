@@ -202,6 +202,8 @@ export interface VoiceToMealResult {
   }[];
   requested_food_name?: string;
   requested_quantity_grams?: number;
+  requested_quantity_value?: number;
+  requested_quantity_unit?: string;
 }
 
 // Recipe types

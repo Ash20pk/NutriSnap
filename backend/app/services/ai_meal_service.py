@@ -113,6 +113,8 @@ class AIMealService:
                             "options": matched.get("options") or [],
                             "requested_food_name": matched.get("name") or item.get("name"),
                             "requested_quantity_grams": float(matched.get("quantity") or qty_val),
+                            "requested_quantity_value": qty_val,
+                            "requested_quantity_unit": qty_unit,
                         }
 
                     matched["displayQuantity"] = round(qty_val, 1)

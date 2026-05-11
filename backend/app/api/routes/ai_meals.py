@@ -48,6 +48,8 @@ class VoiceToMealResponse(BaseModel):
     options: Optional[List[Dict[str, Any]]] = None
     requested_food_name: Optional[str] = None
     requested_quantity_grams: Optional[float] = None
+    requested_quantity_value: Optional[float] = None
+    requested_quantity_unit: Optional[str] = None
 
 
 @router.post("/log-photo")

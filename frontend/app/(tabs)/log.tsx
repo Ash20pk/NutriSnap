@@ -72,6 +72,9 @@ export default function LogScreen() {
   const [manualParseLoading, setManualParseLoading] = useState(false);
   const [clarificationQuestion, setClarificationQuestion] = useState<string | null>(null);
   const [clarificationRequestedName, setClarificationRequestedName] = useState<string | null>(null);
+  const [clarificationOptions, setClarificationOptions] = useState<any[]>([]);
+  const [clarificationQtyValue, setClarificationQtyValue] = useState<number>(1);
+  const [clarificationQtyUnit, setClarificationQtyUnit] = useState<string>('g');
 
   const fetchTodayData = useCallback(async () => {
     if (!user) return;
@@ -183,6 +186,9 @@ export default function LogScreen() {
       setUsedVoice(false);
       setClarificationQuestion(null);
       setClarificationRequestedName(null);
+      setClarificationOptions([]);
+      setClarificationQtyValue(1);
+      setClarificationQtyUnit('g');
     }
   }, [showModal]);
 
@@ -307,8 +313,11 @@ export default function LogScreen() {
       const result = await mealApi.voiceToMeal(uri, user.id);
       if (result?.needs_clarification) {
         setUsedVoice(true);
-        setClarificationQuestion(result.follow_up_question || 'Can you clarify what you meant?');
+        setClarificationQuestion(result.follow_up_question || null);
         setClarificationRequestedName(result.requested_food_name || null);
+        setClarificationOptions(result.options || []);
+        setClarificationQtyValue(result.requested_quantity_value ?? 1);
+        setClarificationQtyUnit(result.requested_quantity_unit ?? 'g');
         return;
       }
 
@@ -331,6 +340,39 @@ export default function LogScreen() {
     }
   };
 
+  const UNIT_TO_GRAMS: Record<string, number> = {
+    g: 1, oz: 28.35, ml: 1, scoop: 30, serving: 150, piece: 100,
+    katori: 150, cup: 240, tbsp: 15, tsp: 5, slice: 30, medium: 150, plate: 300,
+  };
+
+  const handleClarificationSelect = (option: any) => {
+    const gramsPerUnit = UNIT_TO_GRAMS[clarificationQtyUnit] ?? 100;
+    const qtyGrams = clarificationQtyValue * gramsPerUnit;
+    const multiplier = qtyGrams / 100;
+    const food = {
+      food_id: option.food_id,
+      name: option.name,
+      quantity: qtyGrams,
+      displayQuantity: clarificationQtyValue,
+      displayUnit: clarificationQtyUnit,
+      calories: Math.round((option.calories_per_100g || 0) * multiplier),
+      protein: Math.round((option.protein_per_100g || 0) * multiplier),
+      carbs: Math.round((option.carbs_per_100g || 0) * multiplier),
+      fat: Math.round((option.fat_per_100g || 0) * multiplier),
+      calories_per_100g: option.calories_per_100g || 0,
+      protein_per_100g: option.protein_per_100g || 0,
+      carbs_per_100g: option.carbs_per_100g || 0,
+      fat_per_100g: option.fat_per_100g || 0,
+      matched: true,
+      needs_review: true,
+    };
+    setClarificationQuestion(null);
+    setClarificationRequestedName(null);
+    setClarificationOptions([]);
+    setSelectedFoods(prev => [...prev, food]);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  };
+
   const handleFoodSelect = (food: any) => {
     setConfiguringFood(food);
     setConfigQty(food.serving_size ? String(food.serving_size) : '100');
@@ -342,9 +384,11 @@ export default function LogScreen() {
     const food = selectedFoods[index];
     setEditingIndex(index);
     setConfiguringFood(food);
-    // Use displayQuantity if available (string), otherwise quantity (number)
-    setConfigQty(food.displayQuantity ? String(food.displayQuantity) : String(food.quantity));
-    setConfigUnit(food.displayUnit || 'g');
+    // Always init in grams — food.quantity is always grams from backend.
+    // Named units (scoop, piece, etc.) must not be passed raw to getCalculatedMacros
+    // which only understands g and oz.
+    setConfigQty(String(food.quantity || 0));
+    setConfigUnit('g');
   };
 
   const getCalculatedMacros = () => {
@@ -840,36 +884,66 @@ export default function LogScreen() {
                       >
                         {!voiceLoading ? (
                           <>
-                            <View style={styles.voicePromptContainerCentered}>
-                              <Text style={styles.voicePromptTitle}>
-                                {clarificationQuestion ? 'Quick question' : 'Tap to speak your meal'}
-                              </Text>
-                              <Text style={styles.voicePromptSub}>
-                                {clarificationQuestion ? getClarificationPrompt() : '"2 boiled eggs and a bowl of poha"'}
-                              </Text>
-                              {!!clarificationRequestedName && (
-                                <Text style={styles.voicePromptSub}>
-                                  {`You said: ${clarificationRequestedName}`}
-                                </Text>
-                              )}
-                            </View>
-
-                            <TouchableOpacity
-                              style={[styles.micButtonLarge, isRecording && styles.micButtonActive]}
-                              onPress={() => {
-                                if (isRecording) {
-                                  stopVoiceRecordingAndParse();
-                                } else {
-                                  startVoiceRecording();
-                                }
-                              }}
-                            >
-                              <Ionicons
-                                name={isRecording ? 'stop' : 'mic'}
-                                size={32}
-                                color={isRecording ? theme.white : theme.primary}
-                              />
-                            </TouchableOpacity>
+                            {clarificationOptions.length > 0 ? (
+                              <View style={styles.voicePromptContainerCentered}>
+                                <Text style={styles.voicePromptTitle}>Which one did you mean?</Text>
+                                {!!clarificationRequestedName && (
+                                  <Text style={[styles.voicePromptSub, { marginBottom: 12 }]}>
+                                    {`You said: "${clarificationRequestedName}"`}
+                                  </Text>
+                                )}
+                                {clarificationOptions.map((opt, idx) => (
+                                  <TouchableOpacity
+                                    key={opt.food_id || idx}
+                                    style={[styles.clarificationOption, { backgroundColor: theme.white, borderColor: theme.border }]}
+                                    onPress={() => handleClarificationSelect(opt)}
+                                    activeOpacity={0.75}
+                                  >
+                                    <Text style={[styles.clarificationOptionName, { color: theme.text }]}>{opt.name}</Text>
+                                    <Text style={[styles.clarificationOptionMacros, { color: theme.textSecondary }]}>
+                                      {`${opt.calories_per_100g} kcal · ${opt.protein_per_100g}g P · ${opt.carbs_per_100g}g C · ${opt.fat_per_100g}g F  per 100g`}
+                                    </Text>
+                                  </TouchableOpacity>
+                                ))}
+                                <TouchableOpacity
+                                  style={{ marginTop: 8 }}
+                                  onPress={() => {
+                                    setClarificationQuestion(null);
+                                    setClarificationRequestedName(null);
+                                    setClarificationOptions([]);
+                                  }}
+                                >
+                                  <Text style={{ color: theme.textSecondary, fontSize: 14, fontWeight: '600' }}>Cancel</Text>
+                                </TouchableOpacity>
+                              </View>
+                            ) : (
+                              <>
+                                <View style={styles.voicePromptContainerCentered}>
+                                  <Text style={styles.voicePromptTitle}>
+                                    {clarificationQuestion ? 'Quick question' : 'Tap to speak your meal'}
+                                  </Text>
+                                  <Text style={styles.voicePromptSub}>
+                                    {clarificationQuestion ? getClarificationPrompt() : '"2 boiled eggs and a bowl of poha"'}
+                                  </Text>
+                                </View>
+                                <TouchableOpacity
+                                  style={[styles.micButtonLarge, isRecording && styles.micButtonActive]}
+                                  onPress={() => {
+                                    if (isRecording) {
+                                      stopVoiceRecordingAndParse();
+                                    } else {
+                                      startVoiceRecording();
+                                    }
+                                  }}
+                                >
+                                  <Ionicons
+                                    name={isRecording ? 'stop' : 'mic'}
+                                    size={32}
+                                    color={isRecording ? theme.white : theme.primary}
+                                  />
+                                </TouchableOpacity>
+                              </>
+                            )}
                           </>
                         ) : (
                           <View style={styles.processingContainer}>
@@ -1325,6 +1399,24 @@ function makeStyles(theme: typeof Colors) {
     fontWeight: '700',
     fontStyle: 'italic',
     textAlign: 'center',
+  },
+  clarificationOption: {
+    borderWidth: 1.5,
+    borderBottomWidth: 4,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 8,
+    width: '100%',
+  },
+  clarificationOptionName: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  clarificationOptionMacros: {
+    fontSize: 11,
+    fontWeight: '500',
   },
   micButtonLarge: {
     width: 64,
