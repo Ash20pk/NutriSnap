@@ -127,6 +127,7 @@ _SERVING_SIZE_FALLBACK: Dict[str, float] = {
     "cup":     240.0,   # correct for liquids (milk, tea, water); solids use food-specific overrides
     "katori":  150.0,
     "serving": 150.0,   # bumped from 100g — typical Indian meal serving is closer to 150g
+    "scoop":   30.0,    # standard protein/supplement scoop
     "plate":   300.0,
     "slice":   30.0,
     "piece":   100.0,
@@ -318,6 +319,23 @@ _FOOD_SERVING_FALLBACK: Dict[tuple, float] = {
     # ── Dairy ────────────────────────────────────────────────────────────────
     ("cheese", "slice"):          20.0,
     ("cheese slice", "slice"):    20.0,
+
+    # ── Protein supplements ────────────────────────────────────────────────────
+    ("whey protein", "scoop"):          30.0,
+    ("whey protein", "serving"):        30.0,
+    ("protein powder", "scoop"):        30.0,
+    ("protein powder", "serving"):      30.0,
+    ("whey protein powder", "scoop"):   30.0,
+    ("whey protein powder", "serving"): 30.0,
+    ("casein protein", "scoop"):        35.0,
+    ("casein protein", "serving"):      35.0,
+    ("mass gainer", "scoop"):          100.0,
+    ("mass gainer", "serving"):        100.0,
+    ("creatine", "scoop"):               5.0,
+    ("creatine", "tsp"):                 5.0,
+    ("pre workout", "scoop"):           10.0,
+    ("pre-workout", "scoop"):           10.0,
+    ("bcaa", "scoop"):                  10.0,
 
     # ── Snacks / sweets ───────────────────────────────────────────────────────
     ("chocolate bar", "piece"):   45.0,
@@ -622,7 +640,7 @@ _PARSE_SYSTEM_PROMPT = """\
 You are a global nutrition expert extracting individual food items from meal descriptions in any language or cuisine.
 Return JSON ONLY: {"foods": [{"name": string, "quantity_value": number, "quantity_unit": string}]}
 
-Valid quantity_unit values: "piece", "katori", "cup", "tbsp", "tsp", "g", "oz", "ml", "serving", "slice", "medium", "plate"
+Valid quantity_unit values: "piece", "katori", "cup", "tbsp", "tsp", "g", "oz", "ml", "serving", "scoop", "slice", "medium", "plate"
 
 ## Unit guide by food category
 
@@ -692,6 +710,13 @@ Latin:         flour tortilla (≈45g) | corn tortilla (≈25g) | arepa (≈100g
 ### Snacks & sweets
   chocolate bar → "piece" (≈45g) | individual square → "piece" (≈10g)
   chips / crisps / nuts → "g" if weight known, else "serving"
+
+### Protein supplements & powders → "scoop" (≈30 g per scoop)
+  whey protein / casein / protein powder / protein shake → "scoop"
+  mass gainer → "scoop" (≈100 g)
+  creatine → "scoop" or "tsp" (≈5 g)
+  pre-workout / BCAA → "scoop" (≈10 g)
+  If the user gives grams explicitly (e.g. "30g whey"), use "g".
 
 ## Rules: SEPARATE vs COMBINED
 

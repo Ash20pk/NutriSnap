@@ -196,10 +196,17 @@ class AIMealService:
                     qty_val,
                     qty_unit,
                 )
+
+                # Text entry can't interactively ask a follow-up — auto-pick the best option
+                if isinstance(matched, dict) and matched.get("needs_clarification"):
+                    matched = await self._auto_pick_best_option(
+                        conn, matched, item["name"], qty_val, qty_unit
+                    )
+
                 matched["displayQuantity"] = round(qty_val, 1)
                 matched["displayUnit"] = qty_unit
                 matched_foods.append(matched)
-        
+
         return {
             "transcript": transcript,
             "foods": matched_foods
@@ -292,6 +299,61 @@ class AIMealService:
                 status_code=500,
                 detail=f"Failed to match food '{food_name}': {str(e)}"
             )
+
+    async def _auto_pick_best_option(
+        self,
+        conn: asyncpg.Connection,
+        clarification_result: Dict[str, Any],
+        food_name: str,
+        qty_val: float,
+        qty_unit: str,
+    ) -> Dict[str, Any]:
+        """When clarification can't be asked (text entry), pick the highest-scored option."""
+        from app.utils.parsers import _resolve_quantity_grams
+        import uuid as _uuid
+
+        options = clarification_result.get("options") or []
+        if not options:
+            # No options at all — fall back to the original result which may be empty
+            return clarification_result
+
+        best = options[0]
+        cal_per_100 = float(best.get("calories_per_100g") or 0)
+        pro_per_100 = float(best.get("protein_per_100g") or 0)
+        carb_per_100 = float(best.get("carbs_per_100g") or 0)
+        fat_per_100 = float(best.get("fat_per_100g") or 0)
+        food_id_str = best.get("food_id")
+
+        try:
+            food_id_uuid = _uuid.UUID(food_id_str) if food_id_str else None
+        except Exception:
+            food_id_uuid = None
+
+        qty_grams = await _resolve_quantity_grams(conn, food_id_uuid, food_name, qty_val, qty_unit)
+        multiplier = qty_grams / 100.0
+
+        logger.info(
+            "[TEXT_TO_MEAL] Auto-picked '%s' for '%s' (score=%.3f, %.0f g)",
+            best.get("name"), food_name, float(best.get("score") or 0), qty_grams,
+        )
+
+        return {
+            "food_id": food_id_str,
+            "name": best.get("name", food_name),
+            "quantity": qty_grams,
+            "quantity_value": qty_val,
+            "quantity_unit": qty_unit,
+            "calories": round(cal_per_100 * multiplier, 2),
+            "protein": round(pro_per_100 * multiplier, 2),
+            "carbs": round(carb_per_100 * multiplier, 2),
+            "fat": round(fat_per_100 * multiplier, 2),
+            "calories_per_100g": cal_per_100,
+            "protein_per_100g": pro_per_100,
+            "carbs_per_100g": carb_per_100,
+            "fat_per_100g": fat_per_100,
+            "matched": True,
+            "needs_review": True,
+        }
 
     async def has_food(self, image_base64: str) -> Dict[str, Any]:
         """
