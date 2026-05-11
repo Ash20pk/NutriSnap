@@ -17,6 +17,7 @@ import { useUser } from '../../context/UserContext';
 import { mealApi, analyticsApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
+import Svg, { Line, G, Text as SvgText } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import PageHeader from '../../components/PageHeader';
@@ -234,6 +235,78 @@ interface ApiBioImpact {
   [key: string]: number | OrganEffects | undefined;
 }
 
+function MacroDonutWithLabels({ data, hasAnyMacros, theme }: { data: any[]; hasAnyMacros: boolean; theme: any }) {
+  const R = 90;
+  const INNER_R = 60;
+  const PAD_H = 50; // horizontal padding for left/right labels
+  const PAD_V = 40; // vertical padding for top/bottom labels
+  const W = R * 2 + PAD_H * 2; // 280 — fits even on iPhone SE
+  const H = R * 2 + PAD_V * 2; // 260
+  // Chart center in SVG coords = (PAD_H + R, PAD_V + R)
+  const cx = PAD_H + R; // 140
+  const cy = PAD_V + R; // 130
+
+  const total = data.reduce((s: number, d: any) => s + (d.value || 0), 0) || 1;
+
+  // Skia arcToOval convention: 0° = 3 o'clock (right), clockwise
+  const toXY = (deg: number, r: number) => {
+    const rad = (deg * Math.PI) / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  };
+
+  let cumDeg = 0;
+  const slices = data.map((d: any) => {
+    const sweep = (d.value / total) * 360;
+    const midDeg = cumDeg + sweep / 2;
+    cumDeg += sweep;
+    return { ...d, midDeg, pct: Math.round((d.value / total) * 100) };
+  });
+
+  return (
+    <View style={{ width: W, height: H }}>
+      <View style={{ position: 'absolute', left: PAD_H, top: PAD_V, width: R * 2, height: R * 2 }}>
+        <StandardDonutChart
+          data={hasAnyMacros ? data : [{ value: 1, color: theme.border }]}
+          radius={R}
+          innerRadius={INNER_R}
+          showText={false}
+          centerLabelComponent={() => (
+            <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="nutrition" size={20} color={theme.white} />
+              <Text style={{ marginTop: 4, color: theme.primary, fontSize: 10, fontWeight: '900' }}>
+                Macros
+              </Text>
+            </View>
+          )}
+        />
+      </View>
+      <Svg width={W} height={H} style={{ position: 'absolute', top: 0, left: 0 }}>
+        {hasAnyMacros && slices.map((slice: any, i: number) => {
+          const lineStart = toXY(slice.midDeg, R + 4);
+          const lineEnd = toXY(slice.midDeg, R + 18);
+          const labelPt = toXY(slice.midDeg, R + 24);
+          const anchor = labelPt.x > cx + 8 ? 'start' : labelPt.x < cx - 8 ? 'end' : 'middle';
+          return (
+            <G key={i}>
+              <Line
+                x1={lineStart.x} y1={lineStart.y}
+                x2={lineEnd.x} y2={lineEnd.y}
+                stroke={slice.color} strokeWidth={1.5} strokeDasharray="4,3"
+              />
+              <SvgText
+                x={labelPt.x} y={labelPt.y + 5}
+                fontSize={11} fontWeight="bold" fill={slice.color} textAnchor={anchor}
+              >
+                {slice.pct}%
+              </SvgText>
+            </G>
+          );
+        })}
+      </Svg>
+    </View>
+  );
+}
+
 export default function AnalyticsScreen() {
   const { theme } = useTheme();
   const styles = makeStyles(theme);
@@ -355,21 +428,28 @@ export default function AnalyticsScreen() {
     let chartData: any[] = [];
 
     if (timeRange === 'week') {
-      // Last 7 days rolling
-      const last7Days = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date();
-        d.setDate(d.getDate() - (6 - i));
-        return format(d, 'EEE');
+      // Current Mon-Sun week
+      const today = new Date();
+      const dow = today.getDay(); // 0=Sun, 1=Mon … 6=Sat
+      const daysFromMon = dow === 0 ? 6 : dow - 1;
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - daysFromMon);
+      monday.setHours(0, 0, 0, 0);
+
+      const weekDates = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        return d;
       });
 
       meals.forEach((meal: any) => {
-        const day = format(new Date(meal.timestamp), 'EEE');
-        dayTotals[day] = (dayTotals[day] || 0) + meal.total_calories;
+        const dateStr = format(new Date(meal.timestamp), 'yyyy-MM-dd');
+        dayTotals[dateStr] = (dayTotals[dateStr] || 0) + meal.total_calories;
       });
 
-      chartData = last7Days.map((day) => ({
-        label: day,
-        value: dayTotals[day] || 0,
+      chartData = weekDates.map((d) => ({
+        label: format(d, 'EEE'),
+        value: dayTotals[format(d, 'yyyy-MM-dd')] || 0,
         frontColor: theme.primary,
         gradientColor: theme.primaryLight,
         showGradient: true,
@@ -1030,22 +1110,11 @@ export default function AnalyticsScreen() {
           <AppCard style={styles.standardCard} padding={0}>
             <View style={[styles.macroContent, { padding: 20 }]}>
               <View style={styles.pieChartContainer}>
-                <View style={styles.pieChartWrapper}>
-                  <StandardDonutChart
-                    data={hasAnyMacros ? macroDistribution : [{ value: 1, color: theme.border }]}
-                    radius={90}
-                    innerRadius={60}
-                    showText
-                    centerLabelComponent={() => (
-                      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                        <Ionicons name="nutrition" size={20} color={theme.white} />
-                        <Text style={{ marginTop: 4, color: theme.primary, fontSize: 10, fontWeight: '900', textAlign: 'center' }}>
-                          Macros
-                        </Text>
-                      </View>
-                    )}
-                  />
-                </View>
+                <MacroDonutWithLabels
+                  data={macroDistribution}
+                  hasAnyMacros={hasAnyMacros}
+                  theme={theme}
+                />
               </View>
 
               <View style={styles.macroLegend}>
@@ -1571,13 +1640,7 @@ function makeStyles(theme: typeof Colors) {
   },
   pieChartContainer: {
     alignItems: 'center',
-    marginBottom: 24,
-  },
-  pieChartWrapper: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 140,
-    height: 140,
+    marginBottom: 8,
   },
   macroLegend: {
     gap: 14,

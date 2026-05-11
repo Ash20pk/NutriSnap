@@ -80,17 +80,17 @@ export default function LogScreen() {
     if (!user) return;
     try {
       const [result, stats, water] = await Promise.all([
-        mealApi.getHistory(user.id, 2),
-        mealApi.getStats(user.id),
-        waterApi.getToday(user.id),
+        mealApi.getHistory(user.id, 2).catch(() => ({ meals: [], count: 0 })),
+        mealApi.getStats(user.id).catch(() => null),
+        waterApi.getToday(user.id).catch(() => null),
       ]);
       const today = new Date().toDateString();
-      const todays = (result.meals as Meal[]).filter(
+      const todays = ((result as any)?.meals as Meal[] || []).filter(
         m => new Date((m as any).timestamp || (m as any).logged_at).toDateString() === today
       );
       setTodayMeals(todays);
       setTodayStats(stats);
-      setWaterData(water);
+      setWaterData(water as any);
     } catch (e) {
       console.error('Error fetching today data:', e);
     }
@@ -499,7 +499,7 @@ export default function LogScreen() {
         {/* Today's Energy — same card as home screen */}
         {(() => {
           const eaten = Math.round(todayStats?.total_calories || 0);
-          const target = Math.round(todayStats?.targets?.calories || 2000);
+          const target = Math.round(todayStats?.targets?.calories || user?.daily_calorie_target || 2000);
           const pct = Math.min(1, eaten / target);
           const goalMet = pct >= 0.8 && pct <= 1.2;
           return (
@@ -525,9 +525,9 @@ export default function LogScreen() {
               </View>
               <View style={styles.overviewMacroStrip}>
                 {[
-                  { label: 'Pro',  val: Math.round(todayStats?.total_protein || 0), target: Math.round(todayStats?.targets?.protein || 0), color: Colors.protein },
-                  { label: 'Carb', val: Math.round(todayStats?.total_carbs   || 0), target: Math.round(todayStats?.targets?.carbs   || 0), color: Colors.carbs   },
-                  { label: 'Fat',  val: Math.round(todayStats?.total_fat      || 0), target: Math.round(todayStats?.targets?.fat     || 0), color: Colors.fat     },
+                  { label: 'Pro',  val: Math.round(todayStats?.total_protein || 0), target: Math.round(todayStats?.targets?.protein || user?.protein_target || 0), color: Colors.protein },
+                  { label: 'Carb', val: Math.round(todayStats?.total_carbs   || 0), target: Math.round(todayStats?.targets?.carbs   || user?.carbs_target  || 0), color: Colors.carbs   },
+                  { label: 'Fat',  val: Math.round(todayStats?.total_fat      || 0), target: Math.round(todayStats?.targets?.fat     || user?.fat_target   || 0), color: Colors.fat     },
                 ].map(m => (
                   <View key={m.label} style={styles.overviewMacroItem}>
                     <Text style={[styles.overviewMacroValue, { color: m.color }]}>

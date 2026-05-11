@@ -29,6 +29,7 @@ interface UserProfile {
   fat_target: number;
   onboarding_completed: boolean;
   is_special_user?: boolean;
+  date_of_birth?: string;
 }
 
 interface UserContextType {

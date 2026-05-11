@@ -58,16 +58,16 @@ export default function HomeScreen() {
     setLoading(true);
     try {
       const [mealStats, qStats, lb, feed] = await Promise.all([
-        mealApi.getStats(user.id),
-        questApi.getStats(user.id),
+        mealApi.getStats(user.id).catch(() => null),
+        questApi.getStats(user.id).catch(() => null),
         questApi.getLeaderboard('global').catch(() => ({ leaderboard: [] })),
         postApi.getFeed(20).catch(() => ({ posts: [], next_cursor: null })),
       ]);
       setStats(mealStats);
       setQuestStats(qStats);
-      setLeaderboard(lb.leaderboard || []);
-      setFeedPosts(feed.posts || []);
-      setNextCursor(feed.next_cursor ?? null);
+      setLeaderboard((lb as any)?.leaderboard || []);
+      setFeedPosts((feed as any)?.posts || []);
+      setNextCursor((feed as any)?.next_cursor ?? null);
     } catch (e) {
       console.error('Home fetch error:', e);
     } finally {
@@ -92,7 +92,7 @@ export default function HomeScreen() {
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const caloriesEaten = Math.round(stats?.total_calories || 0);
-  const caloriesTarget = Math.round(stats?.targets?.calories || 2000);
+  const caloriesTarget = Math.round(stats?.targets?.calories || user?.daily_calorie_target || 2000);
   const caloriesLeft = Math.max(0, caloriesTarget - caloriesEaten);
   const caloriesPct = Math.min(1, caloriesEaten / caloriesTarget);
   const hasMetGoal = caloriesPct >= 0.8 && caloriesPct <= 1.2;
@@ -245,9 +245,9 @@ export default function HomeScreen() {
 
           <View style={styles.macroStrip}>
             {[
-              { label: 'Pro',  val: Math.round(stats?.total_protein || 0), target: Math.round(stats?.targets?.protein || 0), color: Colors.protein },
-              { label: 'Carb', val: Math.round(stats?.total_carbs   || 0), target: Math.round(stats?.targets?.carbs   || 0), color: Colors.carbs },
-              { label: 'Fat',  val: Math.round(stats?.total_fat      || 0), target: Math.round(stats?.targets?.fat     || 0), color: Colors.fat },
+              { label: 'Pro',  val: Math.round(stats?.total_protein || 0), target: Math.round(stats?.targets?.protein || user?.protein_target || 0), color: Colors.protein },
+              { label: 'Carb', val: Math.round(stats?.total_carbs   || 0), target: Math.round(stats?.targets?.carbs   || user?.carbs_target  || 0), color: Colors.carbs },
+              { label: 'Fat',  val: Math.round(stats?.total_fat      || 0), target: Math.round(stats?.targets?.fat     || user?.fat_target   || 0), color: Colors.fat },
             ].map(m => (
               <View key={m.label} style={styles.macroStripItem}>
                 <Text style={[styles.macroStripValue, { color: m.color }]}>
