@@ -38,12 +38,13 @@ async def log_water(
 @router.get("/today/{user_id}")
 async def get_today(
     user_id: str,
+    tz_offset: int = 0,
     uid: str = Depends(get_current_uid),
     service: WaterService = Depends(get_water_service),
 ):
     if uid != user_id:
         raise HTTPException(status_code=403, detail="Forbidden")
-    return await service.get_today(user_id)
+    return await service.get_today(user_id, tz_offset)
 
 
 @router.delete("/{log_id}")

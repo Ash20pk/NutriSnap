@@ -1015,8 +1015,8 @@ export const waterApi = {
     const response = await api.post('/water/log', { user_id: userId, amount_ml: amountMl });
     return response.data;
   },
-  getToday: async (userId: string): Promise<WaterToday> => {
-    const response = await api.get(`/water/today/${userId}`);
+  getToday: async (userId: string, tzOffsetMinutes: number = new Date().getTimezoneOffset()): Promise<WaterToday> => {
+    const response = await api.get(`/water/today/${userId}?tz_offset=${tzOffsetMinutes}`);
     return response.data;
   },
   deleteLog: async (userId: string, logId: string): Promise<void> => {

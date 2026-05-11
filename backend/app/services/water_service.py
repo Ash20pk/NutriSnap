@@ -32,7 +32,7 @@ class WaterService:
             )
         return {"id": str(row["id"]), "amount_ml": row["amount_ml"], "logged_at": row["logged_at"]}
 
-    async def get_today(self, user_id: str) -> Dict[str, Any]:
+    async def get_today(self, user_id: str, tz_offset: int = 0) -> Dict[str, Any]:
         async with self.pool.acquire() as conn:
             goal_row = await conn.fetchrow(
                 "SELECT water_goal_ml FROM profiles WHERE id = $1",
@@ -46,10 +46,12 @@ class WaterService:
                 SELECT id, amount_ml, logged_at
                 FROM water_logs
                 WHERE user_id = $1
-                  AND logged_at >= (now() AT TIME ZONE 'UTC')::date
+                  AND (logged_at AT TIME ZONE 'UTC' - make_interval(mins := $2))::date = 
+                      (now() AT TIME ZONE 'UTC' - make_interval(mins := $2))::date
                 ORDER BY logged_at DESC
                 """,
                 to_uuid(user_id),
+                tz_offset
             )
 
         logs = [{"id": str(r["id"]), "amount_ml": r["amount_ml"], "logged_at": r["logged_at"]} for r in rows]

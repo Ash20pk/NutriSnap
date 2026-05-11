@@ -273,26 +273,16 @@ function MacroDonutWithLabels({ data, hasAnyMacros, theme }: { data: any[]; hasA
           centerLabelComponent={() => (
             <View style={{ alignItems: 'center', justifyContent: 'center' }}>
               <Ionicons name="nutrition" size={20} color={theme.white} />
-              <Text style={{ marginTop: 4, color: theme.primary, fontSize: 10, fontWeight: '900' }}>
-                Macros
-              </Text>
             </View>
           )}
         />
       </View>
       <Svg width={W} height={H} style={{ position: 'absolute', top: 0, left: 0 }}>
         {hasAnyMacros && slices.map((slice: any, i: number) => {
-          const lineStart = toXY(slice.midDeg, R + 4);
-          const lineEnd = toXY(slice.midDeg, R + 18);
           const labelPt = toXY(slice.midDeg, R + 24);
           const anchor = labelPt.x > cx + 8 ? 'start' : labelPt.x < cx - 8 ? 'end' : 'middle';
           return (
             <G key={i}>
-              <Line
-                x1={lineStart.x} y1={lineStart.y}
-                x2={lineEnd.x} y2={lineEnd.y}
-                stroke={slice.color} strokeWidth={1.5} strokeDasharray="4,3"
-              />
               <SvgText
                 x={labelPt.x} y={labelPt.y + 5}
                 fontSize={11} fontWeight="bold" fill={slice.color} textAnchor={anchor}
@@ -428,17 +418,11 @@ export default function AnalyticsScreen() {
     let chartData: any[] = [];
 
     if (timeRange === 'week') {
-      // Current Mon-Sun week
+      // Last 7 days including today
       const today = new Date();
-      const dow = today.getDay(); // 0=Sun, 1=Mon … 6=Sat
-      const daysFromMon = dow === 0 ? 6 : dow - 1;
-      const monday = new Date(today);
-      monday.setDate(today.getDate() - daysFromMon);
-      monday.setHours(0, 0, 0, 0);
-
       const weekDates = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(monday);
-        d.setDate(monday.getDate() + i);
+        const d = new Date(today);
+        d.setDate(today.getDate() - (6 - i));
         return d;
       });
 
