@@ -23,6 +23,7 @@ type Props = {
   labelWidth?: number;
   showValuesAsTopLabel?: boolean;
   tickCount?: number;
+  unit?: string;
 };
 
 export default function StandardBarChart({
@@ -35,6 +36,7 @@ export default function StandardBarChart({
   labelWidth = 40,
   showValuesAsTopLabel,
   tickCount,
+  unit,
 }: Props) {
   const { theme } = useTheme();
   const font = useFont(require('../assets/fonts/SpaceMono-Regular.ttf'), 10);
@@ -74,7 +76,8 @@ export default function StandardBarChart({
           {({ points, chartBounds }) => {
             return points.value.map((p, i) => {
               const valStr = String(Math.round(chartData[i]?.value || 0));
-              const textWidth = font?.getTextWidth(valStr) ?? 0;
+              const displayStr = unit ? `${valStr}${unit}` : valStr;
+              const textWidth = font?.getTextWidth(displayStr) ?? 0;
               const pX = p?.x ?? 0;
               const pY = p?.y ?? 0;
               const textX = pX - textWidth / 2;
@@ -97,7 +100,7 @@ export default function StandardBarChart({
                       font={font}
                       x={textX}
                       y={textY}
-                      text={valStr}
+                      text={displayStr}
                       color={theme.textSecondary}
                     />
                   )}

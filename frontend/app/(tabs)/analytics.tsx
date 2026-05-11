@@ -10,6 +10,7 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  Modal,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useTheme } from '../../context/ThemeContext';
@@ -27,7 +28,6 @@ import StandardDonutChart from '../../components/StandardDonutChart';
 import AppCard from '../../components/AppCard';
 import SectionTitle from '../../components/SectionTitle';
 import EmptyState from '../../components/EmptyState';
-import HydrationTracker from '../../components/HydrationTracker';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 48;
@@ -224,17 +224,6 @@ interface OrganEffects {
   [key: string]: number | undefined;
 }
 
-interface ApiBioImpact {
-  energy?: number;
-  recovery?: number;
-  focus?: number;
-  stability?: number;
-  antioxidants?: number;
-  digestion?: number;
-  organ_effects?: OrganEffects;
-  [key: string]: number | OrganEffects | undefined;
-}
-
 function MacroDonutWithLabels({ data, hasAnyMacros, theme }: { data: any[]; hasAnyMacros: boolean; theme: any }) {
   const R = 90;
   const INNER_R = 60;
@@ -306,6 +295,7 @@ export default function AnalyticsScreen() {
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('week');
   const [weeklyData, setWeeklyData] = useState<any[]>([]);
   const [waterData, setWaterData] = useState<any[]>([]);
+  const [selectedHealthInsight, setSelectedHealthInsight] = useState<{ label: string; text: string } | null>(null);
   const [periodMealCount, setPeriodMealCount] = useState(0);
   const [macroDistribution, setMacroDistribution] = useState<any[]>([]);
   const [mealTypeBreakdown, setMealTypeBreakdown] = useState<any>({});
@@ -343,39 +333,9 @@ export default function AnalyticsScreen() {
   const [topFoods, setTopFoods] = useState<any[]>([]);
   const [ingredientInsights, setIngredientInsights] = useState<any[]>([]);
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
-  const [bioImpact, setBioImpact] = useState<any>({
-    energy: 0,
-    recovery: 0,
-    focus: 0,
-    stability: 0,
-    antioxidants: 0,
-    digestion: 0,
-    organEffects: {
-      heart: 0,
-      liver: 0,
-      kidney: 0,
-      brain: 0,
-      skin: 0,
-    },
-  });
 
   const resetAiSections = useCallback(() => {
     setAiAnalysis(null);
-    setBioImpact({
-      energy: 0,
-      recovery: 0,
-      focus: 0,
-      stability: 0,
-      antioxidants: 0,
-      digestion: 0,
-      organEffects: {
-        heart: 0,
-        liver: 0,
-        kidney: 0,
-        brain: 0,
-        skin: 0,
-      },
-    });
   }, []);
 
   const processTopFoods = useCallback((meals: any[]) => {
@@ -830,26 +790,6 @@ export default function AnalyticsScreen() {
           resetAiSections();
         } else {
           setAiAnalysis(aiData);
-          if (aiData.bio_impact && typeof aiData.bio_impact === 'object') {
-            const bio = aiData.bio_impact as ApiBioImpact;
-            setBioImpact({
-              energy: bio.energy ?? 0,
-              recovery: bio.recovery ?? 0,
-              focus: bio.focus ?? 0,
-              stability: bio.stability ?? 0,
-              antioxidants: bio.antioxidants ?? 0,
-              digestion: bio.digestion ?? 0,
-              organEffects: {
-                heart: bio.organ_effects?.heart ?? 0,
-                liver: bio.organ_effects?.liver ?? 0,
-                kidney: bio.organ_effects?.kidney ?? 0,
-                brain: bio.organ_effects?.brain ?? 0,
-                skin: bio.organ_effects?.skin ?? 0,
-              },
-            });
-          } else {
-            resetAiSections();
-          }
         }
       } catch (err) {
         console.warn('[Analytics] Bundle fetch failed, falling back to legacy flow:', err);
@@ -883,26 +823,6 @@ export default function AnalyticsScreen() {
           resetAiSections();
         } else {
           setAiAnalysis(aiData);
-          if (aiData.bio_impact && typeof aiData.bio_impact === 'object') {
-            const bio = aiData.bio_impact as ApiBioImpact;
-            setBioImpact({
-              energy: bio.energy ?? 0,
-              recovery: bio.recovery ?? 0,
-              focus: bio.focus ?? 0,
-              stability: bio.stability ?? 0,
-              antioxidants: bio.antioxidants ?? 0,
-              digestion: bio.digestion ?? 0,
-              organEffects: {
-                heart: bio.organ_effects?.heart ?? 0,
-                liver: bio.organ_effects?.liver ?? 0,
-                kidney: bio.organ_effects?.kidney ?? 0,
-                brain: bio.organ_effects?.brain ?? 0,
-                skin: bio.organ_effects?.skin ?? 0,
-              },
-            });
-          } else {
-            resetAiSections();
-          }
         }
       }
     } catch (error) {
@@ -1039,9 +959,6 @@ export default function AnalyticsScreen() {
             </View>
           </View>
         </AnimatedCard>
-
-        <HydrationTracker userId={user?.id} delay={125} readOnly={true} />
-
         <AnimatedCard delay={150} type="slide" style={styles.section}>
           <InsightHeader
             title="Micronutrients (Daily Avg)"
@@ -1186,6 +1103,7 @@ export default function AnalyticsScreen() {
                     labelWidth={timeRange === 'week' ? 56 : (timeRange === 'month' ? 70 : 50)}
                     showValuesAsTopLabel
                     maxValueFallback={3000}
+                    unit="kcal"
                   />
                 </View>
               </ScrollView>
@@ -1212,6 +1130,7 @@ export default function AnalyticsScreen() {
                     labelWidth={timeRange === 'week' ? 56 : (timeRange === 'month' ? 70 : 50)}
                     showValuesAsTopLabel
                     maxValueFallback={3000}
+                    unit="ml"
                   />
                 </View>
               </ScrollView>
@@ -1353,90 +1272,38 @@ export default function AnalyticsScreen() {
             <View style={styles.healthInsightsCard}>
               <View style={styles.organGrid}>
                 {[
-                  { label: 'Heart', key: 'heart', score: bioImpact.organEffects.heart, icon: 'heart', color: Colors.error },
-                  { label: 'Liver', key: 'liver', score: bioImpact.organEffects.liver, icon: 'shield-checkmark', color: Colors.success },
-                  { label: 'Kidney', key: 'kidney', score: bioImpact.organEffects.kidney, icon: 'water', color: Colors.info },
-                  { label: 'Brain', key: 'brain', score: bioImpact.organEffects.brain, icon: 'flash', color: Colors.warning },
-                  { label: 'Skin', key: 'skin', score: bioImpact.organEffects.skin, icon: 'sparkles', color: theme.primary },
+                  { label: 'Heart', key: 'heart', icon: 'heart', color: Colors.error },
+                  { label: 'Liver', key: 'liver', icon: 'shield-checkmark', color: Colors.success },
+                  { label: 'Kidney', key: 'kidney', icon: 'water', color: Colors.info },
+                  { label: 'Brain', key: 'brain', icon: 'flash', color: Colors.warning },
+                  { label: 'Skin', key: 'skin', icon: 'sparkles', color: theme.primary },
                 ].map((organ, index) => (
-                  <View key={index} style={styles.organItem}>
-                    <View style={[styles.organIconContainer, { backgroundColor: organ.color + '15' }]}>
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.organItem}
+                    onPress={() => {
+                      if (aiAnalysis?.health_insights?.[organ.key]) {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                        setSelectedHealthInsight({
+                          label: organ.label,
+                          text: aiAnalysis.health_insights[organ.key],
+                        });
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.organIconContainer, { backgroundColor: organ.color + '15' }]}>                      
                       <Ionicons name={organ.icon as any} size={20} color={organ.color} />
                     </View>
                     <View style={styles.organInfo}>
-                      <View style={styles.organHeader}>
-                        <Text style={styles.organLabel}>{organ.label}</Text>
-                        <Text style={[styles.organScore, { color: organ.score < 50 ? Colors.error : (organ.score < 80 ? Colors.warning : Colors.success) }]}>
-                          {organ.score}%
-                        </Text>
-                      </View>
-                      <View style={styles.organProgressBg}>
-                        <View
-                          style={[
-                            styles.organProgressFill,
-                            {
-                              width: `${organ.score}%`,
-                              backgroundColor: organ.score < 50 ? Colors.error : (organ.score < 80 ? Colors.warning : Colors.success)
-                            }
-                          ]}
-                        />
-                      </View>
+                      <Text style={styles.organLabel}>{organ.label}</Text>
                       {aiAnalysis?.health_insights?.[organ.key] && (
                         <Text style={styles.organInsightText} numberOfLines={2} ellipsizeMode="tail">
                           {aiAnalysis.health_insights[organ.key]}
                         </Text>
                       )}
                     </View>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-        </AnimatedCard>
-
-        <AnimatedCard delay={550} type="slide" style={styles.section}>
-          <SectionTitle title="Biological Impact" />
-          {isInactivePeriod ? (
-            <EmptyState
-              icon="analytics-outline"
-              title="No meals logged"
-              titleStyle={styles.emptyFoodsText}
-            />
-          ) : (
-            <View style={styles.healthInsightsCard}>
-              <View style={styles.organGrid}>
-                {[
-                  { label: 'Energy Levels', value: bioImpact.energy, icon: 'flash', color: Colors.warning },
-                  { label: 'Muscle Recovery', value: bioImpact.recovery, icon: 'barbell', color: Colors.error },
-                  { label: 'Mental Focus', value: bioImpact.focus, icon: 'eye', color: Colors.info },
-                  { label: 'Sugar Stability', value: bioImpact.stability, icon: 'pulse', color: Colors.success },
-                  { label: 'Antioxidant Load', value: bioImpact.antioxidants, icon: 'leaf', color: theme.primary },
-                  { label: 'Digestive Ease', value: bioImpact.digestion, icon: 'water', color: Colors.info },
-                ].map((item, index) => (
-                  <View key={index} style={styles.organItem}>
-                    <View style={[styles.organIconContainer, { backgroundColor: item.color + '15' }]}>
-                      <Ionicons name={item.icon as any} size={20} color={item.color} />
-                    </View>
-                    <View style={styles.organInfo}>
-                      <View style={styles.organHeader}>
-                        <Text style={styles.organLabel}>{item.label}</Text>
-                        <Text style={[styles.organScore, { color: item.color }]}>
-                          {item.value}%
-                        </Text>
-                      </View>
-                      <View style={styles.organProgressBg}>
-                        <View
-                          style={[
-                            styles.organProgressFill,
-                            {
-                              width: `${item.value}%`,
-                              backgroundColor: item.color
-                            }
-                          ]}
-                        />
-                      </View>
-                    </View>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             </View>
@@ -1476,6 +1343,70 @@ export default function AnalyticsScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      <Modal
+        visible={!!selectedHealthInsight}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedHealthInsight(null)}
+      >
+        <TouchableOpacity
+          style={styles.healthInsightModalOverlay}
+          activeOpacity={1}
+          onPress={() => setSelectedHealthInsight(null)}
+        >
+          <View style={styles.healthInsightModalContent}>
+            <View style={styles.healthInsightModalHeader}>
+              <Text style={styles.healthInsightModalTitle}>{selectedHealthInsight?.label}</Text>
+              <TouchableOpacity
+                style={styles.healthInsightModalCloseButton}
+                onPress={() => setSelectedHealthInsight(null)}
+              >
+                <Ionicons name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.healthInsightModalText}>{selectedHealthInsight?.text}</Text>
+            {(() => {
+              const key = selectedHealthInsight?.label?.toLowerCase() || '';
+              const recommendedKey = `${key}_recommended_foods`;
+              const culpritKey = `${key}_culprit_foods`;
+              const recommendedFoods = aiAnalysis?.health_insights?.[recommendedKey] || [];
+              const culpritFoods = aiAnalysis?.health_insights?.[culpritKey] || [];
+              
+              if (recommendedFoods.length === 0 && culpritFoods.length === 0) return null;
+              
+              return (
+                <View style={styles.foodRecommendationsSection}>
+                  {recommendedFoods.length > 0 && (
+                    <View style={styles.foodSection}>
+                      <Text style={styles.foodSectionTitle}>Recommended foods:</Text>
+                      <View style={styles.foodChipsContainer}>
+                        {recommendedFoods.map((food: string, index: number) => (
+                          <View key={index} style={[styles.foodChip, styles.recommendedFoodChip]}>
+                            <Text style={styles.foodChipText}>{food}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                  {culpritFoods.length > 0 && (
+                    <View style={styles.foodSection}>
+                      <Text style={styles.foodSectionTitle}>Culprit foods:</Text>
+                      <View style={styles.foodChipsContainer}>
+                        {culpritFoods.map((food: string, index: number) => (
+                          <View key={index} style={[styles.foodChip, styles.culpritFoodChip]}>
+                            <Text style={styles.foodChipText}>{food}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                </View>
+              );
+            })()}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -1524,6 +1455,81 @@ function makeStyles(theme: typeof Colors) {
   },
   section: {
     marginBottom: 20,
+  },
+  healthInsightModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  healthInsightModalContent: {
+    backgroundColor: theme.white,
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 2,
+    borderColor: theme.border,
+    borderBottomWidth: 6,
+  },
+  healthInsightModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  healthInsightModalCloseButton: {
+    padding: 8,
+  },
+  healthInsightModalTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: theme.text,
+    textTransform: 'uppercase',
+    flex: 1,
+  },
+  healthInsightModalText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  foodRecommendationsSection: {
+    marginTop: 16,
+  },
+  foodSection: {
+    marginBottom: 12,
+  },
+  foodSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.text,
+    marginBottom: 6,
+  },
+  foodChipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  foodChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  recommendedFoodChip: {
+    backgroundColor: Colors.success + '20',
+    borderColor: Colors.success + '40',
+  },
+  culpritFoodChip: {
+    backgroundColor: Colors.error + '20',
+    borderColor: Colors.error + '40',
+  },
+  foodChipText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   toolCard: {
     width: '100%',
@@ -2013,14 +2019,6 @@ function makeStyles(theme: typeof Colors) {
     fontWeight: '700',
     color: theme.textSecondary,
     lineHeight: 16,
-  },
-  bioImpactCard: {
-    backgroundColor: theme.white,
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 2,
-    borderColor: theme.border,
-    borderBottomWidth: 8,
   },
   bioGrid: {
     flexDirection: 'row',
