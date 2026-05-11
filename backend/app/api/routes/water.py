@@ -47,6 +47,23 @@ async def get_today(
     return await service.get_today(user_id, tz_offset)
 
 
+class WaterHistoryRequest(BaseModel):
+    user_id: str
+    days: int = 7
+
+
+@router.get("/history/{user_id}")
+async def get_history(
+    user_id: str,
+    days: int = 7,
+    uid: str = Depends(get_current_uid),
+    service: WaterService = Depends(get_water_service),
+):
+    if uid != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return await service.get_history(user_id, days)
+
+
 @router.delete("/{log_id}")
 async def delete_log(
     log_id: str,

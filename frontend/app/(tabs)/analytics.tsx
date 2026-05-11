@@ -14,7 +14,7 @@ import {
 import { Colors } from '../../constants/Colors';
 import { useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
-import { mealApi, analyticsApi } from '../../utils/api';
+import { mealApi, analyticsApi, waterApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import Svg, { Line, G, Text as SvgText } from 'react-native-svg';
@@ -305,6 +305,7 @@ export default function AnalyticsScreen() {
   const [loading, setLoading] = useState(false);
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('week');
   const [weeklyData, setWeeklyData] = useState<any[]>([]);
+  const [waterData, setWaterData] = useState<any[]>([]);
   const [periodMealCount, setPeriodMealCount] = useState(0);
   const [macroDistribution, setMacroDistribution] = useState<any[]>([]);
   const [mealTypeBreakdown, setMealTypeBreakdown] = useState<any>({});
@@ -411,6 +412,107 @@ export default function AnalyticsScreen() {
       .slice(0, 4);
     setIngredientInsights(sortedIngredients);
   }, []);
+
+  const processWaterData = useCallback(async () => {
+    if (!user) return;
+    try {
+      const days = timeRange === 'week' ? 7 : (timeRange === 'month' ? 30 : 365);
+      const history = await waterApi.getHistory(user.id, days);
+      
+      let chartData: any[] = [];
+      
+      if (timeRange === 'week') {
+        // Last 7 days including today
+        const today = new Date();
+        const weekDates = Array.from({ length: 7 }, (_, i) => {
+          const d = new Date(today);
+          d.setDate(today.getDate() - (6 - i));
+          return d;
+        });
+
+        const dayTotals: any = {};
+        history.history.forEach((h: any) => {
+          dayTotals[h.date] = h.total_ml;
+        });
+
+        chartData = weekDates.map((d) => ({
+          label: format(d, 'EEE'),
+          value: dayTotals[format(d, 'yyyy-MM-dd')] || 0,
+          frontColor: Colors.info,
+          gradientColor: Colors.info + '40',
+          showGradient: true,
+          labelTextStyle: {
+            color: theme.textSecondary,
+            fontSize: 10,
+            fontWeight: '900',
+            width: 45,
+            textAlign: 'center',
+          },
+        }));
+      } else if (timeRange === 'month') {
+        // 30 days grouped into 5 buckets
+        const weekTotals: number[] = [0, 0, 0, 0, 0];
+        const now = new Date();
+
+        history.history.forEach((h: any) => {
+          const date = new Date(h.date);
+          const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+
+          if (diffDays < 7) weekTotals[4] += h.total_ml;
+          else if (diffDays < 14) weekTotals[3] += h.total_ml;
+          else if (diffDays < 21) weekTotals[2] += h.total_ml;
+          else if (diffDays < 28) weekTotals[1] += h.total_ml;
+          else if (diffDays < 30) weekTotals[0] += h.total_ml;
+        });
+
+        chartData = weekTotals.map((total, i) => ({
+          label: i === 0 ? 'Days 29-30' : `Week ${i}`,
+          value: total,
+          frontColor: Colors.info,
+          gradientColor: Colors.info + '40',
+          showGradient: true,
+          labelTextStyle: {
+            color: theme.textSecondary,
+            fontSize: 10,
+            fontWeight: '900',
+            width: 60,
+            textAlign: 'center',
+          },
+        }));
+      } else {
+        // Year - group by months
+        const monthTotals: number[] = new Array(12).fill(0);
+        const now = new Date();
+
+        history.history.forEach((h: any) => {
+          const date = new Date(h.date);
+          if (date.getFullYear() === now.getFullYear()) {
+            monthTotals[date.getMonth()] += h.total_ml;
+          }
+        });
+
+        const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        chartData = monthTotals.map((total, i) => ({
+          label: monthLabels[i],
+          value: total,
+          frontColor: Colors.info,
+          gradientColor: Colors.info + '40',
+          showGradient: true,
+          labelTextStyle: {
+            color: theme.textSecondary,
+            fontSize: 10,
+            fontWeight: '900',
+            width: 45,
+            textAlign: 'center',
+          },
+        }));
+      }
+
+      setWaterData(chartData);
+    } catch (err) {
+      console.error('[Analytics] Water data fetch failed:', err);
+    }
+  }, [user, timeRange, theme]);
 
   const processWeeklyData = useCallback((meals: any[]) => {
     const dayTotals: any = {};
@@ -710,6 +812,7 @@ export default function AnalyticsScreen() {
         processMealTypeBreakdown(meals);
         processTopFoods(meals);
         calculateAverages(meals);
+        processWaterData();
 
         // If analytics cache is stale (or missing), refresh and re-fetch to show AI data
         if ((bundle as any)?.stale && meals.length > 0) {
@@ -772,6 +875,7 @@ export default function AnalyticsScreen() {
         processMealTypeBreakdown(meals);
         processTopFoods(meals);
         calculateAverages(meals);
+        processWaterData();
 
         const aiData = await analyticsApi.getAnalytics(user.id, timeRange);
         const isInactive = !!(aiData as any)?.inactive || meals.length === 0;
@@ -806,7 +910,7 @@ export default function AnalyticsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [user, timeRange, processWeeklyData, processMacroDistribution, processMealTypeBreakdown, calculateAverages, processTopFoods, resetAiSections]);
+  }, [user, timeRange, processWeeklyData, processMacroDistribution, processMealTypeBreakdown, calculateAverages, processTopFoods, processWaterData, resetAiSections]);
 
   useEffect(() => {
     if (user) {
@@ -1075,6 +1179,32 @@ export default function AnalyticsScreen() {
                 <View style={[styles.chartWrapper, { padding: 20 }]}>
                   <StandardBarChart
                     data={weeklyData}
+                    width={timeRange === 'week' ? CARD_WIDTH - 40 : (timeRange === 'month' ? CARD_WIDTH - 40 : CARD_WIDTH * 2)}
+                    height={200}
+                    barWidth={timeRange === 'week' ? 20 : (timeRange === 'month' ? 40 : 28)}
+                    spacing={timeRange === 'week' ? 15 : (timeRange === 'month' ? 30 : 22)}
+                    labelWidth={timeRange === 'week' ? 56 : (timeRange === 'month' ? 70 : 50)}
+                    showValuesAsTopLabel
+                    maxValueFallback={3000}
+                  />
+                </View>
+              </ScrollView>
+            </AppCard>
+          </AnimatedCard>
+        )}
+
+        {waterData.length > 0 && (
+          <AnimatedCard delay={250} type="slide" style={styles.section}>
+            <SectionTitle title="Water Intake Trend" />
+            <AppCard style={styles.chartCard} padding={0}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingRight: 20 }}
+              >
+                <View style={[styles.chartWrapper, { padding: 20 }]}>
+                  <StandardBarChart
+                    data={waterData}
                     width={timeRange === 'week' ? CARD_WIDTH - 40 : (timeRange === 'month' ? CARD_WIDTH - 40 : CARD_WIDTH * 2)}
                     height={200}
                     barWidth={timeRange === 'week' ? 20 : (timeRange === 'month' ? 40 : 28)}

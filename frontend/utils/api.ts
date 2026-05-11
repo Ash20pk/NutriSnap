@@ -1019,6 +1019,10 @@ export const waterApi = {
     const response = await api.get(`/water/today/${userId}?tz_offset=${tzOffsetMinutes}`);
     return response.data;
   },
+  getHistory: async (userId: string, days: number = 7): Promise<{ history: { date: string; total_ml: number }[]; count: number }> => {
+    const response = await api.get(`/water/history/${userId}?days=${days}`);
+    return response.data;
+  },
   deleteLog: async (userId: string, logId: string): Promise<void> => {
     await api.delete(`/water/${logId}`, { params: { user_id: userId } });
   },

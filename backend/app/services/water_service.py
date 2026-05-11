@@ -76,6 +76,32 @@ class WaterService:
             raise HTTPException(status_code=404, detail="Log not found")
         return {"detail": "Deleted"}
 
+    async def get_history(self, user_id: str, days: int = 7) -> Dict[str, Any]:
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT 
+                    DATE(logged_at) as date,
+                    SUM(amount_ml) as total_ml
+                FROM water_logs
+                WHERE user_id = $1
+                  AND logged_at >= NOW() - INTERVAL '%s days'
+                GROUP BY DATE(logged_at)
+                ORDER BY date DESC
+                """ % days,
+                to_uuid(user_id),
+            )
+
+        history = [
+            {"date": str(r["date"]), "total_ml": r["total_ml"]}
+            for r in rows
+        ]
+        
+        return {
+            "history": history,
+            "count": len(history),
+        }
+
     async def update_goal(self, user_id: str, goal_ml: int) -> Dict[str, int]:
         if goal_ml <= 0:
             raise HTTPException(status_code=400, detail="goal_ml must be positive")
