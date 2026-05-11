@@ -458,6 +458,56 @@ class FeedService:
 
     # ── Save / Unsave ───────────────────────────────────────────────────────
 
+    async def get_saved_posts(
+        self,
+        user_id: str,
+        limit: int = 20,
+        cursor: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        uid = to_uuid(user_id)
+        cursor_ts = datetime.fromisoformat(cursor) if cursor else datetime.now(timezone.utc)
+
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    p.id, p.user_id, p.post_type, p.caption, p.metadata,
+                    p.reaction_count, p.comment_count, p.created_at,
+                    pr.name AS author_name, pr.username AS author_username,
+                    COALESCE(
+                        JSON_AGG(
+                            JSON_BUILD_OBJECT(
+                                'id', pm.id::text, 'media_url', pm.media_url,
+                                'media_type', pm.media_type, 'width', pm.width,
+                                'height', pm.height, 'sort_order', pm.sort_order
+                            ) ORDER BY pm.sort_order
+                        ) FILTER (WHERE pm.id IS NOT NULL), '[]'::json
+                    ) AS media,
+                    EXISTS(
+                        SELECT 1 FROM post_reactions r2
+                        WHERE r2.post_id = p.id AND r2.user_id = $1
+                    ) AS i_reacted,
+                    TRUE AS i_saved,
+                    NULL::json AS first_comment,
+                    sp.created_at AS saved_at
+                FROM saved_posts sp
+                JOIN posts p ON p.id = sp.post_id
+                JOIN profiles pr ON pr.id = p.user_id
+                LEFT JOIN post_media pm ON pm.post_id = p.id
+                WHERE sp.user_id = $1
+                  AND p.deleted_at IS NULL
+                  AND sp.created_at < $2
+                GROUP BY p.id, pr.name, pr.username, sp.created_at
+                ORDER BY sp.created_at DESC
+                LIMIT $3
+                """,
+                uid, cursor_ts, limit,
+            )
+
+        posts = [self._row_to_post(r) for r in rows]
+        next_cursor = rows[-1]["saved_at"].isoformat() if len(rows) == limit else None
+        return {"posts": posts, "next_cursor": next_cursor}
+
     async def toggle_save_post(self, user_id: str, post_id: str) -> Dict[str, Any]:
         uid = to_uuid(user_id)
         pid = to_uuid(post_id)

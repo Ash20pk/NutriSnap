@@ -43,6 +43,9 @@ export default function EditProfileScreen() {
   const [editUsernameDraft, setEditUsernameDraft] = useState('');
   const [editNameDraft, setEditNameDraft] = useState('');
   const [editBioDraft, setEditBioDraft] = useState('');
+  const [editWeightDraft, setEditWeightDraft] = useState('');
+  const [editHeightDraft, setEditHeightDraft] = useState('');
+  const [editAgeDraft, setEditAgeDraft] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
@@ -50,7 +53,10 @@ export default function EditProfileScreen() {
     setEditUsernameDraft((user?.username || '').toString());
     setEditNameDraft((user?.name || '').toString());
     setEditBioDraft((user?.bio || '').toString());
-  }, [user?.username, user?.name, user?.bio]);
+    setEditWeightDraft(user?.weight ? String(user.weight) : '');
+    setEditHeightDraft(user?.height ? String(user.height) : '');
+    setEditAgeDraft(user?.age ? String(user.age) : '');
+  }, [user?.username, user?.name, user?.bio, user?.weight, user?.height, user?.age]);
 
   const handleSaveProfile = async () => {
     if (!user) return;
@@ -62,9 +68,15 @@ export default function EditProfileScreen() {
     }
     try {
       setSavingProfile(true);
+      const weight = parseFloat(editWeightDraft);
+      const height = parseFloat(editHeightDraft);
+      const age = parseInt(editAgeDraft, 10);
       const updatePayload: any = {
         bio: editBioDraft.trim(),
-        name: editNameDraft.trim()
+        name: editNameDraft.trim(),
+        ...(editWeightDraft.trim() && !isNaN(weight) ? { weight } : {}),
+        ...(editHeightDraft.trim() && !isNaN(height) ? { height } : {}),
+        ...(editAgeDraft.trim() && !isNaN(age) ? { age } : {}),
       };
 
       const promises: Promise<any>[] = [userApi.updateMyProfile(updatePayload)];
@@ -80,7 +92,10 @@ export default function EditProfileScreen() {
         ...user,
         username: usernameRes ? usernameRes.username : user.username,
         name: editNameDraft.trim(),
-        bio: profileRes.bio ?? editBioDraft.trim()
+        bio: profileRes.bio ?? editBioDraft.trim(),
+        weight: profileRes.weight ?? (editWeightDraft.trim() ? parseFloat(editWeightDraft) : user.weight),
+        height: profileRes.height ?? (editHeightDraft.trim() ? parseFloat(editHeightDraft) : user.height),
+        age: profileRes.age ?? (editAgeDraft.trim() ? parseInt(editAgeDraft, 10) : user.age),
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -235,6 +250,57 @@ export default function EditProfileScreen() {
             <Text style={styles.charCount}>{editBioDraft.length}/160</Text>
           </View>
 
+          <Text style={styles.sectionDivider}>Body Stats</Text>
+
+          <View style={styles.rowInputGroup}>
+            <View style={[styles.inputGroup, { flex: 1 }]}>
+              <Text style={styles.inputLabel}>Weight (kg)</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="barbell-outline" size={18} color={theme.primary} style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.textInput}
+                  value={editWeightDraft}
+                  onChangeText={setEditWeightDraft}
+                  placeholder="e.g. 72"
+                  placeholderTextColor={theme.textLight}
+                  keyboardType="decimal-pad"
+                  selectionColor={theme.primary}
+                />
+              </View>
+            </View>
+            <View style={[styles.inputGroup, { flex: 1 }]}>
+              <Text style={styles.inputLabel}>Height (cm)</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="resize-outline" size={18} color={theme.primary} style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.textInput}
+                  value={editHeightDraft}
+                  onChangeText={setEditHeightDraft}
+                  placeholder="e.g. 175"
+                  placeholderTextColor={theme.textLight}
+                  keyboardType="decimal-pad"
+                  selectionColor={theme.primary}
+                />
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Age</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="calendar-outline" size={18} color={theme.primary} style={{ marginRight: 10 }} />
+              <TextInput
+                style={styles.textInput}
+                value={editAgeDraft}
+                onChangeText={setEditAgeDraft}
+                placeholder="e.g. 25"
+                placeholderTextColor={theme.textLight}
+                keyboardType="number-pad"
+                selectionColor={theme.primary}
+              />
+            </View>
+          </View>
+
           <DuoButton
             title={savingProfile ? 'Saving...' : 'Save Changes'}
             onPress={handleSaveProfile}
@@ -376,6 +442,19 @@ function makeStyles(theme: typeof Colors) {
       textAlign: 'right',
       marginTop: Spacing.xs,
       fontWeight: '700',
+    },
+    sectionDivider: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: theme.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+      marginBottom: Spacing.xl,
+      marginTop: Spacing.sm,
+    },
+    rowInputGroup: {
+      flexDirection: 'row',
+      gap: Spacing.lg,
     },
   });
 }

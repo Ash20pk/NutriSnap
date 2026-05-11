@@ -97,6 +97,16 @@ async def toggle_hype_compat(
 
 # ── Save ────────────────────────────────────────────────────────────────────
 
+@router.get("/saved")
+async def get_saved_posts(
+    limit: int = Query(20, ge=1, le=50),
+    cursor: Optional[str] = Query(None),
+    uid: str = Depends(get_current_uid),
+    service: FeedService = Depends(get_feed_service),
+):
+    return await service.get_saved_posts(uid, limit=limit, cursor=cursor)
+
+
 @router.post("/{post_id}/save")
 async def toggle_save(
     post_id: str,

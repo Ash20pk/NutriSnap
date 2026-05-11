@@ -165,17 +165,17 @@ export default function CreatePostSheet({ visible, onClose, onPosted }: Props) {
       >
         <View style={styles.overlay}>
           <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
-          <Animated.View style={[styles.sheet, { paddingBottom: insets.bottom + 8, transform: [{ translateY: slideAnim }] }]}>
+          <Animated.View style={[styles.sheet, { backgroundColor: theme.cardBackground, borderTopColor: theme.border, paddingBottom: insets.bottom + 8, transform: [{ translateY: slideAnim }] }]}>
             {/* Handle + top bar */}
-            <View style={styles.handle} />
-            <View style={styles.topBar}>
+            <View style={[styles.handle, { backgroundColor: theme.border }]} />
+            <View style={[styles.topBar, { borderBottomColor: theme.borderSubtle }]}>
               <TouchableOpacity onPress={step === 'compose' ? () => setStep('pick') : onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Text style={styles.topBarCancel}>{step === 'compose' ? 'Back' : 'Cancel'}</Text>
+                <Text style={[styles.topBarCancel, { color: theme.textSecondary }]}>{step === 'compose' ? 'Back' : 'Cancel'}</Text>
               </TouchableOpacity>
-              <Text style={styles.topBarTitle}>New Post</Text>
+              <Text style={[styles.topBarTitle, { color: theme.text }]}>New Post</Text>
               {step === 'compose' ? (
                 <TouchableOpacity
-                  style={[styles.postBtn, (!image || uploading) && styles.postBtnDisabled]}
+                  style={[styles.postBtn, { backgroundColor: theme.primary }, (!image || uploading) && styles.postBtnDisabled]}
                   onPress={handlePost}
                   disabled={!image || uploading}
                   activeOpacity={0.85}
@@ -193,18 +193,18 @@ export default function CreatePostSheet({ visible, onClose, onPosted }: Props) {
             {step === 'pick' ? (
               /* ── Pick step ── */
               <View style={styles.pickStep}>
-                <View style={styles.pickIconContainer}>
-                  <Ionicons name="images-outline" size={48} color={Colors.primary} />
+                <View style={[styles.pickIconContainer, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}>
+                  <Ionicons name="images-outline" size={48} color={theme.primary} />
                 </View>
                 <View style={{ alignItems: 'center', gap: 8 }}>
-                  <Text style={styles.pickTitle}>Share a Photo</Text>
-                  <Text style={styles.pickSub}>Show the world your progress, meals, or achievements!</Text>
+                  <Text style={[styles.pickTitle, { color: theme.text }]}>Share a Photo</Text>
+                  <Text style={[styles.pickSub, { color: theme.textSecondary }]}>Show the world your progress, meals, or achievements!</Text>
                 </View>
                 
                 <View style={{ width: '100%', gap: 12, marginTop: 12 }}>
-                  <TouchableOpacity style={styles.pickBtn} onPress={pickFromLibrary} activeOpacity={0.88}>
+                  <TouchableOpacity style={[styles.pickBtn, { backgroundColor: theme.primary }]} onPress={pickFromLibrary} activeOpacity={0.88}>
                     <LinearGradient
-                      colors={[Colors.primary, Colors.primary + 'CC']}
+                      colors={[theme.primary, theme.primary + 'CC']}
                       start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                       style={StyleSheet.absoluteFill}
                     />
@@ -212,9 +212,9 @@ export default function CreatePostSheet({ visible, onClose, onPosted }: Props) {
                     <Text style={styles.pickBtnText}>Choose from Library</Text>
                   </TouchableOpacity>
                   
-                  <TouchableOpacity style={[styles.pickBtn, styles.pickBtnOutline]} onPress={pickFromCamera} activeOpacity={0.88}>
-                    <Ionicons name="camera" size={20} color={Colors.primary} />
-                    <Text style={[styles.pickBtnText, { color: Colors.primary }]}>Take a Photo</Text>
+                  <TouchableOpacity style={[styles.pickBtn, styles.pickBtnOutline, { borderColor: theme.primary }]} onPress={pickFromCamera} activeOpacity={0.88}>
+                    <Ionicons name="camera" size={20} color={theme.primary} />
+                    <Text style={[styles.pickBtnText, { color: theme.primary }]}>Take a Photo</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -239,16 +239,16 @@ export default function CreatePostSheet({ visible, onClose, onPosted }: Props) {
                   </View>
                   <View style={styles.captionInputWrap}>
                     <TextInput
-                      style={styles.captionInput}
+                      style={[styles.captionInput, { color: theme.text }]}
                       placeholder="Write a caption…"
-                      placeholderTextColor="#aaa"
+                      placeholderTextColor={theme.textLight}
                       value={caption}
                       onChangeText={setCaption}
                       multiline
                       maxLength={MAX_CAPTION}
                       autoFocus
                     />
-                    <Text style={[styles.charCount, charsLeft < 100 && { color: charsLeft < 20 ? '#FF3D00' : Colors.warning }]}>
+                    <Text style={[styles.charCount, charsLeft < 100 && { color: charsLeft < 20 ? theme.error : theme.warning }]}>
                       {charsLeft}
                     </Text>
                   </View>

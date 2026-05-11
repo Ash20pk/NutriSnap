@@ -11,16 +11,15 @@ import {
   Easing,
   useWindowDimensions,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/Colors';
 import { useUser } from '../../context/UserContext';
 import { useTheme } from '../../context/ThemeContext';
 import { mealApi, questApi, postApi, ApiLeaderboardEntry, Post } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
-import { format } from 'date-fns';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import DuoButton from '../../components/DuoButton';
+import PageHeader from '../../components/PageHeader';
 import StreakCalendarModal from '../../components/StreakCalendarModal';
 import AchievementShareModal, { Achievement } from '../../components/AchievementShareModal';
 import PostCard from '../../components/PostCard';
@@ -36,7 +35,6 @@ export default function HomeScreen() {
   const { theme, isSpecialUser } = useTheme();
   const styles = makeStyles(theme);
   const { width: screenWidth } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
 
   const [stats, setStats] = useState<any>(null);
   const [questStats, setQuestStats] = useState<any>(null);
@@ -179,32 +177,29 @@ export default function HomeScreen() {
         }}
       />
 
-      {/* ── Header ─────────────────────────────── */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top + 8, 14) }]}>
-        <View>
-          <Text style={styles.headerGreeting}>
-            {isSpecialUser ? '🌸 Hey, you' : `Hey, ${user?.name?.split(' ')[0] ?? 'there'}`}
-          </Text>
-          <Text style={styles.headerDate}>{format(new Date(), 'EEEE, MMM d')}</Text>
-        </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.headerBtn}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowStreakCalendar(true); }}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="flame" size={16} color={Colors.highLevels} />
-            <Text style={styles.headerBtnText}>{questStats?.current_streak ?? 0}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerBtn}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); router.push('/(tabs)/profile'); }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="person-outline" size={16} color={theme.text} />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <PageHeader
+        title={`Hey, ${user?.name?.split(' ')[0] ?? 'there'} 🌸`}
+        subtitle={isSpecialUser ? 'Made with love for you ❤️' : undefined}
+        rightComponent={
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.headerBtn}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setShowStreakCalendar(true); }}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="flame" size={18} color={Colors.highLevels} />
+              <Text style={styles.headerBtnText}>{questStats?.current_streak ?? 0}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerIconBtn}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); router.push('/(tabs)/profile'); }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="person-outline" size={20} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+        }
+      />
 
       <ScrollView
         style={styles.flex}
@@ -216,8 +211,19 @@ export default function HomeScreen() {
       >
         {/* ── Today's Overview Card ───────────────── */}
         <View style={styles.overviewCard}>
+          {/* Progress Fill Background */}
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                backgroundColor: hasMetGoal ? Colors.success + '15' : theme.primary + '10',
+                width: `${Math.min(100, caloriesPct * 100)}%`,
+              }
+            ]}
+          />
+
           <View style={styles.overviewTopRow}>
-            <Text style={styles.overviewLabel}>Today's Progress</Text>
+            <Text style={styles.overviewLabel}>Today&apos;s Energy</Text>
             {currentUserRank && (
               <View style={styles.rankChip}>
                 <Ionicons name="podium-outline" size={11} color={Colors.warning} />
@@ -226,39 +232,26 @@ export default function HomeScreen() {
             )}
           </View>
 
-          <View style={styles.calRow}>
-            <View>
-              <Text style={styles.calEaten}>{caloriesEaten.toLocaleString()}</Text>
-              <Text style={styles.calLabel}>of {caloriesTarget.toLocaleString()} kcal</Text>
+          <View style={styles.energyMain}>
+            <View style={styles.energyStatItemLeft}>
+              <Text style={styles.energyStatValueLarge}>{caloriesEaten.toLocaleString()}</Text>
+              <Text style={styles.energyStatLabel}>Eaten</Text>
             </View>
-            <View style={[styles.calBubble, hasMetGoal && styles.calBubbleGoal]}>
-              <Text style={[styles.calPct, hasMetGoal && { color: Colors.success }]}>
-                {Math.round(caloriesPct * 100)}%
-              </Text>
-              <Text style={styles.calPctSub}>{hasMetGoal ? '🎯 Goal!' : `${caloriesLeft} left`}</Text>
+            <View style={styles.energyStatItemRight}>
+              <Text style={styles.energyStatValueLarge}>{caloriesTarget.toLocaleString()}</Text>
+              <Text style={styles.energyStatLabel}>Target</Text>
             </View>
           </View>
 
-          <View style={styles.barTrack}>
-            <Animated.View
-              style={[
-                styles.barFill,
-                hasMetGoal && { backgroundColor: Colors.success },
-                { width: barAnim.interpolate({ inputRange: [0, 1], outputRange: [0, barWidth] }) },
-              ]}
-            />
-          </View>
-
-          <View style={styles.macroPills}>
+          <View style={styles.macroStrip}>
             {[
-              { label: 'P', val: Math.round(stats?.total_protein || 0), target: Math.round(stats?.targets?.protein || 150), color: Colors.protein },
-              { label: 'C', val: Math.round(stats?.total_carbs || 0), target: Math.round(stats?.targets?.carbs || 250), color: Colors.carbs },
-              { label: 'F', val: Math.round(stats?.total_fat || 0), target: Math.round(stats?.targets?.fat || 65), color: Colors.fat },
+              { label: 'Pro', val: Math.round(stats?.total_protein || 0), color: Colors.protein },
+              { label: 'Carb', val: Math.round(stats?.total_carbs || 0), color: Colors.carbs },
+              { label: 'Fat', val: Math.round(stats?.total_fat || 0), color: Colors.fat },
             ].map(m => (
-              <View key={m.label} style={styles.macroPill}>
-                <View style={[styles.macroPillDot, { backgroundColor: m.color }]} />
-                <Text style={styles.macroPillVal}>{m.val}g</Text>
-                <Text style={styles.macroPillTarget}>/ {m.target}g</Text>
+              <View key={m.label} style={styles.macroStripItem}>
+                <Text style={[styles.macroStripValue, { color: m.color }]}>{m.val}g</Text>
+                <Text style={styles.macroStripLabel}>{m.label}</Text>
               </View>
             ))}
           </View>
@@ -297,7 +290,7 @@ export default function HomeScreen() {
         {loading && feedPosts.length === 0 ? (
           renderFeedSkeleton()
         ) : (
-          <>
+          <View style={{ paddingHorizontal: 16 }}>
             {feedPosts.length === 0 && (
               <View style={styles.emptyFeed}>
                 <Ionicons name="globe-outline" size={36} color={theme.textLight} />
@@ -321,7 +314,7 @@ export default function HomeScreen() {
                 onDeleted={id => setFeedPosts(prev => prev.filter(p => p.id !== id))}
               />
             ))}
-          </>
+          </View>
         )}
 
         {nextCursor && !loadingMore && (
@@ -351,7 +344,7 @@ export default function HomeScreen() {
             </View>
             <Text style={styles.goalTitle}>Daily Goal</Text>
             <Text style={[styles.goalTitle, { color: theme.primary }]}>Crushed!</Text>
-            <Text style={styles.goalBody}>You've hit your calorie target for today. Consistency is key!</Text>
+            <Text style={styles.goalBody}>You&apos;ve hit your calorie target for today. Consistency is key!</Text>
             <View style={styles.goalStatsRow}>
               <View style={styles.goalStat}>
                 <Text style={styles.goalStatVal}>{caloriesEaten.toLocaleString()}</Text>
@@ -395,46 +388,45 @@ function makeStyles(theme: typeof Colors) {
     scrollContent: { paddingBottom: 100 },
 
     // Header
-    header: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingHorizontal: 16,
-      paddingTop: 14,
-      paddingBottom: 10,
-      backgroundColor: theme.white,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-    },
-    headerGreeting: { fontSize: 20, fontWeight: '900', color: theme.text },
-    headerDate: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginTop: 2 },
     headerActions: { flexDirection: 'row', gap: 8 },
     headerBtn: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 5,
-      backgroundColor: theme.backgroundSecondary,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 20,
+      justifyContent: 'center',
+      gap: 6,
+      backgroundColor: theme.white,
+      paddingHorizontal: 14,
+      height: 44,
+      borderRadius: 14,
       borderWidth: 2,
       borderColor: theme.border,
       borderBottomWidth: 4,
     },
-    headerBtnText: { fontSize: 14, fontWeight: '900', color: theme.text },
+    headerIconBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      backgroundColor: theme.white,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderBottomWidth: 4,
+    },
+    headerBtnText: { fontSize: 15, fontWeight: '800', color: theme.text },
 
     // Overview card
     overviewCard: {
       margin: 12,
       backgroundColor: theme.white,
       borderRadius: 24,
-      padding: 16,
+      padding: 20,
       borderWidth: 2,
       borderColor: theme.border,
       borderBottomWidth: 6,
-      gap: 12,
+      overflow: 'hidden',
     },
-    overviewTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    overviewTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
     overviewLabel: { fontSize: 12, fontWeight: '800', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8 },
     rankChip: {
       flexDirection: 'row', alignItems: 'center', gap: 4,
@@ -442,37 +434,58 @@ function makeStyles(theme: typeof Colors) {
       borderRadius: 20, borderWidth: 1.5, borderColor: Colors.warning + '35',
     },
     rankChipText: { fontSize: 11, fontWeight: '800', color: Colors.warning },
-    calRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    calEaten: { fontSize: 36, fontWeight: '900', color: theme.text, letterSpacing: -1 },
-    calLabel: { fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginTop: 2 },
-    calBubble: {
-      width: 72, height: 72, borderRadius: 20,
-      backgroundColor: theme.backgroundSecondary,
-      alignItems: 'center', justifyContent: 'center',
-      borderWidth: 2, borderColor: theme.primary,
-      borderBottomWidth: 5, borderBottomColor: theme.primary + '40',
+    energyMain: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
+      paddingBottom: 16,
     },
-    calBubbleGoal: { borderColor: Colors.success, borderBottomColor: Colors.success + '40' },
-    calPct: { fontSize: 20, fontWeight: '900', color: theme.primary },
-    calPctSub: { fontSize: 10, fontWeight: '700', color: theme.textSecondary, marginTop: 2 },
-    barTrack: { height: 10, backgroundColor: theme.backgroundSecondary, borderRadius: 5, overflow: 'hidden', borderWidth: 1, borderColor: theme.border },
-    barFill: { height: '100%', backgroundColor: theme.primary, borderRadius: 5 },
-    macroPills: { flexDirection: 'row', gap: 8 },
-    macroPill: {
-      flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4,
-      backgroundColor: theme.backgroundSecondary,
-      paddingHorizontal: 8, paddingVertical: 7,
-      borderRadius: 12, borderWidth: 1.5, borderColor: theme.border,
+    energyStatItemLeft: {
+      alignItems: 'flex-start',
     },
-    macroPillDot: { width: 7, height: 7, borderRadius: 4 },
-    macroPillVal: { fontSize: 13, fontWeight: '900', color: theme.text },
-    macroPillTarget: { fontSize: 11, fontWeight: '600', color: theme.textSecondary },
+    energyStatItemRight: {
+      alignItems: 'flex-end',
+    },
+    energyStatValueLarge: {
+      fontSize: 36,
+      fontWeight: '900',
+      color: theme.text,
+      letterSpacing: -1,
+    },
+    energyStatLabel: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: theme.textSecondary,
+      marginTop: -2,
+    },
+    macroStrip: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingTop: 16,
+      marginBottom: 16,
+      borderTopWidth: 1,
+      borderTopColor: theme.border + '40',
+    },
+    macroStripItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    macroStripValue: {
+      fontSize: 14,
+      fontWeight: '900',
+    },
+    macroStripLabel: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: theme.textSecondary,
+      textTransform: 'uppercase',
+    },
     logCta: {
-      flexDirection: 'row', alignItems: 'center', gap: 10,
-      borderRadius: 14, paddingVertical: 13, paddingHorizontal: 16, overflow: 'hidden',
-    },
-    logCtaText: { flex: 1, fontSize: 14, fontWeight: '900', color: '#fff' },
-
+            flexDirection: 'row', alignItems: 'center', gap: 10,
+            borderRadius: 14, paddingVertical: 13, paddingHorizontal: 16, overflow: 'hidden',
+          },
+          logCtaText: { flex: 1, fontSize: 14, fontWeight: '900', color: '#fff' },
     // Feed header row
     feedHeaderRow: {
       flexDirection: 'row', alignItems: 'center',

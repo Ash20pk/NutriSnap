@@ -58,6 +58,7 @@ interface Props {
 
 export default function PostCard({ post, currentUserId, onCommentPress, onDeleted }: Props) {
   const { theme } = useTheme();
+  const styles = makeStyles(theme);
   const router = useRouter();
   const [reacted, setReacted] = useState(post.i_reacted);
   const [reactionCount, setReactionCount] = useState(post.reaction_count);
@@ -344,158 +345,159 @@ export default function PostCard({ post, currentUserId, onCommentPress, onDelete
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#fff',
-    marginHorizontal: 12,
-    marginBottom: 16,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: '#e8e8e8',
-    borderBottomWidth: 6,
-    overflow: 'hidden',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 12,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(0,0,0,0.08)',
-  },
-  avatarText: { fontSize: 16, fontWeight: '900', color: '#fff' },
-  authorName: { fontSize: 15, fontWeight: '900', color: '#111' },
-  timeAgo: { fontSize: 12, fontWeight: '700', color: '#999', marginTop: 1 },
+function makeStyles(theme: any) {
+  return StyleSheet.create({
+    card: {
+      backgroundColor: theme.white,
+      marginBottom: 16,
+      borderRadius: 24,
+      borderWidth: 2,
+      borderColor: theme.border,
+      borderBottomWidth: 10,
+      overflow: 'hidden',
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 16,
+      paddingTop: 14,
+      paddingBottom: 12,
+    },
+    avatar: {
+      width: 44,
+      height: 44,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: 'rgba(0,0,0,0.08)',
+    },
+    avatarText: { fontSize: 16, fontWeight: '900', color: '#fff' },
+    authorName: { fontSize: 15, fontWeight: '900', color: theme.text },
+    timeAgo: { fontSize: 12, fontWeight: '700', color: theme.textLight, marginTop: 1 },
 
-  photo: { width: '100%', height: 300 },
-  shareOverlay: {
-    position: 'absolute',
-    bottom: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.38)',
-    borderRadius: 20,
-    padding: 7,
-  },
-  bigHeart: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    justifyContent: 'center', alignItems: 'center',
-    zIndex: 10,
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 4 },
-    textShadowRadius: 10,
-  },
+    photo: { width: '100%', height: 300 },
+    shareOverlay: {
+      position: 'absolute',
+      bottom: 10,
+      right: 10,
+      backgroundColor: 'rgba(0,0,0,0.38)',
+      borderRadius: 20,
+      padding: 7,
+    },
+    bigHeart: {
+      position: 'absolute',
+      top: 0, left: 0, right: 0, bottom: 0,
+      justifyContent: 'center', alignItems: 'center',
+      zIndex: 10,
+      textShadowColor: 'rgba(0,0,0,0.3)',
+      textShadowOffset: { width: 0, height: 4 },
+      textShadowRadius: 10,
+    },
 
-  gradientContent: {
-    marginHorizontal: 12,
-    marginBottom: 4,
-    borderRadius: 16,
-    paddingVertical: 28,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    gap: 10,
-  },
-  gradientEmoji: { fontSize: 52 },
-  gradientTitle: { fontSize: 18, fontWeight: '900', color: '#fff', textAlign: 'center' },
-  xpPill: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 14, paddingVertical: 5,
-    borderRadius: 12, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)',
-  },
-  xpText: { fontSize: 13, fontWeight: '900', color: '#fff' },
+    gradientContent: {
+      marginHorizontal: 12,
+      marginBottom: 4,
+      borderRadius: 16,
+      paddingVertical: 28,
+      paddingHorizontal: 20,
+      alignItems: 'center',
+      gap: 10,
+    },
+    gradientEmoji: { fontSize: 52 },
+    gradientTitle: { fontSize: 18, fontWeight: '900', color: '#fff', textAlign: 'center' },
+    xpPill: {
+      backgroundColor: 'rgba(255,255,255,0.25)',
+      paddingHorizontal: 14, paddingVertical: 5,
+      borderRadius: 12, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)',
+    },
+    xpText: { fontSize: 13, fontWeight: '900', color: '#fff' },
 
-  captionText: {
-    paddingHorizontal: 14,
-    paddingBottom: 12,
-    fontSize: 14,
-    color: '#222',
-    lineHeight: 20,
-    fontWeight: '400',
-  },
-  captionAuthor: { fontWeight: '900', color: '#111' },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  actionCount: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#888',
-  },
-  saveBtn: {
-    marginLeft: 'auto',
-  },
+    captionText: {
+      paddingHorizontal: 14,
+      paddingBottom: 12,
+      fontSize: 14,
+      color: theme.text,
+      lineHeight: 20,
+      fontWeight: '400',
+    },
+    captionAuthor: { fontWeight: '900', color: theme.text },
+    actions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+      gap: 16,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+    },
+    actionBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+    },
+    actionCount: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: theme.textLight,
+    },
+    saveBtn: {
+      marginLeft: 'auto',
+    },
 
-  // Options modal
-  optionsBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
-  },
-  optionsSheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingBottom: 32,
-    paddingTop: 8,
-    borderTopWidth: 2,
-    borderColor: '#e8e8e8',
-  },
-  optionsHandle: {
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: '#ddd', alignSelf: 'center', marginBottom: 12,
-  },
-  optionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    gap: 14,
-  },
-  optionIcon: {
-    width: 40, height: 40, borderRadius: 14,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  optionLabel: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#111',
-  },
-  optionDivider: {
-    height: 1,
-    backgroundColor: '#f0f0f0',
-    marginHorizontal: 20,
-  },
-  optionCancel: {
-    justifyContent: 'center',
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  optionCancelText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#888',
-    flex: 1,
-    textAlign: 'center',
-  },
-});
+    // Options modal
+    optionsBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.45)',
+      justifyContent: 'flex-end',
+    },
+    optionsSheet: {
+      backgroundColor: theme.white,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      paddingBottom: 32,
+      paddingTop: 8,
+      borderTopWidth: 2,
+      borderColor: theme.border,
+    },
+    optionsHandle: {
+      width: 40, height: 4, borderRadius: 2,
+      backgroundColor: theme.border, alignSelf: 'center', marginBottom: 12,
+    },
+    optionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingVertical: 14,
+      gap: 14,
+    },
+    optionIcon: {
+      width: 40, height: 40, borderRadius: 14,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    optionLabel: {
+      flex: 1,
+      fontSize: 15,
+      fontWeight: '700',
+      color: theme.text,
+    },
+    optionDivider: {
+      height: 1,
+      backgroundColor: theme.border,
+      marginHorizontal: 20,
+    },
+    optionCancel: {
+      justifyContent: 'center',
+      marginTop: 8,
+      borderTopWidth: 1,
+      borderTopColor: theme.border,
+    },
+    optionCancelText: {
+      fontSize: 15,
+      fontWeight: '800',
+      color: theme.textLight,
+      flex: 1,
+      textAlign: 'center',
+    },
+  });
+}

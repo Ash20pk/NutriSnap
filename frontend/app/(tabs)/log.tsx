@@ -12,11 +12,12 @@ import {
   Alert,
   Animated,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
-import { mealApi, Meal } from '../../utils/api';
+import { mealApi, Meal, waterApi, WaterToday } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import PageHeader from '../../components/PageHeader';
@@ -53,6 +54,8 @@ export default function LogScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [todayMeals, setTodayMeals] = useState<Meal[]>([]);
   const [todayStats, setTodayStats] = useState<any>(null);
+  const [waterData, setWaterData] = useState<WaterToday | null>(null);
+  const [waterLoading, setWaterLoading] = useState(false);
   const [selectedMeal, setSelectedMeal] = useState<Meal | null>(null);
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -73,9 +76,10 @@ export default function LogScreen() {
   const fetchTodayData = useCallback(async () => {
     if (!user) return;
     try {
-      const [result, stats] = await Promise.all([
+      const [result, stats, water] = await Promise.all([
         mealApi.getHistory(user.id, 2),
         mealApi.getStats(user.id),
+        waterApi.getToday(user.id),
       ]);
       const today = new Date().toDateString();
       const todays = (result.meals as Meal[]).filter(
@@ -83,8 +87,25 @@ export default function LogScreen() {
       );
       setTodayMeals(todays);
       setTodayStats(stats);
+      setWaterData(water);
     } catch (e) {
       console.error('Error fetching today data:', e);
+    }
+  }, [user]);
+
+  const handleLogWater = useCallback(async (amountMl: number) => {
+    if (!user) return;
+    setWaterLoading(true);
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      await waterApi.logWater(user.id, amountMl);
+      const water = await waterApi.getToday(user.id);
+      setWaterData(water);
+    } catch (e) {
+      console.error('Error logging water:', e);
+      Alert.alert('Error', 'Failed to log water intake');
+    } finally {
+      setWaterLoading(false);
     }
   }, [user]);
 
@@ -409,10 +430,10 @@ export default function LogScreen() {
     <View style={styles.container}>
       <PageHeader 
         title="Log Your Meal" 
-        subtitle="Choose your meal type"
+        subtitle="Track your nutrition"
         rightComponent={
           <TouchableOpacity
-            style={styles.profileIconButton}
+            style={styles.headerBtn}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               router.push('/(tabs)/profile');
@@ -431,9 +452,109 @@ export default function LogScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />
         }
       >
+        {/* Today's Energy — same card as home screen */}
+        {(() => {
+          const eaten = Math.round(todayStats?.total_calories || 0);
+          const target = Math.round(todayStats?.targets?.calories || 2000);
+          const pct = Math.min(1, eaten / target);
+          const goalMet = pct >= 0.8 && pct <= 1.2;
+          return (
+            <View style={styles.overviewCard}>
+              <View
+                style={[
+                  StyleSheet.absoluteFill,
+                  { backgroundColor: goalMet ? Colors.success + '15' : theme.primary + '10', width: `${Math.min(100, pct * 100)}%` },
+                ]}
+              />
+              <View style={styles.overviewTopRow}>
+                <Text style={styles.overviewLabel}>Today&apos;s Energy</Text>
+              </View>
+              <View style={styles.overviewEnergyMain}>
+                <View style={styles.overviewEnergyLeft}>
+                  <Text style={styles.overviewEnergyLarge}>{eaten.toLocaleString()}</Text>
+                  <Text style={styles.overviewEnergyStatLabel}>Eaten</Text>
+                </View>
+                <View style={styles.overviewEnergyRight}>
+                  <Text style={styles.overviewEnergyLarge}>{target.toLocaleString()}</Text>
+                  <Text style={styles.overviewEnergyStatLabel}>Target</Text>
+                </View>
+              </View>
+              <View style={styles.overviewMacroStrip}>
+                {[
+                  { label: 'Pro',  val: Math.round(todayStats?.total_protein || 0), color: Colors.protein },
+                  { label: 'Carb', val: Math.round(todayStats?.total_carbs   || 0), color: Colors.carbs   },
+                  { label: 'Fat',  val: Math.round(todayStats?.total_fat      || 0), color: Colors.fat     },
+                ].map(m => (
+                  <View key={m.label} style={styles.overviewMacroItem}>
+                    <Text style={[styles.overviewMacroValue, { color: m.color }]}>{m.val}g</Text>
+                    <Text style={styles.overviewMacroLabel}>{m.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          );
+        })()}
+
+        {/* Water Intake */}
+        <AnimatedCard delay={150} type="slide" style={styles.glanceSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Hydration</Text>
+            {waterLoading && <ActivityIndicator size="small" color="#2196F3" />}
+          </View>
+          <AppCard padding={20} style={styles.waterCard}>
+            <View style={styles.waterMainRow}>
+              <View style={styles.waterIconWrap}>
+                <Ionicons name="water" size={36} color="#2196F3" />
+              </View>
+              <View style={styles.waterInfo}>
+                <View style={styles.waterTextRow}>
+                  <Text style={styles.waterAmount}>
+                    {Math.round(waterData?.total_ml || 0)}
+                    <Text style={styles.waterUnit}> ml</Text>
+                  </Text>
+                  <Text style={styles.waterTarget}>
+                    of {Math.round(waterData?.goal_ml || 2500)} ml
+                  </Text>
+                </View>
+                <View style={styles.waterBarTrack}>
+                  <View
+                    style={[
+                      styles.waterBarFill,
+                      { width: `${Math.min(100, waterData?.percentage || 0)}%` },
+                    ]}
+                  />
+                </View>
+              </View>
+            </View>
+            <View style={styles.waterButtonsRow}>
+              {[250, 500, 750].map((amount) => (
+                <TouchableOpacity
+                  key={amount}
+                  style={styles.waterBtn}
+                  onPress={() => handleLogWater(amount)}
+                  disabled={waterLoading}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.waterBtnIcon}>
+                    <Ionicons name="add" size={18} color="#2196F3" />
+                  </View>
+                  <Text style={styles.waterBtnText}>{amount}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </AppCard>
+        </AnimatedCard>
 
         {/* Meal Type Selector */}
-        <AnimatedCard delay={100} type="pop" style={styles.mealTypeContainer}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>What are you logging?</Text>
+        </View>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          style={styles.mealTypeScroll}
+          contentContainerStyle={styles.mealTypeScrollContent}
+        >
           {mealTypes.map((type) => (
             <TouchableOpacity
               key={type.id}
@@ -447,11 +568,16 @@ export default function LogScreen() {
                 setMealType(type.id);
               }}
             >
-              <Ionicons
-                name={type.icon as any}
-                size={28}
-                color={mealType === type.id ? theme.primary : theme.primaryLight}
-              />
+              <View style={[
+                styles.mealTypeIconContainer,
+                { backgroundColor: mealType === type.id ? theme.primary + '15' : theme.backgroundSecondary }
+              ]}>
+                <Ionicons
+                  name={type.icon as any}
+                  size={32}
+                  color={mealType === type.id ? theme.primary : theme.textSecondary}
+                />
+              </View>
               <Text
                 style={[
                   styles.mealTypeLabel,
@@ -462,41 +588,32 @@ export default function LogScreen() {
               </Text>
             </TouchableOpacity>
           ))}
-        </AnimatedCard>
+        </ScrollView>
 
         {/* Logging Methods */}
         <View style={styles.methodsContainer}>
-          <Text style={styles.sectionTitle}>How would you like to log?</Text>
-
-          {ENABLE_CAMERA_LOGGING && (
-            <AnimatedCard delay={150} type="slide" style={styles.methodCardWrapper}>
-              <TouchableOpacity
-                activeOpacity={0.9}
-                style={styles.methodCard}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                  handlePhotoLog();
-                }}
-              >
-                <View style={styles.methodIconContainer}>
-                  <Ionicons name="camera" size={32} color={theme.primary} />
-                </View>
-                <View style={styles.methodContent}>
-                  <Text style={styles.methodTitle}>Take a Photo</Text>
-                  <Text style={styles.methodDescription}>
-                    Snap a photo for instant AI meal recognition
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={24} color={theme.textLight} />
-              </TouchableOpacity>
-            </AnimatedCard>
-          )}
-
-          {/* Voice Search (Launch MVP) */}
-          <AnimatedCard delay={200} type="slide" style={styles.methodCardWrapper}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Logging Methods</Text>
+          </View>
+          
+          <View style={styles.methodsGrid}>
             <TouchableOpacity
               activeOpacity={0.9}
-              style={styles.methodCard}
+              style={[styles.methodGridCard, { borderColor: theme.primary }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                handlePhotoLog();
+              }}
+            >
+              <View style={[styles.methodGridIcon, { backgroundColor: theme.primary + '10' }]}>
+                <Ionicons name="camera" size={32} color={theme.primary} />
+              </View>
+              <Text style={styles.methodGridTitle}>Photo</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={[styles.methodGridCard, { borderColor: theme.primary }]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                 setLogMethod('manual');
@@ -505,106 +622,47 @@ export default function LogScreen() {
                 setShowModal(true);
               }}
             >
-              <View style={styles.methodIconContainer}>
+              <View style={[styles.methodGridIcon, { backgroundColor: theme.primary + '10' }]}>
                 <Ionicons name="mic" size={32} color={theme.primary} />
               </View>
-              <View style={styles.methodContent}>
-                <Text style={styles.methodTitle}>Voice Search</Text>
-                <Text style={styles.methodDescription}>
-                  Tap the mic on your keyboard and speak
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={24} color={theme.textLight} />
+              <Text style={styles.methodGridTitle}>Voice</Text>
             </TouchableOpacity>
-          </AnimatedCard>
 
-          {/* Barcode Scanner */}
-          <AnimatedCard delay={300} type="slide" style={styles.methodCardWrapper}>
-            <TouchableOpacity 
+            <TouchableOpacity
               activeOpacity={0.9}
-              style={[styles.methodCard, { borderColor: theme.secondary }]} 
+              style={[styles.methodGridCard, { borderColor: theme.primary }]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                 router.push('/barcode');
               }}
             >
-              <View style={[styles.methodIconContainer, { backgroundColor: theme.secondary + '15' }]}>
-                <Ionicons name="barcode" size={32} color={theme.secondary} />
+              <View style={[styles.methodGridIcon, { backgroundColor: theme.primary + '10' }]}>
+                <Ionicons name="barcode" size={32} color={theme.primary} />
               </View>
-              <View style={styles.methodContent}>
-                <Text style={styles.methodTitle}>Scan Barcode</Text>
-                <Text style={styles.methodDescription}>
-                  Scan packaged food, then photo your portion
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={24} color={theme.textLight} />
+              <Text style={styles.methodGridTitle}>Barcode</Text>
             </TouchableOpacity>
-          </AnimatedCard>
 
-          {/* Manual Logging */}
-          <AnimatedCard delay={500} type="slide" style={styles.methodCardWrapper}>
-            <TouchableOpacity 
+            <TouchableOpacity
               activeOpacity={0.9}
-              style={[styles.methodCard, { borderColor: Colors.success }]} 
+              style={[styles.methodGridCard, { borderColor: theme.primary }]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                 handleManualLog();
               }}
             >
-              <View style={[styles.methodIconContainer, { backgroundColor: Colors.success + '15' }]}>
-                <Ionicons name="create" size={32} color={Colors.success} />
+              <View style={[styles.methodGridIcon, { backgroundColor: theme.primary + '10' }]}>
+                <Ionicons name="create" size={32} color={theme.primary} />
               </View>
-              <View style={styles.methodContent}>
-                <Text style={styles.methodTitle}>Manual Entry</Text>
-                <Text style={styles.methodDescription}>
-                  Search and add foods manually
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={24} color={theme.textLight} />
+              <Text style={styles.methodGridTitle}>Manual</Text>
             </TouchableOpacity>
-          </AnimatedCard>
+          </View>
         </View>
-
-        {/* Today at a Glance */}
-        {todayStats && (
-          <AnimatedCard delay={550} type="slide" style={styles.glanceSection}>
-            <Text style={styles.sectionTitle}>Today at a Glance</Text>
-            <AppCard padding={0} style={styles.glanceCard}>
-              <View style={styles.glanceRow}>
-                <View style={styles.glanceStat}>
-                  <Text style={styles.glanceValue}>{Math.round(todayStats.total_calories || 0)}</Text>
-                  <Text style={styles.glanceLabel}>kcal eaten</Text>
-                </View>
-                <View style={styles.glanceDivider} />
-                <View style={styles.glanceStat}>
-                  <Text style={[styles.glanceValue, { color: theme.primary }]}>
-                    {Math.max(0, Math.round((todayStats.targets?.calories || 2000) - (todayStats.total_calories || 0)))}
-                  </Text>
-                  <Text style={styles.glanceLabel}>kcal left</Text>
-                </View>
-                <View style={styles.glanceDivider} />
-                <View style={styles.glanceStat}>
-                  <Text style={styles.glanceValue}>{todayMeals.length}</Text>
-                  <Text style={styles.glanceLabel}>meals</Text>
-                </View>
-              </View>
-              <View style={styles.glanceBarTrack}>
-                <View
-                  style={[
-                    styles.glanceBarFill,
-                    {
-                      width: `${Math.min(100, ((todayStats.total_calories || 0) / (todayStats.targets?.calories || 2000)) * 100)}%`,
-                    },
-                  ]}
-                />
-              </View>
-            </AppCard>
-          </AnimatedCard>
-        )}
 
         {/* Today's Meals */}
         <AnimatedCard delay={620} type="slide" style={styles.glanceSection}>
-          <Text style={styles.sectionTitle}>Today's Meals</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Today&apos;s Meals</Text>
+          </View>
           {todayMeals.length > 0 ? (
             <View style={styles.mealsListGap}>
               {todayMeals.map(meal => {
@@ -999,38 +1057,57 @@ function makeStyles(theme: typeof Colors) {
     paddingHorizontal: 24,
     paddingBottom: 100,
   },
+  headerBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: theme.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: theme.border,
+    borderBottomWidth: 4,
+  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '900',
     color: theme.text,
-    marginBottom: 16,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  mealTypeContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+  mealTypeScroll: {
     marginBottom: 32,
+    marginHorizontal: -24,
+  },
+  mealTypeScrollContent: {
+    paddingHorizontal: 24,
+    gap: 12,
   },
   mealTypeCard: {
-    width: '48%',
+    width: 100,
     backgroundColor: theme.white,
     borderWidth: 2,
     borderColor: theme.border,
     borderRadius: 24,
-    padding: 24,
+    paddingVertical: 20,
     alignItems: 'center',
     gap: 12,
-    borderBottomWidth: 8,
+    borderBottomWidth: 6,
+  },
+  mealTypeIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   mealTypeCardActive: {
     borderColor: theme.primary,
-    backgroundColor: theme.primary + '08',
-    borderBottomWidth: 8,
+    backgroundColor: theme.white,
+    borderBottomWidth: 6,
   },
   mealTypeLabel: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '900',
     color: theme.textSecondary,
     textTransform: 'uppercase',
@@ -1040,47 +1117,36 @@ function makeStyles(theme: typeof Colors) {
     color: theme.primary,
   },
   methodsContainer: {
-    marginBottom: 24,
+    marginBottom: 32,
   },
-  methodCardWrapper: {
-    marginBottom: 16,
-  },
-  methodCard: {
+  methodsGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.white,
-    borderRadius: 28,
-    padding: 20,
-    borderWidth: 2,
-    borderColor: theme.border,
-    borderBottomWidth: 8,
+    flexWrap: 'wrap',
+    gap: 12,
   },
-  methodIconContainer: {
+  methodGridCard: {
+    width: '48%',
+    backgroundColor: theme.white,
+    borderRadius: 24,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderBottomWidth: 6,
+    gap: 12,
+  },
+  methodGridIcon: {
     width: 64,
     height: 64,
     borderRadius: 20,
-    backgroundColor: theme.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: theme.border,
-    borderBottomWidth: 4,
   },
-  methodContent: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  methodTitle: {
-    fontSize: 18,
+  methodGridTitle: {
+    fontSize: 15,
     fontWeight: '900',
     color: theme.text,
-    marginBottom: 4,
-  },
-  methodDescription: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    fontWeight: '700',
-    lineHeight: 18,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   modalContainer: {
     flex: 1,
@@ -1493,6 +1559,40 @@ function makeStyles(theme: typeof Colors) {
     gap: 12,
     marginTop: 8,
   },
+  // Today's Energy card (matches home screen)
+  overviewCard: {
+    marginBottom: 24,
+    backgroundColor: theme.white,
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: theme.border,
+    borderBottomWidth: 6,
+    overflow: 'hidden',
+  },
+  overviewTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  overviewLabel: { fontSize: 12, fontWeight: '800', color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8 },
+  overviewEnergyMain: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingBottom: 16,
+  },
+  overviewEnergyLeft: { alignItems: 'flex-start' },
+  overviewEnergyRight: { alignItems: 'flex-end' },
+  overviewEnergyLarge: { fontSize: 36, fontWeight: '900', color: theme.text, letterSpacing: -1 },
+  overviewEnergyStatLabel: { fontSize: 13, fontWeight: '700', color: theme.textSecondary, marginTop: -2 },
+  overviewMacroStrip: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.border + '40',
+  },
+  overviewMacroItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  overviewMacroValue: { fontSize: 14, fontWeight: '900' },
+  overviewMacroLabel: { fontSize: 11, fontWeight: '800', color: theme.textSecondary, textTransform: 'uppercase' },
+
   glanceSection: {
     marginBottom: 24,
   },
@@ -1503,7 +1603,7 @@ function makeStyles(theme: typeof Colors) {
     borderColor: theme.border,
     borderBottomWidth: 6,
     overflow: 'hidden',
-    padding: 16,
+    padding: 20,
     gap: 12,
   },
   glanceRow: {
@@ -1544,62 +1644,237 @@ function makeStyles(theme: typeof Colors) {
     backgroundColor: theme.primary,
     borderRadius: 4,
   },
-  mealsListGap: {
-    gap: 10,
-  },
-  mealCard: {
+  sectionHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  energyMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  energyCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 8,
+    borderColor: theme.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: theme.white,
-    borderRadius: 18,
+  },
+  energyValue: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: theme.text,
+  },
+  energyLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.textSecondary,
+    textTransform: 'uppercase',
+  },
+  energyStats: {
+    flex: 1,
+    marginLeft: 24,
+    gap: 16,
+  },
+  energyStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  energyStatDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  energyStatValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: theme.text,
+  },
+  energyStatLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.textSecondary,
+  },
+  macroStrip: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: theme.border + '50',
+  },
+  macroStripItem: {
+    alignItems: 'center',
+  },
+  macroStripValue: {
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  macroStripLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.textSecondary,
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
+  // Water intake styles
+  waterCard: {
+    backgroundColor: theme.white,
+    borderRadius: 20,
     borderWidth: 2,
     borderColor: theme.border,
-    borderBottomWidth: 4,
+    borderBottomWidth: 6,
     overflow: 'hidden',
+    gap: 16,
+  },
+  waterMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  waterTextRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  waterTarget: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.textSecondary,
+  },
+  waterIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: '#2196F315',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  waterInfo: {
+    flex: 1,
+    gap: 6,
+  },
+  waterAmount: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: theme.text,
+  },
+  waterUnit: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.textSecondary,
+  },
+  waterBarTrack: {
+    height: 12,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: 6,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  waterBarFill: {
+    height: '100%',
+    backgroundColor: '#2196F3',
+    borderRadius: 6,
+  },
+  waterButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  waterBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: theme.white,
+    borderRadius: 16,
+    paddingVertical: 14,
+    borderWidth: 2,
+    borderColor: '#2196F320',
+    borderBottomWidth: 4,
+  },
+  waterBtnIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#2196F315',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  waterBtnText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#2196F3',
+  },
+  mealsListGap: {
+    gap: 12,
+  },
+  mealCard: {
+    backgroundColor: theme.white,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: theme.border,
+    borderBottomWidth: 6,
+    overflow: 'hidden',
+    gap: 16,
   },
   mealCardBody: {
-    flex: 1,
-    padding: 14,
-    gap: 7,
+    padding: 16,
+    gap: 12,
   },
   mealCardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
   mealTypeIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    alignItems: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   mealCardTitle: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '900',
     color: theme.text,
   },
   mealItemsBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 20,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   mealItemsBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '800',
   },
   mealCardTime: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.textLight,
   },
   mealCardSub: {
-    fontSize: 12,
+    fontSize: 14,
     color: theme.textSecondary,
-    lineHeight: 16,
+    fontWeight: '600',
+    lineHeight: 20,
+    backgroundColor: theme.backgroundSecondary + '50',
+    padding: 10,
+    borderRadius: 12,
   },
   mealCardDivider: {
     height: 1,
-    backgroundColor: theme.borderLight,
+    backgroundColor: theme.border + '50',
   },
   mealCardBottomRow: {
     flexDirection: 'row',
@@ -1608,48 +1883,41 @@ function makeStyles(theme: typeof Colors) {
   },
   mealMacroRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   mealMacroChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+    backgroundColor: theme.backgroundSecondary + '30',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   macroDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   mealMacroText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     color: theme.textSecondary,
   },
   mealCardCalRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
+    alignItems: 'baseline',
+    gap: 4,
   },
   mealCardCal: {
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '900',
-    color: theme.text,
   },
   mealCardCalLabel: {
-    fontSize: 11,
+    fontSize: 12,
+    fontWeight: '700',
     color: theme.textSecondary,
-    marginRight: 2,
-  },
-  profileIconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.white,
-    borderWidth: 2,
-    borderColor: theme.border,
-    borderBottomWidth: 4,
+    textTransform: 'uppercase',
   },
   });
 }

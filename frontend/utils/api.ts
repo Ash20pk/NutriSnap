@@ -977,6 +977,13 @@ export const postApi = {
     return response.data;
   },
 
+  getSavedPosts: async (cursor?: string): Promise<{ posts: Post[]; next_cursor: string | null }> => {
+    const params = new URLSearchParams();
+    if (cursor) params.set('cursor', cursor);
+    const response = await api.get(`/feed/saved?${params}`);
+    return response.data;
+  },
+
   toggleCommentReaction: async (postId: string, commentId: string): Promise<{ liked: boolean; like_count: number }> => {
     const response = await api.post(`/feed/${postId}/comments/${commentId}/react`);
     return response.data;
