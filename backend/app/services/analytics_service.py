@@ -240,18 +240,10 @@ class AnalyticsService:
                 current_meal_count = len(meals)
                 meals_unchanged = current_meal_count <= meals_analyzed
 
-                current_input_hash = self._analytics_input_hash(meals)
                 cached_parsed = self._parse_analytics_cache_fields(cache)
-                cached_input_hash = None
-                try:
-                    cached_input_hash = (cached_parsed.get("insights") or {}).get("__input_hash")
-                except Exception:
-                    cached_input_hash = None
-
-                input_unchanged = bool(cached_input_hash) and cached_input_hash == current_input_hash
 
                 logger.info(
-                    "[analytics.bundle] cache_check user_id=%s time_range=%s expires_at=%s cache_not_expired=%s meals_analyzed=%s current_meals=%s meals_unchanged=%s input_hash_match=%s",
+                    "[analytics.bundle] cache_check user_id=%s time_range=%s expires_at=%s cache_not_expired=%s meals_analyzed=%s current_meals=%s meals_unchanged=%s",
                     user_id,
                     time_range,
                     expires_at,
@@ -259,10 +251,9 @@ class AnalyticsService:
                     meals_analyzed,
                     current_meal_count,
                     meals_unchanged,
-                    input_unchanged,
                 )
-                
-                if cache_not_expired and meals_unchanged and input_unchanged:
+
+                if cache_not_expired and meals_unchanged:
                     # Cache is valid - not expired and no new meals
                     cache_valid = True
                     ai = {
