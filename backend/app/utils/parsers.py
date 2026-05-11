@@ -117,15 +117,16 @@ _MICRO_KEYS = [
 ]
 
 # Generic unit → grams (used when no food-specific entry is available)
+# These are last-resort fallbacks; always prefer _FOOD_SERVING_FALLBACK entries.
 _SERVING_SIZE_FALLBACK: Dict[str, float] = {
     "g":       1.0,
     "oz":      28.35,
     "ml":      1.0,
     "tbsp":    15.0,
     "tsp":     5.0,
-    "cup":     240.0,
+    "cup":     240.0,   # correct for liquids (milk, tea, water); solids use food-specific overrides
     "katori":  150.0,
-    "serving": 100.0,
+    "serving": 150.0,   # bumped from 100g — typical Indian meal serving is closer to 150g
     "plate":   300.0,
     "slice":   30.0,
     "piece":   100.0,
@@ -136,26 +137,241 @@ _SERVING_SIZE_FALLBACK: Dict[str, float] = {
 
 # Food-specific fallbacks — (normalised_food_name, unit_name): grams_per_unit
 _FOOD_SERVING_FALLBACK: Dict[tuple, float] = {
-    ("roti", "piece"):        35.0,
-    ("chapati", "piece"):     35.0,
-    ("paratha", "piece"):     60.0,
-    ("puri", "piece"):        25.0,
-    ("naan", "piece"):        90.0,
-    ("bhatura", "piece"):     80.0,
-    ("thepla", "piece"):      40.0,
-    ("dosa", "piece"):        80.0,
-    ("idli", "piece"):        40.0,
-    ("vada", "piece"):        50.0,
-    ("medu vada", "piece"):   50.0,
-    ("uttapam", "piece"):    100.0,
-    ("missi roti", "piece"):  40.0,
-    ("egg", "piece"):         50.0,
-    ("bread", "slice"):       30.0,
-    ("banana", "medium"):    120.0,
-    ("apple", "medium"):     180.0,
-    ("orange", "medium"):    150.0,
-    ("mango", "medium"):     200.0,
+    # ── Indian breads ──────────────────────────────────────────────────────────
+    ("roti", "piece"):           35.0,
+    ("roti", "large"):           50.0,
+    ("roti", "small"):           25.0,
+    ("chapati", "piece"):        35.0,
+    ("chapati", "large"):        50.0,
+    ("chapati", "small"):        25.0,
+    ("paratha", "piece"):        60.0,
+    ("paratha", "large"):        80.0,
+    ("paratha", "small"):        45.0,
+    ("puri", "piece"):           25.0,
+    ("puri", "large"):           35.0,
+    ("naan", "piece"):           90.0,
+    ("naan", "large"):          120.0,
+    ("bhatura", "piece"):        80.0,
+    ("thepla", "piece"):         40.0,
+    ("dosa", "piece"):           80.0,
+    ("dosa", "large"):          100.0,
+    ("idli", "piece"):           40.0,
+    ("vada", "piece"):           50.0,
+    ("medu vada", "piece"):      50.0,
+    ("uttapam", "piece"):       100.0,
+    ("missi roti", "piece"):     40.0,
+
+    # ── Rice (USDA: 1 cup cooked long-grain white rice ≈ 186 g) ───────────────
+    ("rice", "cup"):            185.0,
+    ("rice", "serving"):        185.0,
+    ("white rice", "cup"):      185.0,
+    ("white rice", "serving"):  185.0,
+    ("brown rice", "cup"):      195.0,
+    ("brown rice", "serving"):  195.0,
+    ("basmati rice", "cup"):    185.0,
+    ("basmati rice", "serving"):185.0,
+    ("jeera rice", "cup"):      185.0,
+    ("fried rice", "cup"):      195.0,
+    ("biryani", "cup"):         200.0,
+
+    # ── Eggs ──────────────────────────────────────────────────────────────────
+    ("egg", "piece"):            50.0,
+    ("egg", "medium"):           50.0,
+    ("egg", "large"):            60.0,
+    ("egg", "small"):            40.0,
+    ("boiled egg", "piece"):     50.0,
+    ("boiled egg", "medium"):    50.0,
+    ("boiled egg", "large"):     60.0,
+    ("hard boiled egg", "piece"):50.0,
+    ("hard boiled egg", "medium"):50.0,
+    ("soft boiled egg", "piece"):50.0,
+    ("soft boiled egg", "medium"):50.0,
+    ("fried egg", "piece"):      50.0,
+    ("fried egg", "medium"):     50.0,
+    ("poached egg", "piece"):    50.0,
+    ("poached egg", "medium"):   50.0,
+    ("scrambled egg", "piece"):  50.0,
+    ("scrambled egg", "medium"): 50.0,
+    ("omelette", "piece"):      100.0,  # 2-egg omelette
+    ("egg white", "piece"):      30.0,
+    ("egg yolk", "piece"):       18.0,
+
+    # ── Proteins ───────────────────────────────────────────────────────────────
+    ("chicken breast", "piece"): 150.0,
+    ("chicken leg", "piece"):    120.0,
+    ("chicken leg", "medium"):   120.0,
+    ("chicken wing", "piece"):    60.0,
+    ("chicken thigh", "piece"):  120.0,
+    ("fish fillet", "piece"):    150.0,
+    ("fish fillet", "medium"):   150.0,
+    ("paneer", "piece"):          35.0,  # small cube
+    ("paneer", "slice"):          75.0,  # slab
+
+    # ── Western breads & baked goods ──────────────────────────────────────────
+    ("bread", "slice"):           30.0,
+    ("white bread", "slice"):     30.0,
+    ("whole wheat bread", "slice"):30.0,
+    ("sourdough", "slice"):       35.0,
+    ("bagel", "piece"):          100.0,
+    ("croissant", "piece"):       57.0,
+    ("burger bun", "piece"):      50.0,
+    ("hot dog bun", "piece"):     40.0,
+    ("english muffin", "piece"):  57.0,
+    ("pancake", "piece"):         38.0,
+    ("waffle", "piece"):          75.0,
+    ("muffin", "piece"):         130.0,
+    ("donut", "piece"):           60.0,
+    ("cookie", "piece"):          30.0,
+    ("biscuit", "piece"):         55.0,  # American-style; UK biscuit ≈ 12g but "cookie" catches it
+    ("cracker", "piece"):          8.0,
+    ("tortilla", "piece"):        45.0,  # flour tortilla (medium wrap)
+    ("flour tortilla", "piece"):  45.0,
+    ("corn tortilla", "piece"):   25.0,
+
+    # ── Middle Eastern / Mediterranean breads ─────────────────────────────────
+    ("pita", "piece"):            60.0,
+    ("pita bread", "piece"):      60.0,
+    ("flatbread", "piece"):       80.0,
+    ("lavash", "piece"):          70.0,
+    ("naan bread", "piece"):      90.0,
+
+    # ── Latin American breads ─────────────────────────────────────────────────
+    ("arepa", "piece"):          100.0,
+    ("tostada", "piece"):         26.0,
+    ("tamale", "piece"):         100.0,
+    ("empanada", "piece"):        90.0,
+
+    # ── Pasta & noodles (cooked) ──────────────────────────────────────────────
+    ("pasta", "cup"):            140.0,
+    ("pasta", "serving"):        180.0,
+    ("spaghetti", "cup"):        140.0,
+    ("spaghetti", "serving"):    180.0,
+    ("penne", "cup"):            140.0,
+    ("fettuccine", "cup"):       140.0,
+    ("noodles", "cup"):          140.0,
+    ("noodles", "serving"):      180.0,
+    ("ramen", "serving"):        250.0,   # bowl with broth
+    ("udon", "serving"):         250.0,
+    ("soba", "serving"):         200.0,
+
+    # ── Oats ──────────────────────────────────────────────────────────────────
+    ("oatmeal", "cup"):          240.0,
+    ("oats", "cup"):              80.0,   # dry rolled oats
+    ("oats", "serving"):          40.0,   # standard dry serving
+
+    # ── Western proteins ──────────────────────────────────────────────────────
+    ("beef steak", "piece"):     200.0,
+    ("beef steak", "medium"):    200.0,
+    ("steak", "piece"):          200.0,
+    ("steak", "medium"):         200.0,
+    ("pork chop", "piece"):      150.0,
+    ("pork chop", "medium"):     150.0,
+    ("burger patty", "piece"):   120.0,
+    ("burger", "piece"):         200.0,
+    ("burger", "medium"):        200.0,
+    ("hot dog", "piece"):         90.0,
+    ("sausage", "piece"):         70.0,
+    ("sausage link", "piece"):    45.0,
+    ("bacon", "slice"):           15.0,
+    ("meatball", "piece"):        30.0,
+    ("meatball", "medium"):       30.0,
+
+    # ── Seafood ───────────────────────────────────────────────────────────────
+    ("salmon fillet", "piece"):  150.0,
+    ("salmon", "piece"):         150.0,
+    ("tuna steak", "piece"):     150.0,
+    ("cod fillet", "piece"):     150.0,
+    ("shrimp", "piece"):          15.0,
+    ("prawn", "piece"):           15.0,
+    ("oyster", "piece"):          50.0,
+    ("scallop", "piece"):         30.0,
+
+    # ── Assembled / fast food ─────────────────────────────────────────────────
+    ("pizza", "slice"):          100.0,
+    ("pizza slice", "slice"):    100.0,
+    ("sandwich", "piece"):       200.0,
+    ("sub", "piece"):            250.0,
+    ("wrap", "piece"):           200.0,
+    ("taco", "piece"):            80.0,
+    ("burrito", "piece"):        300.0,
+    ("shawarma", "piece"):       200.0,
+    ("kebab", "piece"):          100.0,
+
+    # ── East Asian ────────────────────────────────────────────────────────────
+    ("sushi", "piece"):           25.0,
+    ("sushi roll", "piece"):      25.0,
+    ("nigiri", "piece"):          30.0,
+    ("maki", "piece"):            25.0,
+    ("dumpling", "piece"):        30.0,
+    ("gyoza", "piece"):           20.0,
+    ("dim sum", "piece"):         30.0,
+    ("spring roll", "piece"):     80.0,
+    ("spring roll", "medium"):    80.0,
+    ("wonton", "piece"):          20.0,
+    ("baozi", "piece"):           50.0,
+    ("bao", "piece"):             50.0,
+
+    # ── Middle Eastern / Mediterranean proteins ───────────────────────────────
+    ("falafel", "piece"):         30.0,
+    ("falafel", "medium"):        30.0,
+
+    # ── Dairy ────────────────────────────────────────────────────────────────
+    ("cheese", "slice"):          20.0,
+    ("cheese slice", "slice"):    20.0,
+
+    # ── Snacks / sweets ───────────────────────────────────────────────────────
+    ("chocolate bar", "piece"):   45.0,
+    ("chocolate", "piece"):       10.0,   # individual square
+
+    # ── Fruits ────────────────────────────────────────────────────────────────
+    ("banana", "piece"):         120.0,
+    ("banana", "medium"):        120.0,
+    ("banana", "large"):         150.0,
+    ("banana", "small"):          80.0,
+    ("apple", "piece"):          180.0,
+    ("apple", "medium"):         180.0,
+    ("apple", "large"):          220.0,
+    ("apple", "small"):          130.0,
+    ("orange", "piece"):         150.0,
+    ("orange", "medium"):        150.0,
+    ("mango", "piece"):          200.0,
+    ("mango", "medium"):         200.0,
+    ("mango", "large"):          300.0,
+    ("pear", "piece"):           180.0,
+    ("pear", "medium"):          180.0,
+    ("peach", "piece"):          150.0,
+    ("peach", "medium"):         150.0,
+    ("plum", "piece"):            65.0,
+    ("plum", "medium"):           65.0,
+    ("kiwi", "piece"):            70.0,
+    ("kiwi", "medium"):           70.0,
+    ("avocado", "piece"):        150.0,
+    ("avocado", "medium"):       150.0,
+    ("strawberry", "piece"):      12.0,
+    ("grape", "piece"):            5.0,
+    ("watermelon", "slice"):     300.0,
+    ("pineapple", "slice"):       80.0,
+    ("lemon", "piece"):           60.0,
+    ("lime", "piece"):            45.0,
 }
+
+
+def _grams_from_serving_size_list(
+    serving_sizes: List[Dict],
+    unit: str,
+    quantity_value: float,
+) -> Optional[float]:
+    """Resolve grams from an in-memory serving_sizes list (used before DB insert).
+
+    Returns qty_grams if a matching unit is found, else None.
+    """
+    unit_norm = (unit or "").strip().lower()
+    for s in serving_sizes:
+        if str(s.get("unit_name") or "").strip().lower() == unit_norm:
+            g = float(s.get("grams") or 0)
+            if g > 0:
+                return quantity_value * g
+    return None
 
 
 async def _resolve_quantity_grams(
@@ -164,15 +380,17 @@ async def _resolve_quantity_grams(
     food_name: str,
     quantity_value: float,
     quantity_unit: str,
+    ai_serving_sizes: Optional[List[Dict]] = None,
 ) -> float:
     """Resolve a named serving unit to grams.
 
     Resolution order:
       1. Direct weight units (g, oz, ml)
-      2. food_serving_sizes DB table (food-specific)
-      3. _FOOD_SERVING_FALLBACK dict (food-specific hardcoded)
-      4. _SERVING_SIZE_FALLBACK dict (generic unit weights)
-      5. 100 g per unit as last resort
+      2. In-memory AI serving sizes (used for first-time food before DB insert)
+      3. food_serving_sizes DB table (food-specific)
+      4. _FOOD_SERVING_FALLBACK dict (food-specific hardcoded)
+      5. _SERVING_SIZE_FALLBACK dict (generic unit weights)
+      6. 100 g per unit as last resort
     """
     unit = (quantity_unit or "g").strip().lower()
 
@@ -182,6 +400,12 @@ async def _resolve_quantity_grams(
         return quantity_value * 28.35
     if unit == "ml":
         return quantity_value
+
+    # AI serving sizes list (in-memory, used before DB insert for first-time foods)
+    if ai_serving_sizes:
+        result = _grams_from_serving_size_list(ai_serving_sizes, unit, quantity_value)
+        if result is not None:
+            return result
 
     # DB lookup (only if we have a food_id)
     if food_id is not None:
@@ -395,61 +619,118 @@ async def infer_portion_from_text(transcript: str) -> Dict[str, Any]:
 
 
 _PARSE_SYSTEM_PROMPT = """\
-You are a nutrition expert who extracts individual food items from meal descriptions.
+You are a global nutrition expert extracting individual food items from meal descriptions in any language or cuisine.
 Return JSON ONLY: {"foods": [{"name": string, "quantity_value": number, "quantity_unit": string}]}
 
-Valid quantity_unit values: "piece", "katori", "cup", "tbsp", "tsp", "g", "oz", "ml", "serving", "slice", "medium", "large", "small", "plate"
+Valid quantity_unit values: "piece", "katori", "cup", "tbsp", "tsp", "g", "oz", "ml", "serving", "slice", "medium", "plate"
 
-## Serving unit guide
-Indian breads  (unit = "piece"):
-  roti / chapati | paratha | puri | naan | bhatura | thepla | dosa
-  idli | vada | uttapam | missi roti
+## Unit guide by food category
 
-Indian portions:
-  dal / lentils / curry / sabzi  → "katori"   (1 katori ≈ 150 g)
-  cooked rice (side)             → "cup"      (1 cup ≈ 200 g)
-  cooked rice (full plate)       → "plate"    (1 plate ≈ 300 g)
-  curd / yoghurt / raita         → "katori"
-  sambar                         → "cup"
-  chutney                        → "tbsp"
-  pickle                         → "tsp"
+### Breads & flatbreads  → "piece" or "slice"
+Indian:        roti/chapati (≈35g) | paratha (≈60g) | puri (≈25g) | naan (≈90g)
+               bhatura (≈80g) | thepla (≈40g) | dosa (≈80g) | idli (≈40g)
+               vada/medu vada (≈50g) | uttapam (≈100g)
+Western:       bread/toast → "slice" (≈30g) | bagel (≈100g) | croissant (≈57g)
+               burger bun (≈50g) | english muffin (≈57g) | muffin (≈130g)
+               pancake (≈38g) | waffle (≈75g) | cookie (≈30g) | donut (≈60g)
+Middle Eastern: pita (≈60g) | flatbread (≈80g) | lavash (≈70g)
+Latin:         flour tortilla (≈45g) | corn tortilla (≈25g) | arepa (≈100g)
 
-Other common measures:
-  egg, banana, apple, orange     → "medium" or "piece"
-  milk / tea / coffee            → "cup"
-  butter / ghee / oil            → "tbsp" or "tsp"
-  bread                          → "slice"
-  chicken curry / fish curry     → "katori"
+### Rice & grains (cooked unless noted)
+  Indian rice (side)       → "cup"     (≈185 g)
+  Indian rice (full meal)  → "plate"   (≈300 g)
+  pasta / noodles          → "cup"     (≈140 g cooked)
+  oatmeal (cooked)         → "cup"     (≈240 g)
+  oats (dry)               → "serving" (≈40 g)
+  couscous / quinoa        → "cup"     (≈160 g cooked)
+
+### Indian wet dishes  → "katori" (≈150 g)
+  dal / lentils | curry | sabzi | paneer dish | raita | curd | korma
+  Use "cup" (≈240 ml) for: sambar | soup | any thin liquid dish
+
+### Condiments
+  chutney / sauce / dip / gravy   → "tbsp"
+  pickle / jam / spread (small)   → "tsp"
+  salad dressing / oil / ghee / butter → "tbsp" or "tsp"
+
+### Eggs  → "piece" (≈50 g each)
+  boiled / fried / poached / scrambled / hard-boiled
+  omelette → "piece" (≈100 g, i.e. 2-egg)
+  egg white → "piece" (≈30 g) | egg yolk → "piece" (≈18 g)
+
+### Proteins — whole cuts  → "piece"
+  chicken breast (≈150g) | chicken leg/thigh (≈120g) | chicken wing (≈60g)
+  beef steak / pork chop (≈150–200g) | fish fillet / salmon (≈150g)
+  shrimp / prawn (≈15g each) | sausage (≈70g) | meatball (≈30g)
+  paneer cube (≈35g) | kebab skewer (≈100g) | falafel ball (≈30g)
+
+### Proteins in sauce → "katori" (Indian) or "cup" (Western)
+  chicken curry | fish curry | paneer masala   → "katori"
+  beef stew | chili | clam chowder             → "cup"
+
+### Assembled / fast food  → "piece" or "slice"
+  burger (≈200g) | hot dog (≈90g) | pizza → "slice" (≈100g)
+  sandwich / sub / wrap (≈200–250g) | taco (≈80g) | burrito (≈300g)
+  shawarma / döner (≈200g) | empanada (≈90g) | tamale (≈100g)
+
+### East Asian  → "piece"
+  sushi / maki / nigiri (≈25–30g) | dumpling / gyoza / wonton (≈20–30g)
+  spring roll (≈80g) | baozi / bao (≈50g)
+  ramen / udon → "serving" (includes broth, ≈250 g solid content)
+
+### Dairy
+  cheese → "slice" (≈20g) | milk / yoghurt / cream → "cup" or "ml"
+
+### Beverages → "cup" or "ml"
+  milk | tea | coffee | juice | smoothie | water | soda | broth
+
+### Fruit → "medium" or "piece"
+  Large fruit (banana, apple, orange, mango, pear, peach, avocado) → "medium"
+  Small fruit (kiwi, plum, lemon, lime, strawberry, grape)          → "piece"
+  Sliced (watermelon, pineapple)                                    → "slice"
+
+### Snacks & sweets
+  chocolate bar → "piece" (≈45g) | individual square → "piece" (≈10g)
+  chips / crisps / nuts → "g" if weight known, else "serving"
 
 ## Rules: SEPARATE vs COMBINED
 
-COMBINE into ONE item (filling/topping changes the dish identity):
-  "pizza with pepperoni"          → "pepperoni pizza"
+COMBINE (the filling/topping defines the dish):
+  "pizza with pepperoni"            → "pepperoni pizza"
   "sandwich with turkey and cheese" → "turkey cheese sandwich"
-  "burrito with chicken"          → "chicken burrito"
-  "biryani with mutton"           → "mutton biryani"
-  "pasta with meatballs"          → "meatball pasta"
-  "omelette with vegetables"      → "vegetable omelette"
+  "burrito with chicken"            → "chicken burrito"
+  "pasta with meatballs"            → "meatball pasta"
+  "omelette with vegetables"        → "vegetable omelette"
+  "biryani with mutton"             → "mutton biryani"
+  "fried rice with egg"             → "egg fried rice"
+  "ramen with chashu"               → "chashu ramen"
+  "noodles with beef"               → "beef noodles"
 
-KEEP as SEPARATE items (bread/starch + side dish = a plate, not one food):
-  "roti with bhindi fry"          → roti  +  bhindi fry
-  "paratha with curd"             → paratha  +  curd
-  "rice with dal"                 → rice  +  dal
-  "dosa with sambar and chutney"  → dosa  +  sambar  +  coconut chutney
-  "roti with rajma"               → roti  +  rajma
-  "bread with butter"             → bread  +  butter
-  "idli with sambar"              → idli  +  sambar
-  "poha with tea"                 → poha  +  tea
+KEEP SEPARATE (starch/base + side dish = a plate, not one food):
+  Indian:    "roti with dal"  → roti + dal
+             "paratha with curd" → paratha + curd
+             "dosa with sambar and chutney" → dosa + sambar + coconut chutney
+             "idli with sambar" → idli + sambar
+             "rice with rajma" → rice + rajma
+  Western:   "bread with butter" → bread + butter
+             "eggs with toast" → eggs + toast
+             "steak with fries" → steak + fries
+             "soup with bread" → soup + bread
+  Asian:     "rice with stir fry" → rice + stir fry
 
-RULE: If the first item is a bread / starch (roti, paratha, rice, naan, bread, dosa, idli, puri, bhatura, upma, poha) AND the second is a curry / sabzi / dal / beverage / condiment, keep them SEPARATE.
+RULE: If item A is a plain starch (rice, roti, naan, bread, pasta, tortilla, noodles, dosa, idli)
+AND item B is a separate dish/side (curry, dal, sabzi, stew, sauce, beverage, condiment) — keep SEPARATE.
 
 ## Additional rules
-- Return food names in English (translate if input is Hindi/regional).
-- Use authentic dish names: "bhindi masala" not "okra stir fry"; "rajma" not "kidney bean curry".
+- Return food names in English (translate from any language).
+- Use authentic dish names: "bhindi masala" not "okra curry"; "rajma" not "kidney bean curry";
+  "kimchi" not "Korean fermented cabbage"; "shakshuka" not "eggs in tomato sauce".
+- NEVER use "large" or "small" as quantity_unit — always use "piece" for countable items
+  and set quantity_value to the count.
 - "1.5 roti" → {name: "roti", quantity_value: 1.5, quantity_unit: "piece"}
 - "200g chicken" → {name: "chicken", quantity_value: 200, quantity_unit: "g"}
-- "2 katori dal" → {name: "dal", quantity_value: 2, quantity_unit: "katori"}
-- If no quantity given, use 1 typical serving (e.g., quantity_value: 1, quantity_unit: "piece" for roti).
+- "a bowl of soup" → {name: "soup", quantity_value: 1, quantity_unit: "cup"}
+- If no quantity given, use 1 typical serving for that food type.
 - Never return quantity_value = 0.
 """
 
@@ -511,11 +792,18 @@ async def parse_voice_meal_text(transcript: str) -> List[Dict[str, Any]]:
             "pasta",
             "noodles",
         }
-        # If any item is an Indian bread/starch, never merge the pair.
-        indian_staples = {
+        # Global plain starches and sides that should never be merged with their accompaniment.
+        starch_staples = {
+            # Indian breads
             "roti", "chapati", "paratha", "puri", "naan", "bhatura",
-            "thepla", "dosa", "idli", "uttapam", "upma", "poha",
-            "rice", "dal", "sabzi", "curry", "khichdi",
+            "thepla", "dosa", "idli", "uttapam", "upma", "poha", "khichdi",
+            # Indian sides
+            "dal", "sabzi", "curry", "rajma", "chana",
+            # Global starches
+            "rice", "bread", "toast", "pasta", "spaghetti", "noodles",
+            "tortilla", "pita", "couscous", "quinoa", "oats", "oatmeal",
+            # Beverages (always separate)
+            "tea", "coffee", "milk", "juice", "water", "chai",
         }
         ignore_fillers = {
             "with",
@@ -531,14 +819,14 @@ async def parse_voice_meal_text(transcript: str) -> List[Dict[str, Any]]:
         cleaned_tokens = set(_norm_tokens(cleaned))
         has_with_context = ("with" in cleaned_tokens) or ("filling" in cleaned_tokens)
 
-        # Suppress merge if any item is an Indian staple
-        has_indian_staple = any(
-            t in indian_staples
+        # Suppress merge if any item is a plain starch or side (never merge starch+side globally)
+        has_starch_staple = any(
+            t in starch_staples
             for item in normalized
             for t in _norm_tokens(item.get("name") or "")
         )
 
-        if has_with_context and len(normalized) >= 2 and not has_indian_staple:
+        if has_with_context and len(normalized) >= 2 and not has_starch_staple:
             base_idx = None
             base_word = None
             for i, item in enumerate(normalized):
@@ -853,13 +1141,19 @@ async def match_food_to_database_db(
     if row:
         qty_grams = await _resolve_quantity_grams(conn, row["id"], original_name, qty_val, unit)
         multiplier = qty_grams / 100.0
+        calories = round(float(row.get("calories_per_100g", 0) or 0) * multiplier, 2)
+        if calories > 2000:
+            logger.warning(
+                "[NUTRITION_SANITY] High calories for '%s': %.0f cal (%.0f g @ %.0f cal/100g, unit=%s qty=%.1f)",
+                original_name, calories, qty_grams, float(row.get("calories_per_100g", 0) or 0), unit, qty_val,
+            )
         return {
             "food_id": str(row["id"]),
             "name": row["name"],
             "quantity": qty_grams,
             "quantity_value": qty_val,
             "quantity_unit": unit,
-            "calories": round(float(row.get("calories_per_100g", 0) or 0) * multiplier, 2),
+            "calories": calories,
             "protein": round(float(row.get("protein_per_100g", 0) or 0) * multiplier, 2),
             "carbs": round(float(row.get("carbs_per_100g", 0) or 0) * multiplier, 2),
             "fat": round(float(row.get("fat_per_100g", 0) or 0) * multiplier, 2),
@@ -900,8 +1194,8 @@ async def match_food_to_database_db(
             detail=f"Failed to estimate non-zero nutrition for '{original_name}'",
         )
 
-    # Resolve grams using fallback (no food_id yet)
-    qty_grams = await _resolve_quantity_grams(conn, None, original_name, qty_val, unit)
+    # Resolve grams — pass AI serving sizes so the first request also benefits from them
+    qty_grams = await _resolve_quantity_grams(conn, None, original_name, qty_val, unit, ai_serving_sizes=serving_sizes)
     multiplier = qty_grams / 100.0
 
     food_id = uuid.uuid4()
@@ -998,13 +1292,20 @@ async def match_food_to_database_db(
     if serving_sizes:
         await _store_serving_sizes(conn, food_id, serving_sizes)
 
+    estimated_calories = round(calories_per_100g * multiplier, 2)
+    if estimated_calories > 2000:
+        logger.warning(
+            "[NUTRITION_SANITY] High calories for AI-estimated '%s': %.0f cal (%.0f g @ %.0f cal/100g, unit=%s qty=%.1f)",
+            original_name, estimated_calories, qty_grams, calories_per_100g, unit, qty_val,
+        )
+
     return {
         "food_id": str(food_id),
         "name": original_name,
         "quantity": qty_grams,
         "quantity_value": qty_val,
         "quantity_unit": unit,
-        "calories": round(calories_per_100g * multiplier, 2),
+        "calories": estimated_calories,
         "protein": round(protein_per_100g * multiplier, 2),
         "carbs": round(carbs_per_100g * multiplier, 2),
         "fat": round(fat_per_100g * multiplier, 2),
