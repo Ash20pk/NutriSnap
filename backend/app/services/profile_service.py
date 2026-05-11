@@ -165,34 +165,95 @@ class ProfileService:
         bio: Optional[str] = None,
         avatar_url: Optional[str] = None,
         name: Optional[str] = None,
+        weight: Optional[float] = None,
+        height: Optional[float] = None,
+        date_of_birth: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Update user profile bio, avatar, and display name.
-
-        Args:
-            uid: User UUID
-            bio: User bio text
-            avatar_url: Avatar image URL
-            name: Display name
-
-        Returns:
-            Updated user profile
+        Update user profile. Recalculates nutrition targets whenever
+        weight, height, or date_of_birth change.
         """
+        updating_body = weight is not None or height is not None or date_of_birth is not None
+
         async with self.pool.acquire() as conn:
-            row = await conn.fetchrow(
-                """
-                UPDATE profiles
-                SET bio = COALESCE($2, bio),
-                    avatar_url = COALESCE($3, avatar_url),
-                    name = COALESCE($4, name)
-                WHERE id = $1
-                RETURNING *
-                """,
-                to_uuid(uid),
-                bio,
-                avatar_url,
-                name,
-            )
+            if updating_body:
+                current = await conn.fetchrow(
+                    "SELECT * FROM profiles WHERE id = $1", to_uuid(uid)
+                )
+                if not current:
+                    raise HTTPException(status_code=404, detail="User not found")
+
+                eff_weight = weight if weight is not None else float(current["weight"])
+                eff_height = height if height is not None else float(current["height"])
+
+                dob: Optional[date] = None
+                if date_of_birth is not None:
+                    try:
+                        dob = date.fromisoformat(date_of_birth)
+                    except ValueError:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Invalid date_of_birth format, use YYYY-MM-DD",
+                        )
+                else:
+                    dob = current.get("date_of_birth")
+
+                age = calculate_age_from_dob(dob) if dob else int(current["age"] or 25)
+
+                targets = calculate_calorie_target(
+                    eff_weight,
+                    eff_height,
+                    age,
+                    str(current["gender"]),
+                    str(current["activity_level"]),
+                    str(current["goal"]),
+                )
+
+                row = await conn.fetchrow(
+                    """
+                    UPDATE profiles
+                    SET bio = COALESCE($2, bio),
+                        avatar_url = COALESCE($3, avatar_url),
+                        name = COALESCE($4, name),
+                        weight = COALESCE($5, weight),
+                        height = COALESCE($6, height),
+                        date_of_birth = COALESCE($7, date_of_birth),
+                        age = $8,
+                        daily_calorie_target = $9,
+                        protein_target = $10,
+                        carbs_target = $11,
+                        fat_target = $12
+                    WHERE id = $1
+                    RETURNING *
+                    """,
+                    to_uuid(uid),
+                    bio,
+                    avatar_url,
+                    name,
+                    weight,
+                    height,
+                    dob,
+                    age,
+                    targets["daily_calorie_target"],
+                    targets["protein_target"],
+                    targets["carbs_target"],
+                    targets["fat_target"],
+                )
+            else:
+                row = await conn.fetchrow(
+                    """
+                    UPDATE profiles
+                    SET bio = COALESCE($2, bio),
+                        avatar_url = COALESCE($3, avatar_url),
+                        name = COALESCE($4, name)
+                    WHERE id = $1
+                    RETURNING *
+                    """,
+                    to_uuid(uid),
+                    bio,
+                    avatar_url,
+                    name,
+                )
 
         if not row:
             raise HTTPException(status_code=404, detail="User not found")

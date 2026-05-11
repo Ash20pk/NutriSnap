@@ -245,12 +245,14 @@ export default function HomeScreen() {
 
           <View style={styles.macroStrip}>
             {[
-              { label: 'Pro', val: Math.round(stats?.total_protein || 0), color: Colors.protein },
-              { label: 'Carb', val: Math.round(stats?.total_carbs || 0), color: Colors.carbs },
-              { label: 'Fat', val: Math.round(stats?.total_fat || 0), color: Colors.fat },
+              { label: 'Pro',  val: Math.round(stats?.total_protein || 0), target: Math.round(stats?.targets?.protein || 0), color: Colors.protein },
+              { label: 'Carb', val: Math.round(stats?.total_carbs   || 0), target: Math.round(stats?.targets?.carbs   || 0), color: Colors.carbs },
+              { label: 'Fat',  val: Math.round(stats?.total_fat      || 0), target: Math.round(stats?.targets?.fat     || 0), color: Colors.fat },
             ].map(m => (
               <View key={m.label} style={styles.macroStripItem}>
-                <Text style={[styles.macroStripValue, { color: m.color }]}>{m.val}g</Text>
+                <Text style={[styles.macroStripValue, { color: m.color }]}>
+                  {m.val}{m.target > 0 ? `/${m.target}` : ''}g
+                </Text>
                 <Text style={styles.macroStripLabel}>{m.label}</Text>
               </View>
             ))}

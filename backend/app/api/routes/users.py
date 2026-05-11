@@ -42,6 +42,9 @@ class ProfileUpdateRequest(BaseModel):
     bio: Optional[str] = None
     avatar_url: Optional[str] = None
     name: Optional[str] = None
+    weight: Optional[float] = None
+    height: Optional[float] = None
+    date_of_birth: Optional[str] = None  # YYYY-MM-DD
 
 
 class WeightCheckRequest(BaseModel):
@@ -149,6 +152,9 @@ async def update_my_profile(
         bio=payload.bio,
         avatar_url=payload.avatar_url,
         name=payload.name,
+        weight=payload.weight,
+        height=payload.height,
+        date_of_birth=payload.date_of_birth,
     )
 
 

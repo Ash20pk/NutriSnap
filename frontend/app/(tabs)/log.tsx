@@ -525,12 +525,14 @@ export default function LogScreen() {
               </View>
               <View style={styles.overviewMacroStrip}>
                 {[
-                  { label: 'Pro',  val: Math.round(todayStats?.total_protein || 0), color: Colors.protein },
-                  { label: 'Carb', val: Math.round(todayStats?.total_carbs   || 0), color: Colors.carbs   },
-                  { label: 'Fat',  val: Math.round(todayStats?.total_fat      || 0), color: Colors.fat     },
+                  { label: 'Pro',  val: Math.round(todayStats?.total_protein || 0), target: Math.round(todayStats?.targets?.protein || 0), color: Colors.protein },
+                  { label: 'Carb', val: Math.round(todayStats?.total_carbs   || 0), target: Math.round(todayStats?.targets?.carbs   || 0), color: Colors.carbs   },
+                  { label: 'Fat',  val: Math.round(todayStats?.total_fat      || 0), target: Math.round(todayStats?.targets?.fat     || 0), color: Colors.fat     },
                 ].map(m => (
                   <View key={m.label} style={styles.overviewMacroItem}>
-                    <Text style={[styles.overviewMacroValue, { color: m.color }]}>{m.val}g</Text>
+                    <Text style={[styles.overviewMacroValue, { color: m.color }]}>
+                      {m.val}{m.target > 0 ? `/${m.target}` : ''}g
+                    </Text>
                     <Text style={styles.overviewMacroLabel}>{m.label}</Text>
                   </View>
                 ))}

@@ -467,7 +467,7 @@ export const userApi = {
     const response = await api.get('/user/me');
     return response.data;
   },
-  updateMyProfile: async (payload: { bio?: string | null; avatar_url?: string | null; name?: string | null }): Promise<UserProfile> => {
+  updateMyProfile: async (payload: { bio?: string | null; avatar_url?: string | null; name?: string | null; weight?: number; height?: number; date_of_birth?: string }): Promise<UserProfile> => {
     const response = await api.put('/user/me/profile', payload);
     return response.data;
   },

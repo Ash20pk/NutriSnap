@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -45,9 +45,14 @@ export default function EditProfileScreen() {
   const [editBioDraft, setEditBioDraft] = useState('');
   const [editWeightDraft, setEditWeightDraft] = useState('');
   const [editHeightDraft, setEditHeightDraft] = useState('');
-  const [editAgeDraft, setEditAgeDraft] = useState('');
+  const [dobDay, setDobDay] = useState('');
+  const [dobMonth, setDobMonth] = useState('');
+  const [dobYear, setDobYear] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  const dobMonthRef = useRef<TextInput>(null);
+  const dobYearRef = useRef<TextInput>(null);
 
   useEffect(() => {
     setEditUsernameDraft((user?.username || '').toString());
@@ -55,8 +60,27 @@ export default function EditProfileScreen() {
     setEditBioDraft((user?.bio || '').toString());
     setEditWeightDraft(user?.weight ? String(user.weight) : '');
     setEditHeightDraft(user?.height ? String(user.height) : '');
-    setEditAgeDraft(user?.age ? String(user.age) : '');
-  }, [user?.username, user?.name, user?.bio, user?.weight, user?.height, user?.age]);
+    if (user?.date_of_birth) {
+      const [y, m, d] = user.date_of_birth.split('-');
+      setDobYear(y || '');
+      setDobMonth(m || '');
+      setDobDay(d || '');
+    }
+  }, [user?.username, user?.name, user?.bio, user?.weight, user?.height, user?.date_of_birth]);
+
+  const computedBmi = useMemo(() => {
+    const w = parseFloat(editWeightDraft);
+    const h = parseFloat(editHeightDraft);
+    if (!w || !h || h <= 0) return null;
+    return Math.round((w / Math.pow(h / 100, 2)) * 10) / 10;
+  }, [editWeightDraft, editHeightDraft]);
+
+  const bmiCategory = (bmi: number) => {
+    if (bmi < 18.5) return { label: 'Underweight', color: '#3b82f6' };
+    if (bmi < 25) return { label: 'Normal', color: '#22c55e' };
+    if (bmi < 30) return { label: 'Overweight', color: '#f59e0b' };
+    return { label: 'Obese', color: '#ef4444' };
+  };
 
   const handleSaveProfile = async () => {
     if (!user) return;
@@ -70,13 +94,25 @@ export default function EditProfileScreen() {
       setSavingProfile(true);
       const weight = parseFloat(editWeightDraft);
       const height = parseFloat(editHeightDraft);
-      const age = parseInt(editAgeDraft, 10);
+
+      // Build date_of_birth string if all DOB parts are filled and valid
+      let date_of_birth: string | undefined;
+      if (dobDay.trim() && dobMonth.trim() && dobYear.trim() && dobYear.trim().length === 4) {
+        const d = dobDay.trim().padStart(2, '0');
+        const m = dobMonth.trim().padStart(2, '0');
+        const y = dobYear.trim();
+        const parsed = new Date(`${y}-${m}-${d}`);
+        if (!isNaN(parsed.getTime()) && parsed.getFullYear() === parseInt(y)) {
+          date_of_birth = `${y}-${m}-${d}`;
+        }
+      }
+
       const updatePayload: any = {
         bio: editBioDraft.trim(),
         name: editNameDraft.trim(),
         ...(editWeightDraft.trim() && !isNaN(weight) ? { weight } : {}),
         ...(editHeightDraft.trim() && !isNaN(height) ? { height } : {}),
-        ...(editAgeDraft.trim() && !isNaN(age) ? { age } : {}),
+        ...(date_of_birth ? { date_of_birth } : {}),
       };
 
       const promises: Promise<any>[] = [userApi.updateMyProfile(updatePayload)];
@@ -95,7 +131,12 @@ export default function EditProfileScreen() {
         bio: profileRes.bio ?? editBioDraft.trim(),
         weight: profileRes.weight ?? (editWeightDraft.trim() ? parseFloat(editWeightDraft) : user.weight),
         height: profileRes.height ?? (editHeightDraft.trim() ? parseFloat(editHeightDraft) : user.height),
-        age: profileRes.age ?? (editAgeDraft.trim() ? parseInt(editAgeDraft, 10) : user.age),
+        age: profileRes.age ?? user.age,
+        date_of_birth: profileRes.date_of_birth ?? user.date_of_birth,
+        daily_calorie_target: profileRes.daily_calorie_target ?? user.daily_calorie_target,
+        protein_target: profileRes.protein_target ?? user.protein_target,
+        carbs_target: profileRes.carbs_target ?? user.carbs_target,
+        fat_target: profileRes.fat_target ?? user.fat_target,
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -286,20 +327,65 @@ export default function EditProfileScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Age</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="calendar-outline" size={18} color={theme.primary} style={{ marginRight: 10 }} />
+            <Text style={styles.inputLabel}>Date of Birth</Text>
+            <View style={[styles.inputWrapper, { paddingHorizontal: Spacing.md }]}>
+              <Ionicons name="calendar-outline" size={18} color={theme.primary} style={{ marginRight: 8 }} />
               <TextInput
-                style={styles.textInput}
-                value={editAgeDraft}
-                onChangeText={setEditAgeDraft}
-                placeholder="e.g. 25"
+                style={[styles.textInput, styles.dobField]}
+                value={dobDay}
+                onChangeText={(v) => {
+                  setDobDay(v);
+                  if (v.length === 2) dobMonthRef.current?.focus();
+                }}
+                placeholder="DD"
                 placeholderTextColor={theme.textLight}
                 keyboardType="number-pad"
+                maxLength={2}
+                selectionColor={theme.primary}
+              />
+              <Text style={styles.dobSep}>/</Text>
+              <TextInput
+                ref={dobMonthRef}
+                style={[styles.textInput, styles.dobField]}
+                value={dobMonth}
+                onChangeText={(v) => {
+                  setDobMonth(v);
+                  if (v.length === 2) dobYearRef.current?.focus();
+                }}
+                placeholder="MM"
+                placeholderTextColor={theme.textLight}
+                keyboardType="number-pad"
+                maxLength={2}
+                selectionColor={theme.primary}
+              />
+              <Text style={styles.dobSep}>/</Text>
+              <TextInput
+                ref={dobYearRef}
+                style={[styles.textInput, { flex: 1.5 }]}
+                value={dobYear}
+                onChangeText={setDobYear}
+                placeholder="YYYY"
+                placeholderTextColor={theme.textLight}
+                keyboardType="number-pad"
+                maxLength={4}
                 selectionColor={theme.primary}
               />
             </View>
           </View>
+
+          {computedBmi !== null && (
+            <View style={[styles.bmiCard, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.bmiLabel}>Body Mass Index</Text>
+                <Text style={[styles.bmiCategory, { color: bmiCategory(computedBmi).color }]}>
+                  {bmiCategory(computedBmi).label}
+                </Text>
+              </View>
+              <Text style={[styles.bmiValue, { color: bmiCategory(computedBmi).color }]}>
+                {computedBmi}
+              </Text>
+            </View>
+          )}
 
           <DuoButton
             title={savingProfile ? 'Saving...' : 'Save Changes'}
@@ -455,6 +541,41 @@ function makeStyles(theme: typeof Colors) {
     rowInputGroup: {
       flexDirection: 'row',
       gap: Spacing.lg,
+    },
+    dobField: {
+      flex: 1,
+      textAlign: 'center',
+    },
+    dobSep: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: theme.textSecondary,
+      marginHorizontal: 4,
+    },
+    bmiCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: 16,
+      borderWidth: 2,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.md,
+      marginBottom: Spacing.xxl,
+    },
+    bmiLabel: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: theme.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    bmiCategory: {
+      fontSize: 15,
+      fontWeight: '800',
+      marginTop: 2,
+    },
+    bmiValue: {
+      fontSize: 32,
+      fontWeight: '900',
     },
   });
 }
