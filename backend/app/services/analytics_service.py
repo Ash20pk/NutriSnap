@@ -375,7 +375,7 @@ class AnalyticsService:
             )
             meals = await conn.fetch(
                 """
-                SELECT id, user_id, meal_type, timestamp, foods,
+                SELECT id, user_id, meal_type, timestamp, foods, micros,
                        total_calories, total_protein, total_carbs, total_fat
                 FROM meals
                 WHERE user_id = $1
@@ -790,9 +790,24 @@ class AnalyticsService:
             for fr in food_rows:
                 foods_by_id[str(fr["id"])] = dict(fr)
         
-        # Compute micros for each meal
+        # Compute micros for each meal, merging with stored values.
+        # Recomputed values (from latest foods table data) take priority.
+        # When a nutrient is 0 in the recomputed result (food not enriched yet),
+        # fall back to the value stored on the meal at log time.
         for m in meals:
-            m["micros"] = compute_meal_micros(m, foods_by_id)
+            stored_micros = m.get("micros") or {}
+            if isinstance(stored_micros, str):
+                try:
+                    import json as _json
+                    stored_micros = _json.loads(stored_micros)
+                except Exception:
+                    stored_micros = {}
+            recomputed = compute_meal_micros(m, foods_by_id)
+            merged = {
+                k: recomputed[k] if recomputed.get(k, 0.0) > 0 else float(stored_micros.get(k) or 0)
+                for k in recomputed
+            }
+            m["micros"] = merged
     
     @staticmethod
     def _parse_analytics_cache_fields(cache: asyncpg.Record) -> Dict[str, Any]:
