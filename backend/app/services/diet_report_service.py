@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from app.db.pool import get_pool
 from app.services.analytics_service import AnalyticsService
+from diet_report_ai import generate_diet_report
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,13 @@ class DietReportService:
                 "report_date": report_date.isoformat(),
                 "grade": "N/A",
                 "justification": "No meals logged for this period",
+                "executive_summary": "No meals logged for this period. Start logging your meals to receive personalized diet reports.",
+                "strengths": [],
+                "areas_for_improvement": [],
+                "detailed_analysis": {},
+                "specific_recommendations": [],
+                "meal_suggestions": [],
+                "action_plan": {},
                 "highlights": {},
                 "health_insights": {},
                 "bio_alerts": [],
@@ -78,40 +86,58 @@ class DietReportService:
                 "meals_count": 0,
             }
         
-        # Extract report data from analytics
-        insights = analytics.get("insights", {})
-        overall_diet_quality = insights.get("overall_diet_quality", "C - insufficient data")
+        # Fetch user profile for personalized targets
+        async with self.pool.acquire() as conn:
+            profile = await conn.fetchrow(
+                """
+                SELECT age, gender, daily_calorie_target, protein_target, carbs_target, fat_target
+                FROM profiles
+                WHERE id = $1
+                """,
+                user_id,
+            )
+            user_profile = dict(profile) if profile else None
         
-        # Parse grade from overall_diet_quality
-        grade = self._parse_grade(overall_diet_quality)
-        justification = self._parse_justification(overall_diet_quality)
-        
-        # Build highlights from daily_highlights
-        highlights = {
-            "calories": daily_highlights.get("calories", {}),
-            "protein": daily_highlights.get("protein", {}),
-            "macros": daily_highlights.get("macros", {}),
-            "micronutrients": daily_highlights.get("micronutrients", {}),
+        # Build meals data for AI
+        meals_data = {
+            "meals": meals,
+            "summary": daily_highlights.get("summary", {}),
         }
         
-        # Get top foods from analytics (compute from meals if not available)
+        # Generate comprehensive report using AI
+        ai_report = await generate_diet_report(
+            meals_data=meals_data,
+            analytics_data=analytics,
+            time_range=time_range,
+            user_profile=user_profile,
+        )
+        
+        # Compute top foods from meals
         top_foods = self._compute_top_foods(meals)
         
+        # Build complete report data
         report_data = {
             "user_id": user_id,
             "time_range": time_range,
             "report_date": report_date.isoformat(),
-            "grade": grade,
-            "justification": justification,
-            "highlights": highlights,
+            "grade": ai_report.get("grade", "C"),
+            "justification": ai_report.get("grade_justification", ""),
+            "executive_summary": ai_report.get("executive_summary", ""),
+            "strengths": ai_report.get("strengths", []),
+            "areas_for_improvement": ai_report.get("areas_for_improvement", []),
+            "detailed_analysis": ai_report.get("detailed_analysis", {}),
+            "specific_recommendations": ai_report.get("specific_recommendations", []),
+            "meal_suggestions": ai_report.get("meal_suggestions", []),
+            "action_plan": ai_report.get("action_plan", {}),
+            "highlights": daily_highlights,
             "health_insights": analytics.get("health_insights", {}),
             "bio_alerts": analytics.get("bio_alerts", []),
             "red_flags": analytics.get("red_flags", []),
             "top_foods": top_foods,
-            "macro_balance": insights.get("macro_balance", ""),
-            "micronutrient_status": insights.get("micronutrient_status", ""),
-            "eating_pattern": insights.get("eating_pattern", ""),
-            "variety": insights.get("variety", ""),
+            "macro_balance": analytics.get("insights", {}).get("macro_balance", ""),
+            "micronutrient_status": analytics.get("insights", {}).get("micronutrient_status", ""),
+            "eating_pattern": analytics.get("insights", {}).get("eating_pattern", ""),
+            "variety": analytics.get("insights", {}).get("variety", ""),
             "meals_count": len(meals),
         }
         
@@ -122,7 +148,7 @@ class DietReportService:
             "[diet_report.generate] completed user_id=%s time_range=%s grade=%s",
             user_id,
             time_range,
-            grade,
+            report_data["grade"],
         )
         
         return report_data
@@ -181,15 +207,24 @@ class DietReportService:
                 """
                 INSERT INTO diet_reports (
                     user_id, time_range, report_date, grade, justification,
+                    executive_summary, strengths, areas_for_improvement,
+                    detailed_analysis, specific_recommendations, meal_suggestions, action_plan,
                     highlights, health_insights, bio_alerts, red_flags,
                     top_foods, macro_balance, micronutrient_status,
                     eating_pattern, variety, updated_at
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now())
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, now())
                 ON CONFLICT (user_id, time_range, report_date)
                 DO UPDATE SET
                     grade = EXCLUDED.grade,
                     justification = EXCLUDED.justification,
+                    executive_summary = EXCLUDED.executive_summary,
+                    strengths = EXCLUDED.strengths,
+                    areas_for_improvement = EXCLUDED.areas_for_improvement,
+                    detailed_analysis = EXCLUDED.detailed_analysis,
+                    specific_recommendations = EXCLUDED.specific_recommendations,
+                    meal_suggestions = EXCLUDED.meal_suggestions,
+                    action_plan = EXCLUDED.action_plan,
                     highlights = EXCLUDED.highlights,
                     health_insights = EXCLUDED.health_insights,
                     bio_alerts = EXCLUDED.bio_alerts,
@@ -206,6 +241,13 @@ class DietReportService:
                 report_date,
                 report_data["grade"],
                 report_data["justification"],
+                report_data.get("executive_summary", ""),
+                json.dumps(report_data.get("strengths", [])),
+                json.dumps(report_data.get("areas_for_improvement", [])),
+                json.dumps(report_data.get("detailed_analysis", {})),
+                json.dumps(report_data.get("specific_recommendations", [])),
+                json.dumps(report_data.get("meal_suggestions", [])),
+                json.dumps(report_data.get("action_plan", {})),
                 json.dumps(report_data["highlights"]),
                 json.dumps(report_data["health_insights"]),
                 json.dumps(report_data["bio_alerts"]),

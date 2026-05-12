@@ -1513,37 +1513,137 @@ export default function AnalyticsScreen() {
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.healthInsightModalScroll}>
-              <Text style={styles.healthInsightModalText}>{dietReport?.justification || ''}</Text>
-              
-              {dietReport?.macro_balance && (
+              {dietReport?.executive_summary && (
                 <View style={styles.reportSection}>
-                  <Text style={styles.reportSectionTitle}>Macro Balance</Text>
-                  <Text style={styles.reportSectionText}>{dietReport.macro_balance}</Text>
+                  <Text style={styles.reportSectionTitle}>Executive Summary</Text>
+                  <Text style={styles.reportSectionText}>{dietReport.executive_summary}</Text>
                 </View>
               )}
               
-              {dietReport?.micronutrient_status && (
+              {dietReport?.strengths && Array.isArray(dietReport.strengths) && dietReport.strengths.length > 0 && (
                 <View style={styles.reportSection}>
-                  <Text style={styles.reportSectionTitle}>Micronutrients</Text>
-                  <Text style={styles.reportSectionText}>{dietReport.micronutrient_status}</Text>
+                  <Text style={styles.reportSectionTitle}>Strengths</Text>
+                  {dietReport.strengths.map((strength: string, idx: number) => (
+                    <View key={idx} style={styles.reportListItem}>
+                      <Text style={styles.reportBullet}>✓</Text>
+                      <Text style={styles.reportListItemText}>{strength}</Text>
+                    </View>
+                  ))}
                 </View>
               )}
               
-              {dietReport?.eating_pattern && (
+              {dietReport?.areas_for_improvement && Array.isArray(dietReport.areas_for_improvement) && dietReport.areas_for_improvement.length > 0 && (
                 <View style={styles.reportSection}>
-                  <Text style={styles.reportSectionTitle}>Eating Pattern</Text>
-                  <Text style={styles.reportSectionText}>{dietReport.eating_pattern}</Text>
+                  <Text style={styles.reportSectionTitle}>Areas for Improvement</Text>
+                  {dietReport.areas_for_improvement.map((area: string, idx: number) => (
+                    <View key={idx} style={styles.reportListItem}>
+                      <Text style={styles.reportBullet}>•</Text>
+                      <Text style={styles.reportListItemText}>{area}</Text>
+                    </View>
+                  ))}
                 </View>
               )}
               
-              {dietReport?.variety && (
+              {dietReport?.detailed_analysis && typeof dietReport.detailed_analysis === 'object' && (
                 <View style={styles.reportSection}>
-                  <Text style={styles.reportSectionTitle}>Food Variety</Text>
-                  <Text style={styles.reportSectionText}>{dietReport.variety}</Text>
+                  <Text style={styles.reportSectionTitle}>Detailed Analysis</Text>
+                  {dietReport.detailed_analysis.macronutrients && (
+                    <View style={styles.reportSubsection}>
+                      <Text style={styles.reportSubsectionTitle}>Macronutrients</Text>
+                      <Text style={styles.reportSectionText}>{dietReport.detailed_analysis.macronutrients}</Text>
+                    </View>
+                  )}
+                  {dietReport.detailed_analysis.micronutrients && (
+                    <View style={styles.reportSubsection}>
+                      <Text style={styles.reportSubsectionTitle}>Micronutrients</Text>
+                      <Text style={styles.reportSectionText}>{dietReport.detailed_analysis.micronutrients}</Text>
+                    </View>
+                  )}
+                  {dietReport.detailed_analysis.eating_pattern && (
+                    <View style={styles.reportSubsection}>
+                      <Text style={styles.reportSubsectionTitle}>Eating Pattern</Text>
+                      <Text style={styles.reportSectionText}>{dietReport.detailed_analysis.eating_pattern}</Text>
+                    </View>
+                  )}
+                  {dietReport.detailed_analysis.food_variety && (
+                    <View style={styles.reportSubsection}>
+                      <Text style={styles.reportSubsectionTitle}>Food Variety</Text>
+                      <Text style={styles.reportSectionText}>{dietReport.detailed_analysis.food_variety}</Text>
+                    </View>
+                  )}
                 </View>
               )}
               
-              {dietReport?.top_foods && dietReport.top_foods.length > 0 && (
+              {dietReport?.specific_recommendations && Array.isArray(dietReport.specific_recommendations) && dietReport.specific_recommendations.length > 0 && (
+                <View style={styles.reportSection}>
+                  <Text style={styles.reportSectionTitle}>Specific Recommendations</Text>
+                  {dietReport.specific_recommendations.map((rec: any, idx: number) => (
+                    <View key={idx} style={styles.reportRecommendation}>
+                      <Text style={styles.reportRecCategory}>{rec.category || 'General'}</Text>
+                      <Text style={styles.reportRecText}>{rec.recommendation}</Text>
+                      {rec.why && (
+                        <Text style={styles.reportRecWhy}>Why: {rec.why}</Text>
+                      )}
+                      {rec.how_to_implement && (
+                        <Text style={styles.reportRecHow}>How: {rec.how_to_implement}</Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
+              
+              {dietReport?.meal_suggestions && Array.isArray(dietReport.meal_suggestions) && dietReport.meal_suggestions.length > 0 && (
+                <View style={styles.reportSection}>
+                  <Text style={styles.reportSectionTitle}>Meal Suggestions</Text>
+                  {dietReport.meal_suggestions.map((suggestion: string, idx: number) => (
+                    <View key={idx} style={styles.reportListItem}>
+                      <Text style={styles.reportBullet}>🍽</Text>
+                      <Text style={styles.reportListItemText}>{suggestion}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+              
+              {dietReport?.action_plan && typeof dietReport.action_plan === 'object' && (
+                <View style={styles.reportSection}>
+                  <Text style={styles.reportSectionTitle}>Action Plan</Text>
+                  {dietReport.action_plan.week_1 && Array.isArray(dietReport.action_plan.week_1) && dietReport.action_plan.week_1.length > 0 && (
+                    <View style={styles.reportSubsection}>
+                      <Text style={styles.reportSubsectionTitle}>Week 1</Text>
+                      {dietReport.action_plan.week_1.map((action: string, idx: number) => (
+                        <View key={idx} style={styles.reportListItem}>
+                          <Text style={styles.reportBullet}>→</Text>
+                          <Text style={styles.reportListItemText}>{action}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                  {dietReport.action_plan.week_2 && Array.isArray(dietReport.action_plan.week_2) && dietReport.action_plan.week_2.length > 0 && (
+                    <View style={styles.reportSubsection}>
+                      <Text style={styles.reportSubsectionTitle}>Week 2</Text>
+                      {dietReport.action_plan.week_2.map((action: string, idx: number) => (
+                        <View key={idx} style={styles.reportListItem}>
+                          <Text style={styles.reportBullet}>→</Text>
+                          <Text style={styles.reportListItemText}>{action}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                  {dietReport.action_plan.ongoing && Array.isArray(dietReport.action_plan.ongoing) && dietReport.action_plan.ongoing.length > 0 && (
+                    <View style={styles.reportSubsection}>
+                      <Text style={styles.reportSubsectionTitle}>Ongoing Habits</Text>
+                      {dietReport.action_plan.ongoing.map((action: string, idx: number) => (
+                        <View key={idx} style={styles.reportListItem}>
+                          <Text style={styles.reportBullet}>♻</Text>
+                          <Text style={styles.reportListItemText}>{action}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+              
+              {dietReport?.top_foods && Array.isArray(dietReport.top_foods) && dietReport.top_foods.length > 0 && (
                 <View style={styles.reportSection}>
                   <Text style={styles.reportSectionTitle}>Top Foods</Text>
                   <View style={styles.reportFoodList}>
@@ -1558,7 +1658,7 @@ export default function AnalyticsScreen() {
                 </View>
               )}
               
-              {dietReport?.bio_alerts && dietReport.bio_alerts.length > 0 && (
+              {dietReport?.bio_alerts && Array.isArray(dietReport.bio_alerts) && dietReport.bio_alerts.length > 0 && (
                 <View style={styles.reportSection}>
                   <Text style={styles.reportSectionTitle}>Alerts</Text>
                   {dietReport.bio_alerts.map((alert: any, idx: number) => (
@@ -1570,7 +1670,7 @@ export default function AnalyticsScreen() {
                 </View>
               )}
               
-              {dietReport?.red_flags && dietReport.red_flags.length > 0 && (
+              {dietReport?.red_flags && Array.isArray(dietReport.red_flags) && dietReport.red_flags.length > 0 && (
                 <View style={styles.reportSection}>
                   <Text style={styles.reportSectionTitle}>Red Flags</Text>
                   {dietReport.red_flags.map((flag: any, idx: number) => (
@@ -1858,6 +1958,70 @@ function makeStyles(theme: typeof Colors) {
     fontWeight: '600',
     color: theme.textSecondary,
     marginTop: 4,
+  },
+  reportListItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 4,
+    gap: 8,
+  },
+  reportBullet: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.primary,
+    width: 20,
+  },
+  reportListItemText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: theme.text,
+    flex: 1,
+    lineHeight: 18,
+  },
+  reportSubsection: {
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: theme.border + '80',
+  },
+  reportSubsectionTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: theme.textSecondary,
+    marginBottom: 4,
+  },
+  reportRecommendation: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  reportRecCategory: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: theme.primary,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  reportRecText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.text,
+    marginBottom: 4,
+  },
+  reportRecWhy: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: theme.textSecondary,
+    marginBottom: 2,
+  },
+  reportRecHow: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: theme.textSecondary,
+    fontStyle: 'italic',
   },
   toolCard: {
     width: '100%',
