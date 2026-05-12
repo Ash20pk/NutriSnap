@@ -278,6 +278,8 @@ class DietReportService:
             row = await conn.fetchrow(
                 """
                 SELECT id, user_id, time_range, report_date, grade, justification,
+                       executive_summary, strengths, areas_for_improvement,
+                       detailed_analysis, specific_recommendations, meal_suggestions, action_plan,
                        highlights, health_insights, bio_alerts, red_flags,
                        top_foods, macro_balance, micronutrient_status,
                        eating_pattern, variety, created_at, updated_at
@@ -300,6 +302,13 @@ class DietReportService:
                 "report_date": row["report_date"].isoformat(),
                 "grade": row["grade"],
                 "justification": row["justification"],
+                "executive_summary": row.get("executive_summary", ""),
+                "strengths": row.get("strengths", []),
+                "areas_for_improvement": row.get("areas_for_improvement", []),
+                "detailed_analysis": row.get("detailed_analysis", {}),
+                "specific_recommendations": row.get("specific_recommendations", []),
+                "meal_suggestions": row.get("meal_suggestions", []),
+                "action_plan": row.get("action_plan", {}),
                 "highlights": row["highlights"],
                 "health_insights": row["health_insights"],
                 "bio_alerts": row["bio_alerts"],
