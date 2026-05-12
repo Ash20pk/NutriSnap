@@ -343,34 +343,35 @@ Return ONLY this JSON — no markdown, no explanation outside JSON:
   }},
   "health_insights": {{
     "heart": "1 sentence on cardiovascular risk — cite sodium ({summary['avg_sodium']:.0f}mg vs target), sat fat ({summary['avg_saturated_fat']:.1f}g), and fiber ({summary['avg_fiber']:.1f}g).",
-    "heart_recommended_foods": ["Specific food names if fiber LOW, e.g. 'oats', 'beans', 'avocado'"],
-    "heart_culprit_foods": ["Specific foods from top list if sodium/sat fat HIGH"],
+    "heart_recommended_foods": [],
+    "heart_culprit_foods": [],
     "liver": "1 sentence on liver load — cite sugar ({summary['avg_sugar']:.1f}g vs target) and any processed foods from top list.",
-    "liver_recommended_foods": ["Specific food names if sugar LOW"],
-    "liver_culprit_foods": ["Specific foods from top list if sugar HIGH"],
+    "liver_recommended_foods": [],
+    "liver_culprit_foods": [],
     "kidney": "1 sentence on kidney impact — cite sodium ({summary['avg_sodium']:.0f}mg), potassium ({summary['avg_potassium']:.0f}mg), protein ({summary['avg_protein']:.0f}g).",
-    "kidney_recommended_foods": ["Specific food names if potassium LOW, e.g. 'bananas', 'spinach', 'yogurt'"],
-    "kidney_culprit_foods": ["Specific foods from top list if sodium HIGH"],
+    "kidney_recommended_foods": [],
+    "kidney_culprit_foods": [],
     "brain": "1 sentence on cognitive health — cite folate ({summary['avg_folate']:.0f}µg), B12 ({summary['avg_vitamin_b12']:.2f}µg), iron ({summary['avg_iron']:.2f}mg).",
-    "brain_recommended_foods": ["Specific food names if LOW, e.g. 'eggs', 'salmon', 'leafy greens'"],
+    "brain_recommended_foods": [],
     "brain_culprit_foods": [],
     "skin": "1 sentence on skin health — cite vitamin A ({summary['avg_vitamin_a']:.0f}µg), vitamin C ({summary['avg_vitamin_c']:.0f}mg), zinc ({summary['avg_zinc']:.2f}mg).",
-    "skin_recommended_foods": ["Specific food names if LOW, e.g. 'carrots', 'citrus', 'nuts'"],
+    "skin_recommended_foods": [],
     "skin_culprit_foods": []
   }},
   "bio_alerts": [
-    {{"metric": "Sugar", "status": "good|warning|critical", "value": "{summary['avg_sugar']:.1f}g", "target": "UL from targets above", "message": "One sentence: actual vs target. If HIGH, name culprit foods from top list. If LOW, note good intake (max 20 words)"}},
-    {{"metric": "Sodium", "status": "good|warning|critical", "value": "{summary['avg_sodium']:.0f}mg", "target": "UL from targets above", "message": "One sentence: actual vs target. If HIGH, name culprit foods from top list (max 20 words)"}},
-    {{"metric": "Fiber", "status": "good|warning|critical", "value": "{summary['avg_fiber']:.1f}g", "target": "RDA from targets above", "message": "One sentence: actual vs target. If LOW, recommend fiber-rich foods (max 20 words)"}},
-    {{"metric": "Iron", "status": "good|warning|critical", "value": "{summary['avg_iron']:.2f}mg", "target": "RDA from targets above", "message": "One sentence: actual vs target. If LOW, recommend iron-rich foods (max 20 words)"}}
+    {{"metric": "Sugar", "status": "good|warning|critical", "value": "{summary['avg_sugar']:.1f}g", "target": "UL from targets above", "message": "One sentence: actual vs target with health implication (max 18 words)", "recommended_foods": [], "culprit_foods": []}},
+    {{"metric": "Sodium", "status": "good|warning|critical", "value": "{summary['avg_sodium']:.0f}mg", "target": "UL from targets above", "message": "One sentence: actual vs target with health implication (max 18 words)", "recommended_foods": [], "culprit_foods": []}},
+    {{"metric": "Fiber", "status": "good|warning|critical", "value": "{summary['avg_fiber']:.1f}g", "target": "RDA from targets above", "message": "One sentence: actual vs target with health implication (max 18 words)", "recommended_foods": [], "culprit_foods": []}},
+    {{"metric": "Iron", "status": "good|warning|critical", "value": "{summary['avg_iron']:.2f}mg", "target": "RDA from targets above", "message": "One sentence: actual vs target with health implication (max 18 words)", "recommended_foods": [], "culprit_foods": []}}
   ],
   "red_flags": [
     {{
       "title": "Max 5 words",
-      "description": "Cite specific food + actual value + % over limit (max 20 words)",
+      "description": "Cite specific value, behavior or food (max 20 words)",
       "severity": "critical|warning|moderate",
-      "culprit_foods": ["Specific food from top foods list"],
-      "frequency": "X times this {time_range} (max 6 words)"
+      "culprit_foods": [],
+      "recommended_foods": [],
+      "frequency": "X times this {time_range} or pattern description (max 8 words)"
     }}
   ]
 }}
@@ -387,17 +388,39 @@ ABSOLUTE RULES — VIOLATIONS INVALIDATE THE OUTPUT:
    - "warning": 10–30% over UL, OR 30–50% below RDA
    - "critical": >30% over UL, OR >50% below RDA
 
-3. RED_FLAGS — strict criteria:
-   - Only flag TRUE negatives with data support.
-   - Must name at least 1 food from the Top Foods list as culprit.
-   - Must cite the exact value AND target exceeded.
-   - Do NOT flag nutrients where data coverage < 50%.
-   - No compliments, encouragement, or neutral observations here.
-   - If nothing qualifies → "red_flags": []
+3. RED_FLAGS — flag ANY of the following with data support:
+   NUTRIENT ISSUES:
+   - Any nutrient >30% over UL (critical) or 10-30% over UL (warning)
+   - Any key nutrient >50% below RDA (critical) or 30-50% below RDA (warning)
+   EATING HABIT ISSUES:
+   - Late meals: if late_meals > 2 in this period, flag it
+   - Meal skipping: if avg meals/day < 2, flag it
+   - Low meal variety: if top foods shows only 1-2 unique foods, flag it
+   - Excessive single-food reliance: if one food dominates the top list heavily
+   - Very low calories: if avg_calories < 1000 kcal, flag it
+   For NUTRIENT flags:
+   - culprit_foods: add actual foods from Top Foods list that contribute to HIGH nutrients
+   - recommended_foods: add specific foods to address LOW nutrients
+   For HABIT flags: culprit_foods and recommended_foods can be empty []
+   - If NOTHING qualifies → "red_flags": []
+   - DO NOT use placeholder text in any array.
 
 4. DATA COVERAGE < 70%: append "(micronutrient data partial — {enrichment_pct:.0f}% coverage)" to micronutrient_status.
 
-5. UI LENGTH LIMITS (critical for display):
+5. BIO_ALERTS FOOD ARRAYS:
+   - bio_alerts[].recommended_foods: add specific food names if the metric is LOW (below RDA)
+   - bio_alerts[].culprit_foods: add actual foods from the Top Foods list if metric is HIGH (above UL)
+   - Keep empty [] if metric is within range or no foods qualify.
+
+6. FOOD RECOMMENDATIONS AND CULPRIT FOODS:
+   - For each organ in health_insights, populate the recommended_foods and culprit_foods arrays.
+   - recommended_foods: Add specific food names if the organ's key nutrients are LOW (below RDA). Only add actual foods, not placeholder text.
+   - culprit_foods: Add specific foods from the Top Foods list if the organ's key nutrients are HIGH (above UL). Only add actual foods from the provided data.
+   - If no foods qualify, keep the array empty [].
+   - DO NOT include placeholder text like "Specific food names" or example foods not in the data.
+   - Use short, simple food names (e.g., "oats", not "oats and whole grains").
+
+6. UI LENGTH LIMITS (critical for display):
    - red_flags[].title: ≤5 words
    - red_flags[].description: ≤20 words
    - bio_alerts[].message: ≤18 words
@@ -426,7 +449,7 @@ DAILY MODE — ADDITIONAL RULES:
         response = await openai_client.chat.completions.create(
             model='gpt-5.4-2026-03-05',
             messages=[
-                {"role": "system", "content": "You are a nutrition analyst. Provide concise, data-backed insights in JSON format only. NEVER invent numbers or scores not present in the input data. Every claim must be traceable to a specific value provided."},
+                {"role": "system", "content": "You are world's best nutrition analyst with 20+ years of experience. Provide concise, data-backed insights in JSON format only. NEVER invent numbers or scores not present in the input data. Every claim must be traceable to a specific value provided."},
                 {"role": "user", "content": prompt},
             ],
             response_format={"type": "json_object"},

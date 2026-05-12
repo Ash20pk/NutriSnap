@@ -127,6 +127,30 @@ const CollapsibleBioAlert = ({ alert }: { alert: any }) => {
           <Text style={styles.alertBody}>
             {alert.message}
           </Text>
+          {alert.recommended_foods && alert.recommended_foods.length > 0 && (
+            <View style={styles.redFlagCulprits}>
+              <Text style={styles.redFlagCulpritsLabel}>Recommended Foods:</Text>
+              <View style={styles.redFlagCulpritsList}>
+                {alert.recommended_foods.map((food: string, idx: number) => (
+                  <View key={idx} style={[styles.redFlagCulpritBadge, { borderColor: Colors.success + '30', backgroundColor: Colors.success + '10' }]}>
+                    <Text style={[styles.redFlagCulpritText, { color: Colors.success }]}>{food}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+          {alert.culprit_foods && alert.culprit_foods.length > 0 && (
+            <View style={styles.redFlagCulprits}>
+              <Text style={styles.redFlagCulpritsLabel}>Culprit Foods:</Text>
+              <View style={styles.redFlagCulpritsList}>
+                {alert.culprit_foods.map((food: string, idx: number) => (
+                  <View key={idx} style={[styles.redFlagCulpritBadge, { borderColor: Colors.error + '30', backgroundColor: Colors.error + '10' }]}>
+                    <Text style={[styles.redFlagCulpritText, { color: Colors.error }]}>{food}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
         </View>
       )}
     </TouchableOpacity>
@@ -180,6 +204,18 @@ const CollapsibleRedFlag = ({ flag }: { flag: any }) => {
           <Text style={styles.alertBody}>
             {flag.description}
           </Text>
+          {flag.recommended_foods && flag.recommended_foods.length > 0 && (
+            <View style={styles.redFlagCulprits}>
+              <Text style={styles.redFlagCulpritsLabel}>Recommended Foods:</Text>
+              <View style={styles.redFlagCulpritsList}>
+                {flag.recommended_foods.map((food: string, idx: number) => (
+                  <View key={idx} style={[styles.redFlagCulpritBadge, { borderColor: Colors.success + '30', backgroundColor: Colors.success + '10' }]}>
+                    <Text style={[styles.redFlagCulpritText, { color: Colors.success }]}>{food}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
           {flag.culprit_foods && flag.culprit_foods.length > 0 && (
             <View style={styles.redFlagCulprits}>
               <Text style={styles.redFlagCulpritsLabel}>Culprit Foods:</Text>
@@ -198,7 +234,7 @@ const CollapsibleRedFlag = ({ flag }: { flag: any }) => {
               numberOfLines={1}
               ellipsizeMode="tail"
             >
-              Frequency: {truncateWords(flag.frequency, 6)}
+              Frequency: {truncateWords(flag.frequency, 8)}
             </Text>
           )}
         </View>
@@ -931,6 +967,31 @@ export default function AnalyticsScreen() {
           </TouchableOpacity>
         </View>
 
+        {aiAnalysis?.insights?.overall_diet_quality && !isInactivePeriod && (() => {
+          const raw: string = aiAnalysis.insights.overall_diet_quality;
+          const grade = raw.match(/^([A-F][+-]?)/)?.[1] || raw[0] || '?';
+          const justification = raw.replace(/^[A-F][+-]?\s*[-–:]?\s*/i, '');
+          const gradeColor =
+            grade.startsWith('A') ? Colors.success :
+            grade.startsWith('B') ? '#6BBF6B' :
+            grade.startsWith('C') ? Colors.warning :
+            grade.startsWith('D') ? '#FF8C00' :
+            Colors.error;
+          return (
+            <AnimatedCard delay={80} type="slide" style={styles.section}>
+              <View style={styles.dietGradeCard}>
+                <View style={[styles.dietGradeBadge, { backgroundColor: gradeColor + '18', borderColor: gradeColor + '40' }]}>
+                  <Text style={[styles.dietGradeText, { color: gradeColor }]}>{grade}</Text>
+                </View>
+                <View style={styles.dietGradeInfo}>
+                  <Text style={styles.dietGradeLabel}>Diet Quality</Text>
+                  <Text style={styles.dietGradeJustification} numberOfLines={2}>{justification}</Text>
+                </View>
+              </View>
+            </AnimatedCard>
+          );
+        })()}
+
         <AnimatedCard delay={100} type="slide" style={styles.section}>
           <InsightHeader
             title="Daily Averages"
@@ -1455,6 +1516,46 @@ function makeStyles(theme: typeof Colors) {
   },
   section: {
     marginBottom: 20,
+  },
+  dietGradeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    backgroundColor: theme.white,
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: theme.border,
+    borderBottomWidth: 6,
+  },
+  dietGradeBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dietGradeText: {
+    fontSize: 32,
+    fontWeight: '900',
+  },
+  dietGradeInfo: {
+    flex: 1,
+  },
+  dietGradeLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: theme.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  dietGradeJustification: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.text,
+    lineHeight: 20,
   },
   healthInsightModalOverlay: {
     flex: 1,
