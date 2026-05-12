@@ -58,7 +58,6 @@ class AnalyticsService:
             if int(meals_count or 0) == 0:
                 return {
                     "insights": {},
-                    "bio_impact": {},
                     "health_insights": {},
                     "bio_alerts": [],
                     "red_flags": [],
@@ -69,7 +68,7 @@ class AnalyticsService:
             # Check for cached analytics
             cache = await conn.fetchrow(
                 """
-                SELECT insights, bio_impact, health_insights, bio_alerts, red_flags, meals_analyzed,
+                SELECT insights, health_insights, bio_alerts, red_flags, meals_analyzed,
                        date_range_start, date_range_end, expires_at, last_refreshed_at,
                        tokens_used, refresh_count
                 FROM analytics_cache
@@ -116,7 +115,6 @@ class AnalyticsService:
             # No cache exists
             return {
                 "insights": {},
-                "bio_impact": {},
                 "health_insights": {},
                 "bio_alerts": [],
                 "red_flags": [],
@@ -202,7 +200,7 @@ class AnalyticsService:
             # Get cached analytics
             cache = await conn.fetchrow(
                 """
-                SELECT insights, bio_impact, health_insights, bio_alerts, red_flags, meals_analyzed,
+                SELECT insights, health_insights, bio_alerts, red_flags, meals_analyzed,
                        date_range_start, date_range_end, expires_at, last_refreshed_at,
                        tokens_used, refresh_count
                 FROM analytics_cache
@@ -221,7 +219,6 @@ class AnalyticsService:
             # Cache is valid only if: not expired AND no new meals since cache was created
             ai: Dict[str, Any] = {
                 "insights": {},
-                "bio_impact": {},
                 "health_insights": {},
                 "bio_alerts": [],
                 "red_flags": [],
@@ -258,7 +255,6 @@ class AnalyticsService:
                     cache_valid = True
                     ai = {
                         "insights": cached_parsed.get("insights", {}),
-                        "bio_impact": cached_parsed.get("bio_impact", {}),
                         "health_insights": cached_parsed.get("health_insights", {}),
                         "bio_alerts": cached_parsed.get("bio_alerts", []),
                         "red_flags": cached_parsed.get("red_flags", []),
@@ -269,7 +265,7 @@ class AnalyticsService:
             if time_range == "week":  # Bundle is typically called with week, but we want daily AI
                 daily_cache = await conn.fetchrow(
                     """
-                    SELECT insights, bio_impact, health_insights, bio_alerts, red_flags, 
+                    SELECT insights, health_insights, bio_alerts, red_flags, 
                            expires_at, meals_analyzed
                     FROM analytics_cache
                     WHERE user_id = $1 AND time_range = 'daily'
@@ -284,7 +280,6 @@ class AnalyticsService:
                         parsed_daily = self._parse_analytics_cache_fields(daily_cache)
                         daily_ai = {
                             "insights": parsed_daily.get("insights", {}),
-                            "bio_impact": parsed_daily.get("bio_impact", {}),
                             "health_insights": parsed_daily.get("health_insights", {}),
                             "bio_alerts": parsed_daily.get("bio_alerts", []),
                             "red_flags": parsed_daily.get("red_flags", []),
@@ -395,7 +390,6 @@ class AnalyticsService:
                 )
                 return {
                     "insights": {},
-                    "bio_impact": {},
                     "health_insights": {},
                     "bio_alerts": [],
                     "red_flags": [],
@@ -462,7 +456,7 @@ class AnalyticsService:
                     if latest_meal_ts and cached_range_end and latest_meal_ts == cached_range_end:
                         parsed = await conn.fetchrow(
                             """
-                            SELECT insights, bio_impact, health_insights, bio_alerts, red_flags, meals_analyzed,
+                            SELECT insights, health_insights, bio_alerts, red_flags, meals_analyzed,
                                    date_range_start, date_range_end, expires_at, last_refreshed_at,
                                    tokens_used, refresh_count
                             FROM analytics_cache
@@ -528,15 +522,14 @@ class AnalyticsService:
             await conn.execute(
                 """
                 INSERT INTO analytics_cache (
-                    user_id, time_range, insights, bio_impact, health_insights, bio_alerts, red_flags,
+                    user_id, time_range, insights, health_insights, bio_alerts, red_flags,
                     meals_analyzed, date_range_start, date_range_end, expires_at,
                     tokens_used, analysis_duration_ms
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                 ON CONFLICT (user_id, time_range) DO UPDATE
                 SET
                     insights = EXCLUDED.insights,
-                    bio_impact = EXCLUDED.bio_impact,
                     health_insights = EXCLUDED.health_insights,
                     bio_alerts = EXCLUDED.bio_alerts,
                     red_flags = EXCLUDED.red_flags,
@@ -552,7 +545,6 @@ class AnalyticsService:
                 to_uuid(user_id),
                 time_range,
                 json.dumps(analysis["insights"]),
-                json.dumps(analysis["bio_impact"]),
                 json.dumps(analysis.get("health_insights", {})),
                 json.dumps(analysis.get("bio_alerts", [])),
                 json.dumps(analysis.get("red_flags", [])),
@@ -574,7 +566,6 @@ class AnalyticsService:
             
             return {
                 "insights": analysis["insights"],
-                "bio_impact": analysis["bio_impact"],
                 "health_insights": analysis.get("health_insights", {}),
                 "bio_alerts": analysis.get("bio_alerts", []),
                 "red_flags": analysis.get("red_flags", []),
@@ -830,7 +821,6 @@ class AnalyticsService:
         
         return {
             "insights": safe_parse(cache.get("insights")),
-            "bio_impact": safe_parse(cache.get("bio_impact")),
             "health_insights": safe_parse(cache.get("health_insights")),
             "bio_alerts": safe_parse(cache.get("bio_alerts")) if cache.get("bio_alerts") else [],
             "red_flags": safe_parse(cache.get("red_flags")) if cache.get("red_flags") else [],
