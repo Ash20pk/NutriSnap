@@ -15,7 +15,7 @@ import {
 import { Colors } from '../../constants/Colors';
 import { useTheme } from '../../context/ThemeContext';
 import { useUser } from '../../context/UserContext';
-import { mealApi, analyticsApi, waterApi } from '../../utils/api';
+import { mealApi, analyticsApi, waterApi, dietReportApi } from '../../utils/api';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import Svg, { Line, G, Text as SvgText } from 'react-native-svg';
@@ -333,6 +333,8 @@ export default function AnalyticsScreen() {
   const [waterData, setWaterData] = useState<any[]>([]);
   const [selectedHealthInsight, setSelectedHealthInsight] = useState<{ label: string; text: string } | null>(null);
   const [periodMealCount, setPeriodMealCount] = useState(0);
+  const [dietReport, setDietReport] = useState<any>(null);
+  const [dietReportModalVisible, setDietReportModalVisible] = useState(false);
   const [macroDistribution, setMacroDistribution] = useState<any[]>([]);
   const [mealTypeBreakdown, setMealTypeBreakdown] = useState<any>({});
   const [averages, setAverages] = useState<any>({});
@@ -373,6 +375,17 @@ export default function AnalyticsScreen() {
   const resetAiSections = useCallback(() => {
     setAiAnalysis(null);
   }, []);
+
+  const fetchDietReport = useCallback(async () => {
+    if (!user) return;
+    try {
+      const report = await dietReportApi.getLatestReport(timeRange);
+      setDietReport(report);
+    } catch (err) {
+      console.warn('[Analytics] Diet report fetch failed:', err);
+      setDietReport(null);
+    }
+  }, [user, timeRange]);
 
   const processTopFoods = useCallback((meals: any[]) => {
     const foodCounts: any = {};
@@ -871,8 +884,9 @@ export default function AnalyticsScreen() {
   useEffect(() => {
     if (user) {
       fetchAnalytics();
+      fetchDietReport();
     }
-  }, [user, timeRange, fetchAnalytics]);
+  }, [user, timeRange, fetchAnalytics, fetchDietReport]);
 
   const hasAnyMacros = macroDistribution.some(item => item.value > 1);
   const isInactivePeriod = periodMealCount === 0;
@@ -967,36 +981,44 @@ export default function AnalyticsScreen() {
           </TouchableOpacity>
         </View>
 
-        {aiAnalysis?.insights?.overall_diet_quality && !isInactivePeriod && (() => {
-          const raw: string = aiAnalysis.insights.overall_diet_quality;
-          const grade = raw.match(/^([A-F][+-]?)/)?.[1] || raw[0] || '?';
-          const justification = raw.replace(/^[A-F][+-]?\s*[-–:]?\s*/i, '');
+        {dietReport && !isInactivePeriod && (() => {
+          const { grade, justification, report_date } = dietReport;
           const gradeColor =
             grade.startsWith('A') ? Colors.success :
             grade.startsWith('B') ? '#6BBF6B' :
             grade.startsWith('C') ? Colors.warning :
             grade.startsWith('D') ? '#FF8C00' :
             Colors.error;
+          const isPoorGrade = grade.startsWith('D') || grade === 'F';
+          const timeRangeLabel = timeRange.charAt(0).toUpperCase() + timeRange.slice(1);
+          
           return (
             <AnimatedCard delay={80} type="slide" style={styles.section}>
-              <View style={styles.dietGradeCard}>
-                <View style={[styles.dietGradeBadge, { backgroundColor: gradeColor + '18', borderColor: gradeColor + '40' }]}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                  setDietReportModalVisible(true);
+                }}
+                style={styles.dietReportCard}
+              >
+                <View style={[styles.dietGradeBadge, { backgroundColor: gradeColor + '18', borderColor: isPoorGrade ? gradeColor : gradeColor + '40', borderWidth: isPoorGrade ? 2 : 1 }]}>
                   <Text style={[styles.dietGradeText, { color: gradeColor }]}>{grade}</Text>
                 </View>
                 <View style={styles.dietGradeInfo}>
-                  <Text style={styles.dietGradeLabel}>Diet Quality</Text>
-                  <Text style={styles.dietGradeJustification} numberOfLines={2}>{justification}</Text>
+                  <Text style={styles.dietReportTitle}>{timeRangeLabel} Diet Report Ready</Text>
+                  <Text style={styles.dietReportDate}>Reported on {new Date(report_date).toLocaleDateString()}</Text>
+                  {isPoorGrade && (
+                    <Text style={styles.dietReportAction}>Tap to view details →</Text>
+                  )}
                 </View>
-              </View>
+                <Ionicons name="chevron-forward" size={20} color={theme.textSecondary} />
+              </TouchableOpacity>
             </AnimatedCard>
           );
         })()}
 
         <AnimatedCard delay={100} type="slide" style={styles.section}>
-          <InsightHeader
-            title="Daily Averages"
-            insight={aiAnalysis?.insights?.macro_balance}
-          />
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <Ionicons name="flame" size={28} color={theme.primary} />
@@ -1468,6 +1490,104 @@ export default function AnalyticsScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <Modal
+        visible={dietReportModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDietReportModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.healthInsightModalOverlay}
+          activeOpacity={1}
+          onPress={() => setDietReportModalVisible(false)}
+        >
+ <View style={styles.healthInsightModalContent}>
+            <View style={styles.healthInsightModalHeader}>
+              <Text style={styles.healthInsightModalTitle}>Diet Report</Text>
+              <TouchableOpacity
+                style={styles.healthInsightModalCloseButton}
+                onPress={() => setDietReportModalVisible(false)}
+              >
+                <Ionicons name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.healthInsightModalScroll}>
+              <Text style={styles.healthInsightModalText}>{dietReport?.justification || ''}</Text>
+              
+              {dietReport?.macro_balance && (
+                <View style={styles.reportSection}>
+                  <Text style={styles.reportSectionTitle}>Macro Balance</Text>
+                  <Text style={styles.reportSectionText}>{dietReport.macro_balance}</Text>
+                </View>
+              )}
+              
+              {dietReport?.micronutrient_status && (
+                <View style={styles.reportSection}>
+                  <Text style={styles.reportSectionTitle}>Micronutrients</Text>
+                  <Text style={styles.reportSectionText}>{dietReport.micronutrient_status}</Text>
+                </View>
+              )}
+              
+              {dietReport?.eating_pattern && (
+                <View style={styles.reportSection}>
+                  <Text style={styles.reportSectionTitle}>Eating Pattern</Text>
+                  <Text style={styles.reportSectionText}>{dietReport.eating_pattern}</Text>
+                </View>
+              )}
+              
+              {dietReport?.variety && (
+                <View style={styles.reportSection}>
+                  <Text style={styles.reportSectionTitle}>Food Variety</Text>
+                  <Text style={styles.reportSectionText}>{dietReport.variety}</Text>
+                </View>
+              )}
+              
+              {dietReport?.top_foods && dietReport.top_foods.length > 0 && (
+                <View style={styles.reportSection}>
+                  <Text style={styles.reportSectionTitle}>Top Foods</Text>
+                  <View style={styles.reportFoodList}>
+                    {dietReport.top_foods.map((food: any, idx: number) => (
+                      <View key={idx} style={styles.reportFoodItem}>
+                        <Text style={styles.reportFoodRank}>{idx + 1}.</Text>
+                        <Text style={styles.reportFoodName}>{food.name}</Text>
+                        <Text style={styles.reportFoodCount}>{food.count}x</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+              
+              {dietReport?.bio_alerts && dietReport.bio_alerts.length > 0 && (
+                <View style={styles.reportSection}>
+                  <Text style={styles.reportSectionTitle}>Alerts</Text>
+                  {dietReport.bio_alerts.map((alert: any, idx: number) => (
+                    <View key={idx} style={styles.reportAlert}>
+                      <Text style={styles.reportAlertMetric}>{alert.metric}</Text>
+                      <Text style={styles.reportAlertMessage}>{alert.message}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+              
+              {dietReport?.red_flags && dietReport.red_flags.length > 0 && (
+                <View style={styles.reportSection}>
+                  <Text style={styles.reportSectionTitle}>Red Flags</Text>
+                  {dietReport.red_flags.map((flag: any, idx: number) => (
+                    <View key={idx} style={styles.reportAlert}>
+                      <Text style={styles.reportFlagTitle}>{flag.title}</Text>
+                      <Text style={styles.reportAlertMessage}>{flag.description}</Text>
+                      {flag.frequency && (
+                        <Text style={styles.reportFlagFrequency}>{flag.frequency}</Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -1528,6 +1648,17 @@ function makeStyles(theme: typeof Colors) {
     borderColor: theme.border,
     borderBottomWidth: 6,
   },
+  dietReportCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    backgroundColor: theme.white,
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: theme.border,
+    borderBottomWidth: 6,
+  },
   dietGradeBadge: {
     width: 64,
     height: 64,
@@ -1556,6 +1687,23 @@ function makeStyles(theme: typeof Colors) {
     fontWeight: '700',
     color: theme.text,
     lineHeight: 20,
+  },
+  dietReportTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: theme.text,
+    marginBottom: 4,
+  },
+  dietReportDate: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    marginBottom: 2,
+  },
+  dietReportAction: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.primary,
   },
   healthInsightModalOverlay: {
     flex: 1,
@@ -1631,6 +1779,85 @@ function makeStyles(theme: typeof Colors) {
   foodChipText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  healthInsightModalScroll: {
+    maxHeight: 500,
+  },
+  reportSection: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+  },
+  reportSectionTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: theme.text,
+    marginBottom: 6,
+  },
+  reportSectionText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: theme.textSecondary,
+    lineHeight: 18,
+  },
+  reportFoodList: {
+    marginTop: 8,
+  },
+  reportFoodItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    gap: 8,
+  },
+  reportFoodRank: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.textSecondary,
+    width: 24,
+  },
+  reportFoodName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.text,
+    flex: 1,
+  },
+  reportFoodCount: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.primary,
+  },
+  reportAlert: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  reportAlertMetric: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: theme.text,
+    marginBottom: 4,
+  },
+  reportAlertMessage: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: theme.textSecondary,
+    lineHeight: 18,
+  },
+  reportFlagTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: theme.text,
+    marginBottom: 4,
+  },
+  reportFlagFrequency: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    marginTop: 4,
   },
   toolCard: {
     width: '100%',

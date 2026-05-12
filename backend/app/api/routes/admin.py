@@ -134,6 +134,9 @@ _VALID_JOBS = {
     "analytics_warmup": _scheduler_module.job_analytics_warmup,
     "nutrient_daily":   _scheduler_module.job_nutrient_daily,
     "nutrient_weekly":  _scheduler_module.job_nutrient_weekly,
+    "diet_report_weekly": _scheduler_module.job_diet_report_weekly,
+    "diet_report_monthly": _scheduler_module.job_diet_report_monthly,
+    "diet_report_yearly": _scheduler_module.job_diet_report_yearly,
 }
 
 

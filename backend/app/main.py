@@ -16,7 +16,7 @@ from app.core.scheduler import start as start_scheduler, stop as stop_scheduler
 from app.db.pool import init_pool, close_pool, check_pool_health
 
 # Import route modules
-from app.api.routes import analytics, users, meals, quests, social, foods, recipes, ai_meals, labels, admin, chef, water, feed
+from app.api.routes import analytics, users, meals, quests, social, foods, recipes, ai_meals, labels, admin, chef, water, feed, diet_reports
 
 # Setup logging
 setup_logging()
@@ -90,6 +90,7 @@ app.include_router(admin.router, prefix="/api")
 app.include_router(chef.router, prefix="/api")
 app.include_router(water.router, prefix="/api")
 app.include_router(feed.router, prefix="/api")
+app.include_router(diet_reports.router, prefix="/api")
 
 
 # Health check endpoint

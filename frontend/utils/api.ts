@@ -1032,4 +1032,11 @@ export const waterApi = {
   },
 };
 
+export const dietReportApi = {
+  getLatestReport: async (timeRange: 'week' | 'month' | 'year' = 'week'): Promise<any> => {
+    const response = await api.get(`/diet-reports/latest?time_range=${timeRange}`);
+    return response.data;
+  },
+};
+
 export default api;

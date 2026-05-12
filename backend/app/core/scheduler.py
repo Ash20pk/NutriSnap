@@ -129,6 +129,58 @@ async def job_nutrient_weekly() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Job: diet report generation
+# ---------------------------------------------------------------------------
+
+async def job_diet_report_weekly() -> None:
+    """Generate weekly diet reports for active users."""
+    from app.db.pool import get_pool
+    from app.services.diet_report_service import DietReportService
+
+    logger.info("[CRON diet_report_weekly] Starting")
+    pool = get_pool()
+    service = DietReportService(pool)
+
+    result = await service.generate_for_active_users(time_range="week", days_threshold=7)
+    logger.info(
+        "[CRON diet_report_weekly] done success=%d skipped=%d failed=%d",
+        result["success"], result["skipped"], result["failed"],
+    )
+
+
+async def job_diet_report_monthly() -> None:
+    """Generate monthly diet reports for active users."""
+    from app.db.pool import get_pool
+    from app.services.diet_report_service import DietReportService
+
+    logger.info("[CRON diet_report_monthly] Starting")
+    pool = get_pool()
+    service = DietReportService(pool)
+
+    result = await service.generate_for_active_users(time_range="month", days_threshold=30)
+    logger.info(
+        "[CRON diet_report_monthly] done success=%d skipped=%d failed=%d",
+        result["success"], result["skipped"], result["failed"],
+    )
+
+
+async def job_diet_report_yearly() -> None:
+    """Generate yearly diet reports for active users."""
+    from app.db.pool import get_pool
+    from app.services.diet_report_service import DietReportService
+
+    logger.info("[CRON diet_report_yearly] Starting")
+    pool = get_pool()
+    service = DietReportService(pool)
+
+    result = await service.generate_for_active_users(time_range="year", days_threshold=365)
+    logger.info(
+        "[CRON diet_report_yearly] done success=%d skipped=%d failed=%d",
+        result["success"], result["skipped"], result["failed"],
+    )
+
+
+# ---------------------------------------------------------------------------
 # Scheduler lifecycle
 # ---------------------------------------------------------------------------
 
@@ -185,10 +237,44 @@ def start() -> None:
         coalesce=True,
     )
 
+    # Diet report weekly — Monday 00:00 UTC (~5:30am IST Mon)
+    _scheduler.add_job(
+        job_diet_report_weekly,
+        CronTrigger(day_of_week="mon", hour=0, minute=0, timezone="UTC"),
+        id="diet_report_weekly",
+        name="Weekly diet report generation",
+        max_instances=1,
+        misfire_grace_time=3600,
+        coalesce=True,
+    )
+
+    # Diet report monthly — 1st of month 01:00 UTC (~6:30am IST)
+    _scheduler.add_job(
+        job_diet_report_monthly,
+        CronTrigger(day=1, hour=1, minute=0, timezone="UTC"),
+        id="diet_report_monthly",
+        name="Monthly diet report generation",
+        max_instances=1,
+        misfire_grace_time=7200,
+        coalesce=True,
+    )
+
+    # Diet report yearly — January 1st 02:00 UTC (~7:30am IST)
+    _scheduler.add_job(
+        job_diet_report_yearly,
+        CronTrigger(month=1, day=1, hour=2, minute=0, timezone="UTC"),
+        id="diet_report_yearly",
+        name="Yearly diet report generation",
+        max_instances=1,
+        misfire_grace_time=7200,
+        coalesce=True,
+    )
+
     _scheduler.start()
     logger.info(
         "[CRON] Scheduler started — jobs: analytics_warmup(daily 21:30), "
-        "nutrient_daily(daily 20:00), nutrient_weekly(Sun 22:30)"
+        "nutrient_daily(daily 20:00), nutrient_weekly(Sun 22:30), "
+        "diet_report_weekly(Mon 00:00), diet_report_monthly(1st 01:00), diet_report_yearly(Jan 1 02:00)"
     )
 
 
