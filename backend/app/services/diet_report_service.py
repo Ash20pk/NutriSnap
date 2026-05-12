@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from app.db.pool import get_pool
 from app.services.analytics_service import AnalyticsService
-from diet_report_ai import generate_diet_report
+from app.diet_report_ai import generate_diet_report
 
 logger = logging.getLogger(__name__)
 
