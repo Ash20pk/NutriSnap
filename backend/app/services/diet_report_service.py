@@ -211,9 +211,9 @@ class DietReportService:
                     detailed_analysis, specific_recommendations, meal_suggestions, action_plan,
                     highlights, health_insights, bio_alerts, red_flags,
                     top_foods, macro_balance, micronutrient_status,
-                    eating_pattern, variety, updated_at
+                    eating_pattern, variety
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, now())
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
                 ON CONFLICT (user_id, time_range, report_date)
                 DO UPDATE SET
                     grade = EXCLUDED.grade,
