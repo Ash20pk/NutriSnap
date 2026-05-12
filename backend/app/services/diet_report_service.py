@@ -168,6 +168,14 @@ class DietReportService:
     
     async def _store_report(self, report_data: Dict[str, Any]) -> None:
         """Store report data in diet_reports table."""
+        # Convert report_date string to date object
+        report_date_str = report_data["report_date"]
+        if isinstance(report_date_str, str):
+            from datetime import datetime
+            report_date = datetime.strptime(report_date_str, "%Y-%m-%d").date()
+        else:
+            report_date = report_date_str
+        
         async with self.pool.acquire() as conn:
             await conn.execute(
                 """
@@ -195,7 +203,7 @@ class DietReportService:
                 """,
                 report_data["user_id"],
                 report_data["time_range"],
-                report_data["report_date"],
+                report_date,
                 report_data["grade"],
                 report_data["justification"],
                 json.dumps(report_data["highlights"]),
