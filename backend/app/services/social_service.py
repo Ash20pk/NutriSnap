@@ -215,6 +215,7 @@ class SocialService:
                   p.username,
                   p.bio,
                   p.avatar_url,
+                  p.is_special_user,
                   ux.total_xp,
                   ux.level,
                   ux.current_streak,
@@ -253,4 +254,5 @@ class SocialService:
             "followers_count": int(row["followers_count"] or 0),
             "following_count": int(row["following_count"] or 0),
             "is_followed_by_me": bool(row["is_followed_by_me"]),
+            "is_special_user": bool(row["is_special_user"]),
         }

@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Post } from '../../utils/api';
 import { useTheme } from '../../context/ThemeContext';
@@ -19,18 +20,50 @@ export default function PostDetailScreen() {
   const { theme } = useTheme();
   const router = useRouter();
   const { user } = useUser();
+  const insets = useSafeAreaInsets();
   const styles = makeStyles(theme);
 
-  const [post, setPost] = useState<Post | null>(() => {
+  const initialIndex = params.initialIndex ? parseInt(params.initialIndex as string, 10) : 0;
+
+  const [posts, setPosts] = useState<Post[]>(() => {
     try {
-      return params.post ? JSON.parse(params.post as string) as Post : null;
+      if (params.posts) return JSON.parse(params.posts as string) as Post[];
+      if (params.post) return [JSON.parse(params.post as string) as Post];
+      return [];
     } catch {
-      return null;
+      return [];
     }
   });
+
   const [commentPost, setCommentPost] = useState<Post | null>(null);
 
-  if (!post) {
+  const handleCommentAdded = useCallback((postId: string) => {
+    setPosts(prev => prev.map(p =>
+      p.id === postId ? { ...p, comment_count: p.comment_count + 1 } : p
+    ));
+  }, []);
+
+  const handleDeleted = useCallback((postId: string) => {
+    const remaining = posts.filter(p => p.id !== postId);
+    if (remaining.length === 0) {
+      router.back();
+    } else {
+      setPosts(remaining);
+    }
+  }, [posts, router]);
+
+  const renderItem = useCallback(({ item }: { item: Post }) => (
+    <View style={styles.cardWrapper}>
+      <PostCard
+        post={item}
+        currentUserId={user?.id}
+        onCommentPress={setCommentPost}
+        onDeleted={() => handleDeleted(item.id)}
+      />
+    </View>
+  ), [user?.id, handleDeleted, styles]);
+
+  if (posts.length === 0) {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorText}>Post not found</Text>
@@ -43,7 +76,8 @@ export default function PostDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 14) }]}>
         <TouchableOpacity
           style={styles.closeBtn}
           onPress={() => router.back()}
@@ -51,29 +85,25 @@ export default function PostDetailScreen() {
         >
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Post</Text>
+        <Text style={styles.headerTitle}>Posts</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView style={[styles.flex, { paddingHorizontal: 16, paddingTop: 16 }]}>
-        <PostCard
-          post={post}
-          currentUserId={user?.id}
-          onCommentPress={setCommentPost}
-          onDeleted={() => router.back()}
-        />
-        <View style={{ height: 100 }} />
-      </ScrollView>
+      <FlatList
+        data={posts}
+        keyExtractor={item => item.id}
+        renderItem={renderItem}
+        showsVerticalScrollIndicator={false}
+        initialScrollIndex={initialIndex > 0 ? initialIndex : undefined}
+        onScrollToIndexFailed={() => {}}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: insets.bottom + 40 }}
+      />
 
       <CommentsSheet
         visible={!!commentPost}
         post={commentPost}
         onClose={() => setCommentPost(null)}
-        onCommentAdded={postId => {
-          if (post.id === postId) {
-            setPost({ ...post, comment_count: post.comment_count + 1 });
-          }
-        }}
+        onCommentAdded={handleCommentAdded}
       />
     </View>
   );
@@ -91,19 +121,16 @@ function makeStyles(theme: any) {
       alignItems: 'center',
       backgroundColor: theme.background,
     },
-    flex: {
-      flex: 1,
-    },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 16,
-      paddingTop: 60,
-      paddingBottom: 12,
+      paddingBottom: 10,
       backgroundColor: theme.background,
       borderBottomWidth: 1,
       borderBottomColor: theme.border + '40',
+      zIndex: 10,
     },
     headerTitle: {
       fontSize: 18,
@@ -114,6 +141,9 @@ function makeStyles(theme: any) {
       width: 40,
       height: 40,
       justifyContent: 'center',
+    },
+    cardWrapper: {
+      marginBottom: 8,
     },
     errorText: {
       fontSize: 16,

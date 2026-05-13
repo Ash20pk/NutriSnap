@@ -377,7 +377,7 @@ function makeStyles(theme: any) {
     authorName: { fontSize: 15, fontWeight: '900', color: theme.text },
     timeAgo: { fontSize: 12, fontWeight: '700', color: theme.textLight, marginTop: 1 },
 
-    photo: { width: '100%', height: 300 },
+    photo: { width: '100%', aspectRatio: 1 },
     shareOverlay: {
       position: 'absolute',
       bottom: 10,

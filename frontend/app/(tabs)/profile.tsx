@@ -108,10 +108,7 @@ export default function ProfileScreen() {
 
   const xpProgress = React.useMemo(() => {
     if (!stats) return 0;
-    if (stats.xp_to_next_level != null && stats.xp_for_next_level) {
-      return Math.min(1, Math.max(0, (stats.xp_for_next_level - stats.xp_to_next_level) / stats.xp_for_next_level));
-    }
-    return 0;
+    return Math.min(1, Math.max(0, (stats.total_xp % 100) / 100));
   }, [stats]);
 
   const refreshProfileData = React.useCallback(async () => {
@@ -359,14 +356,17 @@ export default function ProfileScreen() {
                         style={styles.postThumbnail}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                          router.push({ pathname: `/post/${post.id}` as any, params: { post: JSON.stringify(post) } });
+                          const index = userPosts.findIndex(p => p.id === post.id);
+                          router.push({ pathname: `/post/${post.id}` as any, params: { posts: JSON.stringify(userPosts), initialIndex: String(index) } });
                         }}
                       >
                         {photoUri ? (
                           <Image source={{ uri: photoUri }} style={styles.postImage} />
                         ) : (
-                          <View style={[styles.postPlaceholder, { backgroundColor: theme.primary + '20' }]}>
-                            <Ionicons name={post.post_type === 'badge' ? 'medal' : 'flash'} size={24} color={theme.primary} />
+                          <View style={[styles.postPlaceholder, { backgroundColor: post.post_type === 'streak' ? '#FF6B3520' : post.post_type === 'xp_level' ? '#5B6AF020' : post.post_type === 'badge' ? '#F5C51820' : '#2F593E20' }]}>
+                            <Text style={{ fontSize: 28 }}>
+                              {post.post_type === 'badge' ? (post.metadata?.badge_icon ?? '🏅') : post.post_type === 'streak' ? '🔥' : post.post_type === 'xp_level' ? '⚡' : '🎯'}
+                            </Text>
                           </View>
                         )}
                       </TouchableOpacity>
