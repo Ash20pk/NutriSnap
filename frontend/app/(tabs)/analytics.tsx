@@ -334,7 +334,6 @@ export default function AnalyticsScreen() {
   const [selectedHealthInsight, setSelectedHealthInsight] = useState<{ label: string; text: string } | null>(null);
   const [periodMealCount, setPeriodMealCount] = useState(0);
   const [dietReport, setDietReport] = useState<any>(null);
-  const [dietReportModalVisible, setDietReportModalVisible] = useState(false);
   const [macroDistribution, setMacroDistribution] = useState<any[]>([]);
   const [mealTypeBreakdown, setMealTypeBreakdown] = useState<any>({});
   const [averages, setAverages] = useState<any>({});
@@ -998,7 +997,7 @@ export default function AnalyticsScreen() {
                 activeOpacity={0.7}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                  setDietReportModalVisible(true);
+                  router.push({ pathname: '/diet-report', params: { timeRange } });
                 }}
                 style={styles.dietReportCard}
               >
@@ -1491,108 +1490,109 @@ export default function AnalyticsScreen() {
         </TouchableOpacity>
       </Modal>
 
-      <Modal
-        visible={dietReportModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDietReportModalVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.healthInsightModalOverlay}
-          activeOpacity={1}
-          onPress={() => setDietReportModalVisible(false)}
-        >
-          <TouchableOpacity activeOpacity={1} onPress={() => {}}
-            style={styles.healthInsightModalContent}>
-            <View style={styles.healthInsightModalHeader}>
-              <Text style={styles.healthInsightModalTitle}>Diet Report</Text>
-              <TouchableOpacity
-                style={styles.healthInsightModalCloseButton}
-                onPress={() => setDietReportModalVisible(false)}
-              >
-                <Ionicons name="close" size={24} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView
-              style={styles.healthInsightModalScroll}
-              showsVerticalScrollIndicator={true}
-              nestedScrollEnabled={true}
-              contentContainerStyle={{ paddingBottom: 16 }}
-            >
+      {/* diet report moved to /diet-report page */}
+      <View style={{ display: 'none' }}>
               {dietReport?.executive_summary && (
                 <View style={styles.reportSection}>
-                  <Text style={styles.reportSectionTitle}>Executive Summary</Text>
+                  <View style={styles.sectionHeaderRow}>
+                    <Ionicons name="document-text" size={20} color={theme.primary} />
+                    <Text style={styles.reportSectionTitle}>Executive Summary</Text>
+                  </View>
                   <Text style={styles.reportSectionText}>{dietReport.executive_summary}</Text>
                 </View>
               )}
               
               {dietReport?.strengths && Array.isArray(dietReport.strengths) && dietReport.strengths.length > 0 && (
                 <View style={styles.reportSection}>
-                  <Text style={styles.reportSectionTitle}>Strengths</Text>
-                  {dietReport.strengths.map((strength: string, idx: number) => (
-                    <View key={idx} style={styles.reportListItem}>
-                      <Text style={styles.reportBullet}>✓</Text>
-                      <Text style={styles.reportListItemText}>{strength}</Text>
-                    </View>
-                  ))}
+                  <View style={styles.sectionHeaderRow}>
+                    <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                    <Text style={styles.reportSectionTitle}>Key Strengths</Text>
+                  </View>
+                  <View style={styles.strengthsContainer}>
+                    {dietReport.strengths.map((strength: string, idx: number) => (
+                      <View key={idx} style={styles.strengthCard}>
+                        <Ionicons name="ribbon" size={16} color="#4CAF50" style={{ marginTop: 2 }} />
+                        <Text style={styles.strengthText}>{strength}</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
               )}
               
               {dietReport?.areas_for_improvement && Array.isArray(dietReport.areas_for_improvement) && dietReport.areas_for_improvement.length > 0 && (
                 <View style={styles.reportSection}>
-                  <Text style={styles.reportSectionTitle}>Areas for Improvement</Text>
-                  {dietReport.areas_for_improvement.map((area: string, idx: number) => (
-                    <View key={idx} style={styles.reportListItem}>
-                      <Text style={styles.reportBullet}>•</Text>
-                      <Text style={styles.reportListItemText}>{area}</Text>
-                    </View>
-                  ))}
+                  <View style={styles.sectionHeaderRow}>
+                    <Ionicons name="trending-up" size={20} color="#FF9800" />
+                    <Text style={styles.reportSectionTitle}>Focus Areas</Text>
+                  </View>
+                  <View style={styles.improvementsContainer}>
+                    {dietReport.areas_for_improvement.map((area: string, idx: number) => (
+                      <View key={idx} style={styles.improvementCard}>
+                        <Ionicons name="flash" size={16} color="#FF9800" style={{ marginTop: 2 }} />
+                        <Text style={styles.improvementText}>{area}</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
               )}
               
               {dietReport?.detailed_analysis && typeof dietReport.detailed_analysis === 'object' && (
                 <View style={styles.reportSection}>
-                  <Text style={styles.reportSectionTitle}>Detailed Analysis</Text>
+                  <View style={styles.sectionHeaderRow}>
+                    <Ionicons name="analytics" size={20} color={theme.primary} />
+                    <Text style={styles.reportSectionTitle}>Detailed Analysis</Text>
+                  </View>
+                  
                   {dietReport.detailed_analysis.macronutrients && (
-                    <View style={styles.reportSubsection}>
-                      <Text style={styles.reportSubsectionTitle}>Macronutrients</Text>
-                      <Text style={styles.reportSectionText}>{dietReport.detailed_analysis.macronutrients}</Text>
-                    </View>
+                    <AppCard padding={16} style={styles.analysisCard}>
+                      <Text style={styles.analysisCardTitle}>⚡ Macronutrients</Text>
+                      <Text style={styles.analysisCardText}>{dietReport.detailed_analysis.macronutrients}</Text>
+                    </AppCard>
                   )}
+                  
                   {dietReport.detailed_analysis.micronutrients && (
-                    <View style={styles.reportSubsection}>
-                      <Text style={styles.reportSubsectionTitle}>Micronutrients</Text>
-                      <Text style={styles.reportSectionText}>{dietReport.detailed_analysis.micronutrients}</Text>
-                    </View>
+                    <AppCard padding={16} style={styles.analysisCard}>
+                      <Text style={styles.analysisCardTitle}>🧬 Micronutrients</Text>
+                      <Text style={styles.analysisCardText}>{dietReport.detailed_analysis.micronutrients}</Text>
+                    </AppCard>
                   )}
+                  
                   {dietReport.detailed_analysis.eating_pattern && (
-                    <View style={styles.reportSubsection}>
-                      <Text style={styles.reportSubsectionTitle}>Eating Pattern</Text>
-                      <Text style={styles.reportSectionText}>{dietReport.detailed_analysis.eating_pattern}</Text>
-                    </View>
+                    <AppCard padding={16} style={styles.analysisCard}>
+                      <Text style={styles.analysisCardTitle}>⏰ Eating Pattern</Text>
+                      <Text style={styles.analysisCardText}>{dietReport.detailed_analysis.eating_pattern}</Text>
+                    </AppCard>
                   )}
+                  
                   {dietReport.detailed_analysis.food_variety && (
-                    <View style={styles.reportSubsection}>
-                      <Text style={styles.reportSubsectionTitle}>Food Variety</Text>
-                      <Text style={styles.reportSectionText}>{dietReport.detailed_analysis.food_variety}</Text>
-                    </View>
+                    <AppCard padding={16} style={styles.analysisCard}>
+                      <Text style={styles.analysisCardTitle}>🌈 Food Variety</Text>
+                      <Text style={styles.analysisCardText}>{dietReport.detailed_analysis.food_variety}</Text>
+                    </AppCard>
                   )}
                 </View>
               )}
               
               {dietReport?.specific_recommendations && Array.isArray(dietReport.specific_recommendations) && dietReport.specific_recommendations.length > 0 && (
                 <View style={styles.reportSection}>
-                  <Text style={styles.reportSectionTitle}>Specific Recommendations</Text>
+                  <View style={styles.sectionHeaderRow}>
+                    <Ionicons name="bulb" size={20} color="#FFD700" />
+                    <Text style={styles.reportSectionTitle}>Personalized Tips</Text>
+                  </View>
                   {dietReport.specific_recommendations.map((rec: any, idx: number) => (
-                    <View key={idx} style={styles.reportRecommendation}>
-                      <Text style={styles.reportRecCategory}>{rec.category || 'General'}</Text>
-                      <Text style={styles.reportRecText}>{rec.recommendation}</Text>
-                      {rec.why && (
-                        <Text style={styles.reportRecWhy}>Why: {rec.why}</Text>
-                      )}
-                      {rec.how_to_implement && (
-                        <Text style={styles.reportRecHow}>How: {rec.how_to_implement}</Text>
-                      )}
+                    <View key={idx} style={styles.recommendationCard}>
+                      <View style={styles.recCategoryBadge}>
+                        <Text style={styles.recCategoryText}>{rec.category || 'General'}</Text>
+                      </View>
+                      <Text style={styles.recMainText}>{rec.recommendation}</Text>
+                      <View style={styles.recDetailRow}>
+                        <Text style={styles.recLabel}>Why:</Text>
+                        <Text style={styles.recDetailText}>{rec.why}</Text>
+                      </View>
+                      <View style={styles.recDetailRow}>
+                        <Text style={styles.recLabel}>How:</Text>
+                        <Text style={styles.recDetailText}>{rec.how_to_implement}</Text>
+                      </View>
                     </View>
                   ))}
                 </View>
@@ -1600,48 +1600,61 @@ export default function AnalyticsScreen() {
               
               {dietReport?.meal_suggestions && Array.isArray(dietReport.meal_suggestions) && dietReport.meal_suggestions.length > 0 && (
                 <View style={styles.reportSection}>
-                  <Text style={styles.reportSectionTitle}>Meal Suggestions</Text>
-                  {dietReport.meal_suggestions.map((suggestion: string, idx: number) => (
-                    <View key={idx} style={styles.reportListItem}>
-                      <Text style={styles.reportBullet}>🍽</Text>
-                      <Text style={styles.reportListItemText}>{suggestion}</Text>
-                    </View>
-                  ))}
+                  <View style={styles.sectionHeaderRow}>
+                    <Ionicons name="restaurant" size={20} color={theme.primary} />
+                    <Text style={styles.reportSectionTitle}>Smart Meal Ideas</Text>
+                  </View>
+                  <View style={styles.mealSuggestionsGrid}>
+                    {dietReport.meal_suggestions.map((suggestion: string, idx: number) => (
+                      <View key={idx} style={styles.mealSuggestionItem}>
+                        <View style={styles.mealIconCircle}>
+                          <Ionicons name="fast-food" size={14} color={theme.primary} />
+                        </View>
+                        <Text style={styles.mealSuggestionText}>{suggestion}</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
               )}
               
               {dietReport?.action_plan && typeof dietReport.action_plan === 'object' && (
                 <View style={styles.reportSection}>
-                  <Text style={styles.reportSectionTitle}>Action Plan</Text>
-                  {dietReport.action_plan.week_1 && Array.isArray(dietReport.action_plan.week_1) && dietReport.action_plan.week_1.length > 0 && (
-                    <View style={styles.reportSubsection}>
-                      <Text style={styles.reportSubsectionTitle}>Week 1</Text>
+                  <View style={styles.sectionHeaderRow}>
+                    <Ionicons name="calendar" size={20} color={theme.primary} />
+                    <Text style={styles.reportSectionTitle}>Roadmap to Success</Text>
+                  </View>
+                  
+                  {dietReport.action_plan.week_1 && Array.isArray(dietReport.action_plan.week_1) && (
+                    <View style={styles.actionPlanContainer}>
+                      <Text style={styles.actionPlanWeekTitle}>WEEK 1: FOUNDATION</Text>
                       {dietReport.action_plan.week_1.map((action: string, idx: number) => (
-                        <View key={idx} style={styles.reportListItem}>
-                          <Text style={styles.reportBullet}>→</Text>
-                          <Text style={styles.reportListItemText}>{action}</Text>
+                        <View key={idx} style={styles.actionPlanItem}>
+                          <View style={styles.actionPlanNumber}><Text style={styles.actionPlanNumberText}>{idx + 1}</Text></View>
+                          <Text style={styles.actionPlanText}>{action}</Text>
                         </View>
                       ))}
                     </View>
                   )}
-                  {dietReport.action_plan.week_2 && Array.isArray(dietReport.action_plan.week_2) && dietReport.action_plan.week_2.length > 0 && (
-                    <View style={styles.reportSubsection}>
-                      <Text style={styles.reportSubsectionTitle}>Week 2</Text>
+                  
+                  {dietReport.action_plan.week_2 && Array.isArray(dietReport.action_plan.week_2) && (
+                    <View style={styles.actionPlanContainer}>
+                      <Text style={styles.actionPlanWeekTitle}>WEEK 2: MOMENTUM</Text>
                       {dietReport.action_plan.week_2.map((action: string, idx: number) => (
-                        <View key={idx} style={styles.reportListItem}>
-                          <Text style={styles.reportBullet}>→</Text>
-                          <Text style={styles.reportListItemText}>{action}</Text>
+                        <View key={idx} style={styles.actionPlanItem}>
+                          <View style={[styles.actionPlanNumber, { backgroundColor: theme.primary }]}><Text style={styles.actionPlanNumberText}>{idx + 1}</Text></View>
+                          <Text style={styles.actionPlanText}>{action}</Text>
                         </View>
                       ))}
                     </View>
                   )}
-                  {dietReport.action_plan.ongoing && Array.isArray(dietReport.action_plan.ongoing) && dietReport.action_plan.ongoing.length > 0 && (
-                    <View style={styles.reportSubsection}>
-                      <Text style={styles.reportSubsectionTitle}>Ongoing Habits</Text>
+
+                  {dietReport.action_plan.ongoing && Array.isArray(dietReport.action_plan.ongoing) && (
+                    <View style={styles.actionPlanContainer}>
+                      <Text style={styles.actionPlanWeekTitle}>ONGOING HABITS</Text>
                       {dietReport.action_plan.ongoing.map((action: string, idx: number) => (
-                        <View key={idx} style={styles.reportListItem}>
-                          <Text style={styles.reportBullet}>♻</Text>
-                          <Text style={styles.reportListItemText}>{action}</Text>
+                        <View key={idx} style={styles.actionPlanItem}>
+                          <Ionicons name="repeat" size={16} color={theme.primary} style={{ marginRight: 10 }} />
+                          <Text style={styles.actionPlanText}>{action}</Text>
                         </View>
                       ))}
                     </View>
@@ -1690,10 +1703,7 @@ export default function AnalyticsScreen() {
                   ))}
                 </View>
               )}
-            </ScrollView>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+      </View>
     </View>
   );
 }
@@ -1813,37 +1823,46 @@ function makeStyles(theme: typeof Colors) {
   },
   healthInsightModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
   },
   healthInsightModalContent: {
     backgroundColor: theme.white,
-    borderRadius: 24,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    maxHeight: '85%',
-    borderWidth: 2,
-    borderColor: theme.border,
-    borderBottomWidth: 6,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: '90%',
+    flexShrink: 1,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+  },
+  dietReportHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: theme.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 4,
   },
   healthInsightModalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    alignItems: 'flex-start',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 12,
   },
   healthInsightModalCloseButton: {
-    padding: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   healthInsightModalTitle: {
     fontSize: 18,
     fontWeight: '900',
     color: theme.text,
-    textTransform: 'uppercase',
-    flex: 1,
   },
   healthInsightModalText: {
     fontSize: 15,
@@ -1891,22 +1910,216 @@ function makeStyles(theme: typeof Colors) {
     flexGrow: 1,
   },
   reportSection: {
-    marginTop: 16,
-    paddingTop: 12,
+    marginTop: 20,
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: theme.border,
+    borderTopColor: theme.border + '50',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
   },
   reportSectionTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: theme.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  reportSectionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.textSecondary,
+    lineHeight: 20,
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 12,
+  },
+  dietGradeBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dietGradeBadgeText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: theme.white,
+  },
+  strengthsContainer: {
+    gap: 8,
+  },
+  strengthCard: {
+    flexDirection: 'row',
+    backgroundColor: '#E8F5E9',
+    padding: 12,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+    gap: 10,
+  },
+  strengthText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#2E7D32',
+    lineHeight: 18,
+  },
+  improvementsContainer: {
+    gap: 8,
+  },
+  improvementCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF3E0',
+    padding: 12,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
+    gap: 10,
+  },
+  improvementText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#E65100',
+    lineHeight: 18,
+  },
+  analysisCard: {
+    marginBottom: 10,
+    backgroundColor: theme.white,
+    borderColor: theme.border,
+    borderWidth: 1,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  analysisCardTitle: {
     fontSize: 13,
     fontWeight: '800',
     color: theme.text,
     marginBottom: 6,
   },
-  reportSectionText: {
+  analysisCardText: {
     fontSize: 13,
     fontWeight: '500',
     color: theme.textSecondary,
     lineHeight: 18,
+  },
+  recommendationCard: {
+    backgroundColor: theme.white,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FFD700',
+  },
+  recCategoryBadge: {
+    backgroundColor: '#FFFDE7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  recCategoryText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#FBC02D',
+    textTransform: 'uppercase',
+  },
+  recMainText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.text,
+    marginBottom: 10,
+  },
+  recDetailRow: {
+    flexDirection: 'row',
+    marginTop: 4,
+  },
+  recLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: theme.textSecondary,
+    width: 40,
+  },
+  recDetailText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '500',
+    color: theme.textSecondary,
+    lineHeight: 16,
+  },
+  mealSuggestionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  mealSuggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F4FF',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    width: '100%',
+    gap: 10,
+  },
+  mealIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mealSuggestionText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.primary,
+  },
+  actionPlanContainer: {
+    marginBottom: 16,
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 16,
+  },
+  actionPlanWeekTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: theme.textSecondary,
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
+  actionPlanItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  actionPlanNumber: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: theme.textSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  actionPlanNumberText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: theme.white,
+  },
+  actionPlanText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.text,
   },
   reportFoodList: {
     marginTop: 8,

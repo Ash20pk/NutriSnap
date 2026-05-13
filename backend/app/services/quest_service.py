@@ -42,9 +42,9 @@ class QuestService:
             )
             
             if existing == 0:
-                # Get active quest definitions and create user quests
+                # Get active quest definitions and create user quests (randomised each day)
                 definitions = await conn.fetch(
-                    "SELECT id, quest_type, target_value FROM quest_definitions WHERE is_daily = true AND is_active = true LIMIT 3"
+                    "SELECT id, quest_type, target_value FROM quest_definitions WHERE is_daily = true AND is_active = true ORDER BY RANDOM() LIMIT 3"
                 )
                 for defn in definitions:
                     await conn.execute(
@@ -337,36 +337,99 @@ class QuestService:
             SELECT
                 COUNT(*)::int AS meals_logged,
                 COALESCE(SUM(total_calories), 0)::double precision AS total_calories,
-                COALESCE(SUM(total_protein), 0)::double precision AS total_protein
+                COALESCE(SUM(total_protein), 0)::double precision AS total_protein,
+                COALESCE(SUM(total_carbs), 0)::double precision AS total_carbs,
+                COALESCE(SUM(total_fat), 0)::double precision AS total_fat,
+                COUNT(DISTINCT meal_type)::int AS distinct_meal_types,
+                COUNT(CASE WHEN meal_type = 'breakfast' THEN 1 END)::int AS breakfast_logged,
+                COUNT(CASE WHEN meal_type = 'lunch' THEN 1 END)::int AS lunch_logged,
+                COUNT(CASE WHEN meal_type = 'dinner' THEN 1 END)::int AS dinner_logged,
+                COUNT(CASE WHEN meal_type = 'snack' THEN 1 END)::int AS snack_logged
             FROM meals
             WHERE user_id = $1
               AND DATE(timestamp AT TIME ZONE 'UTC') = $2::date
             """,
             to_uuid(user_id), target_date
         )
-        
+
+        targets = await conn.fetchrow(
+            """
+            SELECT daily_calorie_target, protein_target, carbs_target, fat_target
+            FROM profiles WHERE id = $1
+            """,
+            to_uuid(user_id)
+        )
+
         return {
             "meals_logged": stats["meals_logged"] if stats else 0,
             "total_calories": stats["total_calories"] if stats else 0,
             "total_protein": stats["total_protein"] if stats else 0,
+            "total_carbs": stats["total_carbs"] if stats else 0,
+            "total_fat": stats["total_fat"] if stats else 0,
+            "distinct_meal_types": stats["distinct_meal_types"] if stats else 0,
+            "breakfast_logged": stats["breakfast_logged"] if stats else 0,
+            "lunch_logged": stats["lunch_logged"] if stats else 0,
+            "dinner_logged": stats["dinner_logged"] if stats else 0,
+            "snack_logged": stats["snack_logged"] if stats else 0,
+            "calorie_target": float(targets["daily_calorie_target"]) if targets and targets["daily_calorie_target"] else 2000.0,
+            "protein_target": float(targets["protein_target"]) if targets and targets["protein_target"] else 120.0,
+            "carbs_target": float(targets["carbs_target"]) if targets and targets["carbs_target"] else 250.0,
+            "fat_target": float(targets["fat_target"]) if targets and targets["fat_target"] else 70.0,
         }
-    
+
     @staticmethod
     def _calculate_quest_progress(
         quest_type: str, target_value: float, stats: Dict[str, Any]
     ) -> Tuple[float, bool]:
         """Calculate quest progress based on type and stats."""
         current = 0.0
-        
+
         if quest_type == "log_meals":
             current = float(stats.get("meals_logged", 0))
+        elif quest_type == "log_photo":
+            current = float(stats.get("meals_logged", 0))
+        elif quest_type == "log_breakfast":
+            current = float(stats.get("breakfast_logged", 0))
+        elif quest_type == "log_lunch":
+            current = float(stats.get("lunch_logged", 0))
+        elif quest_type == "log_dinner":
+            current = float(stats.get("dinner_logged", 0))
+        elif quest_type == "log_snack":
+            current = float(stats.get("snack_logged", 0))
+        elif quest_type == "log_all_meals":
+            # Count how many of breakfast/lunch/dinner have been logged (target = 3)
+            current = float(
+                (1 if stats.get("breakfast_logged", 0) > 0 else 0) +
+                (1 if stats.get("lunch_logged", 0) > 0 else 0) +
+                (1 if stats.get("dinner_logged", 0) > 0 else 0)
+            )
+        elif quest_type == "hit_protein":
+            protein_target = stats.get("protein_target", 120.0) or 120.0
+            current = min(100.0, (stats.get("total_protein", 0) / protein_target) * 100)
+        elif quest_type == "hit_carbs":
+            carbs_target = stats.get("carbs_target", 250.0) or 250.0
+            current = min(100.0, (stats.get("total_carbs", 0) / carbs_target) * 100)
+        elif quest_type == "hit_fat":
+            fat_target = stats.get("fat_target", 70.0) or 70.0
+            current = min(100.0, (stats.get("total_fat", 0) / fat_target) * 100)
+        elif quest_type == "stay_under_calories":
+            calorie_target = stats.get("calorie_target", 2000.0) or 2000.0
+            logged = stats.get("total_calories", 0)
+            current = min(100.0, (logged / calorie_target) * 100) if logged > 0 else 0.0
         elif quest_type == "hit_calorie_target":
-            current = float(stats.get("total_calories", 0))
-        elif quest_type == "hit_protein_target":
-            current = float(stats.get("total_protein", 0))
+            calorie_target = stats.get("calorie_target", 2000.0) or 2000.0
+            current = min(100.0, (stats.get("total_calories", 0) / calorie_target) * 100)
+        elif quest_type == "hit_all_macros":
+            protein_target = stats.get("protein_target", 120.0) or 120.0
+            carbs_target = stats.get("carbs_target", 250.0) or 250.0
+            fat_target = stats.get("fat_target", 70.0) or 70.0
+            p_pct = (stats.get("total_protein", 0) / protein_target) * 100
+            c_pct = (stats.get("total_carbs", 0) / carbs_target) * 100
+            f_pct = (stats.get("total_fat", 0) / fat_target) * 100
+            current = min(100.0, (p_pct + c_pct + f_pct) / 3)
         else:
             current = 0.0
-        
+
         is_completed = current >= target_value
         return current, is_completed
     

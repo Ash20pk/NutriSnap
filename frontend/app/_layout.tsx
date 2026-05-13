@@ -25,6 +25,7 @@ export default function RootLayout() {
             <Stack.Screen name="barcode" options={{ presentation: 'modal' }} />
             <Stack.Screen name="privacy-policy" />
             <Stack.Screen name="redeem" />
+            <Stack.Screen name="diet-report" />
           </Stack>
         </View>
       </UserProvider>
