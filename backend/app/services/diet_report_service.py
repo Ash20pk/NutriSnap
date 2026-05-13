@@ -295,6 +295,16 @@ class DietReportService:
             if not row:
                 return None
             
+            def _j(val, default):
+                if val is None:
+                    return default
+                if isinstance(val, str):
+                    try:
+                        return json.loads(val)
+                    except Exception:
+                        return default
+                return val
+
             return {
                 "id": str(row["id"]),
                 "user_id": str(row["user_id"]),
@@ -303,17 +313,17 @@ class DietReportService:
                 "grade": row["grade"],
                 "justification": row["justification"],
                 "executive_summary": row["executive_summary"] or "",
-                "strengths": row["strengths"] or [],
-                "areas_for_improvement": row["areas_for_improvement"] or [],
-                "detailed_analysis": row["detailed_analysis"] or {},
-                "specific_recommendations": row["specific_recommendations"] or [],
-                "meal_suggestions": row["meal_suggestions"] or [],
-                "action_plan": row["action_plan"] or {},
-                "highlights": row["highlights"],
-                "health_insights": row["health_insights"],
-                "bio_alerts": row["bio_alerts"],
-                "red_flags": row["red_flags"],
-                "top_foods": row["top_foods"],
+                "strengths": _j(row["strengths"], []),
+                "areas_for_improvement": _j(row["areas_for_improvement"], []),
+                "detailed_analysis": _j(row["detailed_analysis"], {}),
+                "specific_recommendations": _j(row["specific_recommendations"], []),
+                "meal_suggestions": _j(row["meal_suggestions"], []),
+                "action_plan": _j(row["action_plan"], {}),
+                "highlights": _j(row["highlights"], {}),
+                "health_insights": _j(row["health_insights"], {}),
+                "bio_alerts": _j(row["bio_alerts"], []),
+                "red_flags": _j(row["red_flags"], []),
+                "top_foods": _j(row["top_foods"], []),
                 "macro_balance": row["macro_balance"],
                 "micronutrient_status": row["micronutrient_status"],
                 "eating_pattern": row["eating_pattern"],
