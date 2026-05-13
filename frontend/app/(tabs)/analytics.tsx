@@ -1502,7 +1502,8 @@ export default function AnalyticsScreen() {
           activeOpacity={1}
           onPress={() => setDietReportModalVisible(false)}
         >
- <View style={styles.healthInsightModalContent}>
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}
+            style={styles.healthInsightModalContent}>
             <View style={styles.healthInsightModalHeader}>
               <Text style={styles.healthInsightModalTitle}>Diet Report</Text>
               <TouchableOpacity
@@ -1512,7 +1513,12 @@ export default function AnalyticsScreen() {
                 <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.healthInsightModalScroll}>
+            <ScrollView
+              style={styles.healthInsightModalScroll}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              contentContainerStyle={{ paddingBottom: 16 }}
+            >
               {dietReport?.executive_summary && (
                 <View style={styles.reportSection}>
                   <Text style={styles.reportSectionTitle}>Executive Summary</Text>
@@ -1685,7 +1691,7 @@ export default function AnalyticsScreen() {
                 </View>
               )}
             </ScrollView>
-          </View>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </View>
@@ -1818,6 +1824,7 @@ function makeStyles(theme: typeof Colors) {
     padding: 24,
     width: '100%',
     maxWidth: 400,
+    maxHeight: '85%',
     borderWidth: 2,
     borderColor: theme.border,
     borderBottomWidth: 6,
@@ -1881,7 +1888,7 @@ function makeStyles(theme: typeof Colors) {
     fontWeight: '600',
   },
   healthInsightModalScroll: {
-    maxHeight: 500,
+    flexGrow: 1,
   },
   reportSection: {
     marginTop: 16,
